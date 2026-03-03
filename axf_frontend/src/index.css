@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Jockey One'; /* El nombre oficial de la fuente [cite: 41, 42] */
+  src: url('./assets/fonts/JockeyOne-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+
