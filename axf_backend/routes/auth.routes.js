@@ -1,48 +1,54 @@
-import { Router } from 'express';
+import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import pool from '../config/database.js';
+import db from '../config/database.js'; // IMPORTANTE: Agregar .js al final
 
-const router = Router();
+const router = express.Router();
 
 router.post('/login', async (req, res) => {
-  const { usuario, password } = req.body;
+    try {
+        const { usuario, password } = req.body;
 
-  try {
-    const [rows] = await pool.query('SELECT * FROM sucursales WHERE usuario = ? AND activa = 1', [usuario]);
-    
-    if (rows.length === 0) {
-      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+        // 1. Validar Nivel 1: Maestro
+        let [maestros] = await db.query('SELECT id_admin, nombre, password_hash FROM administradores WHERE usuario = ?', [usuario]);
+        if (maestros.length > 0) {
+            const user = maestros[0];
+            const valid = await bcrypt.compare(password, user.password_hash);
+            if (!valid) return res.status(401).json({ message: 'Contraseña incorrecta' });
+            
+            const token = jwt.sign({ id: user.id_admin, rol: 'maestro' }, process.env.JWT_SECRET, { expiresIn: '8h' });
+            return res.json({ token, user: { nombre: user.nombre, rol: 'maestro' } });
+        }
+
+        // 2. Validar Nivel 2: Sucursal (Gerente)
+        let [sucursales] = await db.query('SELECT id_sucursal, nombre, password_hash FROM sucursales WHERE usuario = ? AND activa = 1', [usuario]);
+        if (sucursales.length > 0) {
+            const user = sucursales[0];
+            const valid = await bcrypt.compare(password, user.password_hash);
+            if (!valid) return res.status(401).json({ message: 'Contraseña incorrecta' });
+            
+            const token = jwt.sign({ id: user.id_sucursal, rol: 'sucursal' }, process.env.JWT_SECRET, { expiresIn: '8h' });
+            return res.json({ token, user: { nombre: user.nombre, rol: 'sucursal' } });
+        }
+
+        // 3. Validar Nivel 3: Personal (Staff / Entrenador / Nutriólogo)
+        let [personal] = await db.query('SELECT id_personal, nombres, puesto, password_hash FROM personal WHERE usuario = ? AND activo = 1', [usuario]);
+        if (personal.length > 0) {
+            const user = personal[0];
+            const valid = await bcrypt.compare(password, user.password_hash);
+            if (!valid) return res.status(401).json({ message: 'Contraseña incorrecta' });
+            
+            const token = jwt.sign({ id: user.id_personal, rol: 'personal', puesto: user.puesto }, process.env.JWT_SECRET, { expiresIn: '8h' });
+            return res.json({ token, user: { nombre: user.nombres, rol: 'personal', puesto: user.puesto } });
+        }
+
+        // Si no está en ninguna de las 3 jerarquías
+        return res.status(404).json({ message: 'Usuario no encontrado' });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error en el servidor' });
     }
-
-    const sucursal = rows[0];
-    const passwordValida = await bcrypt.compare(password, sucursal.password_hash);
-    
-    if (!passwordValida) {
-      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
-    }
-
-    const token = jwt.sign(
-      { id: sucursal.id_sucursal, rol: 'sucursal', nombre: sucursal.nombre },
-      process.env.JWT_SECRET || 'axf_super_secreto_dev_2026',
-      { expiresIn: '8h' }
-    );
-
-    console.log(`[AUTH] Login exitoso: ${sucursal.usuario}`);
-    res.json({
-      mensaje: 'Login exitoso',
-      token,
-      usuario: {
-        id: sucursal.id_sucursal,
-        nombre: sucursal.nombre,
-        rol: 'sucursal'
-      }
-    });
-
-  } catch (error) {
-    console.error('[AUTH] Error en login:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
 });
 
 export default router;

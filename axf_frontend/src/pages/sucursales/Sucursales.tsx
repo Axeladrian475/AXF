@@ -1,31 +1,29 @@
 import { useState } from 'react';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
-import SearchBar from '../../components/ui/SearchBar';
+import Input from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import Input from '../../components/ui/Input';
 
-// Datos de prueba basados en tu HTML
+// Datos de prueba basados en tu tabla HTML original
 const DATOS_MOCK = [
-  { id: 1, nombre: 'Sucursal Centro', direccion: 'Av. Principal 123', codigo_postal: '44100', estado: 'Activa' },
-  { id: 2, nombre: 'Sucursal Norte', direccion: 'Blvd. Norte 456', codigo_postal: '45000', estado: 'Inactiva' },
+  { id: 1, nombre: 'Sucursal Centro', direccion: 'Av. Principal 123', gerente: 'gerente_centro', estado: 'Activa' },
+  { id: 2, nombre: 'Sucursal Norte', direccion: 'Blvd. Norte 456', gerente: 'gerente_norte', estado: 'Inactiva' },
 ];
 
 export default function Sucursales() {
-  const [activeTab, setActiveTab] = useState<'lista' | 'agregar' | 'modificar'>('lista');
-  const [searchTerm, setSearchTerm] = useState('');
+  // Las 3 pestañas exactas de tu maquetado
+  const [activeTab, setActiveTab] = useState<'agregar' | 'modificar' | 'lista'>('agregar');
   
-  // Estado para el modal de eliminación
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<any>(null);
 
-  // Configuración de las columnas de tu tabla
+  // Columnas exactas de tu tabla HTML
   const columns = [
     { header: 'ID', accessor: 'id' as const },
-    { header: 'Nombre', accessor: 'nombre' as const },
+    { header: 'Nombre', accessor: 'nombre' as const, className: 'font-bold text-[#071B2F]' },
     { header: 'Dirección', accessor: 'direccion' as const },
-    { header: 'C.P.', accessor: 'codigo_postal' as const },
+    { header: 'Gerente', accessor: 'gerente' as const },
     { 
       header: 'Estado', 
       accessor: (row: any) => <Badge text={row.estado} variant={row.estado === 'Activa' ? 'success' : 'danger'} />
@@ -34,8 +32,11 @@ export default function Sucursales() {
       header: 'Acciones',
       accessor: (row: any) => (
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setActiveTab('modificar')}>
-            Editar
+          <Button variant="secondary" size="sm" onClick={() => {
+            setActiveTab('modificar');
+            // Aquí en un futuro cargaríamos los datos reales en el formulario
+          }}>
+            Modificar
           </Button>
           <Button variant="danger" size="sm" onClick={() => { setItemToDelete(row); setIsDeleteModalOpen(true); }}>
             Eliminar
@@ -46,97 +47,120 @@ export default function Sucursales() {
   ];
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-h-full">
-      {/* HEADER DEL MÓDULO */}
-      <div className="p-6 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#071B2F]">Gestión de Sucursales</h1>
-          <p className="text-gray-500 text-sm mt-1">Administra la información de todas las sucursales del sistema.</p>
+    <div className="space-y-6 animate-fade-in">
+      {/* HEADER Y NAVEGACIÓN */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-4">
+        <div className="flex items-center gap-4">
+          <img src="/axfLogo.png" alt="AxF Logo" className="h-12 object-contain hidden sm:block" />
+          <div>
+            <h1 className="text-3xl font-black text-[#071B2F] tracking-tight">Módulo de Gestión de Sucursales</h1>
+          </div>
         </div>
-        
-        {/* NAVEGACIÓN TIPO PESTAÑAS (Basado en tu HTML) */}
-        <div className="flex bg-gray-100 p-1 rounded-lg">
+
+        {/* Botones de navegación (module-nav) */}
+        <div className="flex gap-2 border-b border-gray-200 pb-2 overflow-x-auto">
           <button 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'lista' ? 'bg-white shadow text-[#071B2F]' : 'text-gray-500 hover:text-gray-700'}`}
+            className={`px-6 py-2 text-sm font-bold rounded-t-lg transition-colors border-b-4 ${activeTab === 'agregar' ? 'border-[#F26A21] text-[#071B2F] bg-gray-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+            onClick={() => setActiveTab('agregar')}
+          >
+            Agregar Sucursal
+          </button>
+          <button 
+            className={`px-6 py-2 text-sm font-bold rounded-t-lg transition-colors border-b-4 ${activeTab === 'modificar' ? 'border-[#F26A21] text-[#071B2F] bg-gray-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+            onClick={() => setActiveTab('modificar')}
+          >
+            Modificar Sucursales
+          </button>
+          <button 
+            className={`px-6 py-2 text-sm font-bold rounded-t-lg transition-colors border-b-4 ${activeTab === 'lista' ? 'border-[#F26A21] text-[#071B2F] bg-gray-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
             onClick={() => setActiveTab('lista')}
           >
             Lista de Sucursales
           </button>
-          <button 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'agregar' ? 'bg-white shadow text-[#071B2F]' : 'text-gray-500 hover:text-gray-700'}`}
-            onClick={() => setActiveTab('agregar')}
-          >
-            Agregar Nueva
-          </button>
-          {activeTab === 'modificar' && (
-            <button className="px-4 py-2 text-sm font-medium rounded-md bg-[#F26A21] text-white shadow">
-              Modificando...
-            </button>
-          )}
         </div>
       </div>
 
-      {/* CONTENIDO DINÁMICO */}
-      <div className="p-6">
+      {/* CONTENIDO DE LAS PESTAÑAS */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
         
-        {/* VISTA: LISTA */}
+        {/* SECCIÓN 1: AGREGAR SUCURSAL */}
+        {activeTab === 'agregar' && (
+          <div className="max-w-3xl">
+            <h3 className="text-xl font-bold text-[#071B2F] mb-6 border-b border-gray-100 pb-2">Agregar Nueva Sucursal</h3>
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); alert('Sucursal guardada'); }}>
+              <Input label="Nombre de la Sucursal:" name="nombre" required />
+              <Input label="Dirección:" name="direccion" required />
+              <Input label="Teléfono:" name="telefono" />
+              <Input label="Email de Contacto:" name="email" type="email" />
+              <Input label="Gerente Asignado (Usuario):" name="gerente" required />
+              <Input label="Contraseña del Gerente:" name="password" type="password" required />
+              
+              <div className="pt-4">
+                <Button type="submit" className="bg-[#071B2F] hover:bg-[#0a2642] w-full sm:w-auto">
+                  Guardar Sucursal
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* SECCIÓN 2: MODIFICAR SUCURSAL */}
+        {activeTab === 'modificar' && (
+          <div className="max-w-3xl">
+            <h3 className="text-xl font-bold text-[#071B2F] mb-6 border-b border-gray-100 pb-2">Modificar Sucursal</h3>
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); alert('Sucursal actualizada'); }}>
+              
+              <Input 
+                label="Seleccione Sucursal:" 
+                name="sucursal_select" 
+                type="select" 
+                options={[
+                  { value: '1', label: 'Sucursal Centro' },
+                  { value: '2', label: 'Sucursal Norte' }
+                ]} 
+              />
+              
+              <Input label="Nombre de la Sucursal:" name="nombre_modificar" id="nombre_modificar" />
+              <Input label="Dirección:" name="direccion_modificar" id="direccion_modificar" />
+              
+              <Input 
+                label="Estado:" 
+                name="estado_modificar" 
+                type="select" 
+                options={[
+                  { value: 'Activa', label: 'Activa' },
+                  { value: 'Inactiva', label: 'Inactiva' }
+                ]} 
+              />
+              
+              <div className="pt-4">
+                <Button type="submit" className="bg-[#071B2F] hover:bg-[#0a2642] w-full sm:w-auto">
+                  Actualizar Sucursal
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* SECCIÓN 3: LISTA DE SUCURSALES */}
         {activeTab === 'lista' && (
-          <div className="space-y-4">
-            <div className="w-full max-w-md">
-              <SearchBar placeholder="Buscar sucursal por nombre..." onSearch={setSearchTerm} />
-            </div>
+          <div>
+            <h3 className="text-xl font-bold text-[#071B2F] mb-6 border-b border-gray-100 pb-2">Lista de Sucursales</h3>
             <Table columns={columns} data={DATOS_MOCK} emptyMessage="No hay sucursales registradas." />
           </div>
         )}
 
-        {/* VISTA: AGREGAR */}
-        {activeTab === 'agregar' && (
-          <form className="max-w-2xl space-y-6" onSubmit={(e) => { e.preventDefault(); alert('Sucursal agregada (Simulación)'); setActiveTab('lista'); }}>
-            <h3 className="text-lg font-bold text-[#F26A21] border-b pb-2">Datos de la Nueva Sucursal</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Nombre de la Sucursal" name="nombre" required placeholder="Ej. Sucursal Centro" />
-              <Input label="Código Postal" name="cp" required placeholder="Ej. 44100" />
-              <div className="md:col-span-2">
-                <Input label="Dirección Completa" name="direccion" required placeholder="Calle, número, colonia..." />
-              </div>
-              <Input label="Usuario (Login)" name="usuario" required placeholder="usuario_admin" />
-              <Input label="Contraseña Temporal" name="password" type="password" required placeholder="••••••••" />
-            </div>
-            <div className="flex justify-end pt-4">
-              <Button type="submit">Guardar Sucursal</Button>
-            </div>
-          </form>
-        )}
-
-        {/* VISTA: MODIFICAR */}
-        {activeTab === 'modificar' && (
-          <form className="max-w-2xl space-y-6" onSubmit={(e) => { e.preventDefault(); alert('Sucursal actualizada (Simulación)'); setActiveTab('lista'); }}>
-            <h3 className="text-lg font-bold text-blue-600 border-b pb-2">Modificar Sucursal Existente</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Nombre de la Sucursal" name="nombre_mod" required defaultValue="Sucursal Centro" />
-              <Input label="Código Postal" name="cp_mod" required defaultValue="44100" />
-              <div className="md:col-span-2">
-                <Input label="Dirección Completa" name="direccion_mod" required defaultValue="Av. Principal 123" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="secondary" onClick={() => setActiveTab('lista')} type="button">Cancelar</Button>
-              <Button type="submit">Actualizar Datos</Button>
-            </div>
-          </form>
-        )}
-
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      {/* MODAL DE ELIMINACIÓN */}
       <ConfirmDialog 
         isOpen={isDeleteModalOpen}
         title="Eliminar Sucursal"
-        message={`¿Estás seguro de que deseas eliminar la ${itemToDelete?.nombre}? Esta acción no se puede deshacer.`}
+        message={`¿Estás seguro de que quieres eliminar la sucursal ID: ${itemToDelete?.id}?`}
         confirmText="Sí, eliminar"
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={() => {
-          alert(`Sucursal ${itemToDelete?.id} eliminada.`);
+          alert(`Sucursal ID: ${itemToDelete?.id} eliminada (simulación).`);
           setIsDeleteModalOpen(false);
         }}
       />
