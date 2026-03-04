@@ -1,14 +1,15 @@
 import { useState, useContext } from 'react';
 import { loginSucursal } from '../../api/authApi';
 import { AuthContext } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   
-  // Extraemos la función login del contexto global
   const { login } = useContext(AuthContext);
+  const navigate = useNavigate(); // Agregamos el hook para redireccionar
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,13 +17,19 @@ export default function Login() {
 
     try {
       const data = await loginSucursal(usuario, password);
-      // Usamos la función del contexto en lugar de localStorage manualmente
-      login(data.usuario, data.token);
-      console.log('[AUTH] Login exitoso:', data.usuario);
-      alert(`Bienvenido, ${data.usuario.nombre}`);
+      
+      // CORRECCIÓN 1: El backend manda "user", no "usuario"
+      login(data.user, data.token); 
+      
+      console.log('[AUTH] Login exitoso:', data.user);
+      
+      // Redireccionamos al dashboard
+      navigate('/dashboard');
+      
     } catch (err: any) {
       console.error('[AUTH] Error:', err);
-      setError(err.response?.data?.error || 'Error al conectar con el servidor');
+      // CORRECCIÓN 2: El backend manda "message", no "error"
+      setError(err.response?.data?.message || 'Error al conectar con el servidor');
     }
   };
 
