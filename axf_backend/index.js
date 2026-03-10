@@ -2,11 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import pool from './config/database.js';
-import authRoutes from './routes/auth.routes.js';
-import sucursalesRoutes from './routes/sucursales.routes.js';
-import personalRoutes from './routes/personal.routes.js';
+import authRoutes         from './routes/auth.routes.js';
+import sucursalesRoutes   from './routes/sucursales.routes.js';
+import personalRoutes     from './routes/personal.routes.js';
 import suscripcionesRoutes from './routes/suscripciones.routes.js';
-import promocionesRoutes from './routes/promociones.routes.js';
+import promocionesRoutes  from './routes/promociones.routes.js';
+import incidenciasRoutes  from './routes/incidencias.routes.js';
 
 dotenv.config();
 
@@ -26,11 +27,12 @@ app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
 // ── Rutas ─────────────────────────────────────────────────────────────────────
-app.use('/api/auth', authRoutes);
-app.use('/api/sucursales', sucursalesRoutes);
-app.use('/api/personal', personalRoutes);
+app.use('/api/auth',          authRoutes);
+app.use('/api/sucursales',    sucursalesRoutes);
+app.use('/api/personal',      personalRoutes);
 app.use('/api/suscripciones', suscripcionesRoutes);
-app.use('/api/promociones', promocionesRoutes);
+app.use('/api/promociones',   promocionesRoutes);
+app.use('/api/incidencias',   incidenciasRoutes);
 
 // ── Iniciar servidor ──────────────────────────────────────────────────────────
 async function startServer() {
