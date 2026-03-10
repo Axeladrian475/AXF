@@ -25,7 +25,7 @@ export default function Sucursales() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F26A21]">
+    <div className=" bg-[#F26A21]">
       {/* HEADER CON TABS */}
       <div className="bg-[#1e293b] px-4 py-3 rounded-full">
         <div className="flex gap-2">
@@ -64,7 +64,7 @@ export default function Sucursales() {
 
       {/* CONTENIDO PRINCIPAL */}
       <div className="p-4">
-        <div className="bg-[#f5f5f5] rounded-lg border-[3px] border-[#ea580c] p-6">
+        <div className="bg-[#f5f5f5] rounded-lg  p-8">
           
           {/* TAB: AGREGAR SUCURSALES */}
           {activeTab === 'agregar' && (
