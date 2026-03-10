@@ -81,24 +81,26 @@ router.post('/config', verificarToken, soloSucursalOMaestro, async (req, res) =>
       return res.status(400).json({ message: 'El valor debe ser un número entero mayor a 0.' });
     }
 
-    // ── Calcular próximo envío ────────────────────────────────────────────────
-    const ahora      = new Date();
-    const proximo    = new Date(ahora.getTime() + frecuencia_dias * 24 * 60 * 60 * 1000);
-    const ahoraSQL   = ahora.toISOString().slice(0, 19).replace('T', ' ');
-    const proximoSQL = proximo.toISOString().slice(0, 19).replace('T', ' ');
-
-    // ── INSERT o UPDATE si ya existe (uq_config_sucursal garantiza unicidad) ─
+    // ── INSERT o UPDATE usando NOW() de MySQL para respetar la zona horaria del servidor ──
+    // proximo_envio = NOW() + frecuencia_dias días (calculado también en MySQL)
     await db.query(
       `INSERT INTO config_reportes_periodicos
          (id_sucursal, frecuencia_dias, frecuencia_tipo, valor, ultimo_envio, proximo_envio)
-       VALUES (?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL ? DAY))
        ON DUPLICATE KEY UPDATE
          frecuencia_dias = VALUES(frecuencia_dias),
          frecuencia_tipo = VALUES(frecuencia_tipo),
          valor           = VALUES(valor),
-         ultimo_envio    = VALUES(ultimo_envio),
-         proximo_envio   = VALUES(proximo_envio)`,
-      [id_sucursal, frecuencia_dias, frecuencia_tipo, parseInt(valor, 10), ahoraSQL, proximoSQL]
+         ultimo_envio    = NOW(),
+         proximo_envio   = DATE_ADD(NOW(), INTERVAL ? DAY)`,
+      [id_sucursal, frecuencia_dias, frecuencia_tipo, parseInt(valor, 10), frecuencia_dias, frecuencia_dias]
+    );
+
+    // ── Leer las fechas tal como quedaron en BD para devolverlas exactas ──────
+    const [[guardado]] = await db.query(
+      `SELECT frecuencia_dias, frecuencia_tipo, valor, ultimo_envio, proximo_envio
+       FROM config_reportes_periodicos WHERE id_sucursal = ?`,
+      [id_sucursal]
     );
 
     // ── Etiqueta legible para el mensaje de confirmación ─────────────────────
@@ -106,13 +108,7 @@ router.post('/config', verificarToken, soloSucursalOMaestro, async (req, res) =>
 
     res.status(200).json({
       message: `Configuración guardada. Recibirás reportes cada ${parseInt(valor, 10)} ${etiquetas[frecuencia_tipo]}.`,
-      config: {
-        frecuencia_dias,
-        frecuencia_tipo,
-        valor:         parseInt(valor, 10),
-        ultimo_envio:  ahoraSQL,
-        proximo_envio: proximoSQL,
-      },
+      config: guardado,
     });
   } catch (error) {
     console.error('[POST /incidencias/config]', error);
