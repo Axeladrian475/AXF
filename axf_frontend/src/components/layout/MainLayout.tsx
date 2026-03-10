@@ -18,4 +18,4 @@ export default function MainLayout({ children }: MainLayoutProps) {
       </div>
     </div>
   );
-}
+} 
