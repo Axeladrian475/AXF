@@ -147,7 +147,7 @@ export default function Sucursales() {
     if (!confirmEliminar) return
     try {
       await eliminarSucursal(confirmEliminar.id_sucursal)
-      mostrarExito('Sucursal desactivada correctamente')
+      mostrarExito('Sucursal eliminada correctamente')
       setConfirmEliminar(null)
       await cargarSucursales()
     } catch (err: any) {
@@ -179,10 +179,10 @@ export default function Sucursales() {
       {confirmEliminar && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
           <div className="bg-white rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold text-black mb-2">¿Desactivar sucursal?</h3>
+            <h3 className="text-lg font-bold text-black mb-2">¿Eliminar sucursal?</h3>
             <p className="text-gray-600 text-sm mb-5">
               La sucursal <span className="font-bold text-black">{confirmEliminar.nombre}</span> será
-              desactivada. Podrá reactivarse desde la base de datos.
+              eliminada permanentemente. Esta acción no se puede deshacer.
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -195,7 +195,7 @@ export default function Sucursales() {
                 onClick={handleConfirmarEliminar}
                 className="px-4 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700"
               >
-                Sí, desactivar
+                Sí, eliminar
               </button>
             </div>
           </div>
@@ -248,7 +248,7 @@ export default function Sucursales() {
               <h2 className="text-xl font-bold text-black mb-1">Agregar Nueva Sucursal</h2>
               <hr className="border-gray-300 mb-4" />
 
-              <form onSubmit={handleAgregar} className="space-y-3">
+              <form onSubmit={handleAgregar} className="space-y-3" autoComplete="off">
                 <div>
                   <label className="block text-sm font-bold text-black italic mb-1">Nombre Sucursal:</label>
                   <input
@@ -256,6 +256,7 @@ export default function Sucursales() {
                     value={formAgregar.nombre}
                     onChange={e => setFormAgregar({ ...formAgregar, nombre: e.target.value })}
                     required
+                    autoComplete="off"
                     className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
                   />
                 </div>
@@ -267,6 +268,7 @@ export default function Sucursales() {
                     value={formAgregar.direccion}
                     onChange={e => setFormAgregar({ ...formAgregar, direccion: e.target.value })}
                     required
+                    autoComplete="off"
                     className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
                   />
                 </div>
@@ -278,6 +280,7 @@ export default function Sucursales() {
                     value={formAgregar.codigo_postal}
                     onChange={e => setFormAgregar({ ...formAgregar, codigo_postal: e.target.value })}
                     required
+                    autoComplete="off"
                     className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
                   />
                 </div>
@@ -289,6 +292,7 @@ export default function Sucursales() {
                     value={formAgregar.usuario}
                     onChange={e => setFormAgregar({ ...formAgregar, usuario: e.target.value })}
                     required
+                    autoComplete="off"
                     className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
                   />
                 </div>
@@ -301,6 +305,7 @@ export default function Sucursales() {
                       value={formAgregar.password}
                       onChange={e => setFormAgregar({ ...formAgregar, password: e.target.value })}
                       required
+                      autoComplete="new-password"
                       className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 pr-10 text-black"
                     />
                     <button

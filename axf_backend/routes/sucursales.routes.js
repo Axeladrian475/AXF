@@ -138,7 +138,7 @@ router.delete('/:id', verificarToken, soloMaestro, async (req, res) => {
     const { id } = req.params;
 
     const [result] = await db.query(
-      'UPDATE sucursales SET activa = 0 WHERE id_sucursal = ?',
+      'DELETE FROM sucursales WHERE id_sucursal = ?',
       [id]
     );
 
@@ -146,10 +146,10 @@ router.delete('/:id', verificarToken, soloMaestro, async (req, res) => {
       return res.status(404).json({ message: 'Sucursal no encontrada' });
     }
 
-    res.json({ message: 'Sucursal desactivada correctamente' });
+    res.json({ message: 'Sucursal eliminada correctamente' });
   } catch (error) {
     console.error('[DELETE /sucursales/:id]', error);
-    res.status(500).json({ message: 'Error al desactivar la sucursal' });
+    res.status(500).json({ message: 'Error al eliminar la sucursal' });
   }
 });
 
