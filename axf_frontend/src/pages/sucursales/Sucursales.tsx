@@ -1,169 +1,293 @@
-import { useState } from 'react';
-import Button from '../../components/ui/Button';
-import Table from '../../components/ui/Table';
-import Input from '../../components/ui/Input';
-import Badge from '../../components/ui/Badge';
-import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 
-// Datos de prueba basados exactamente en tu tabla MySQL
+// Datos de prueba
 const DATOS_MOCK = [
-  { id_sucursal: 1, nombre: 'Sucursal Central AxF', direccion: 'Av. Principal 123', codigo_postal: '45000', usuario: 'admin', activa: 1 },
-];
+  { id_sucursal: 1, nombre: 'Sucursal AxF Centro', direccion: 'Calle Falsa 123', codigo_postal: '44100', usuario: 'adminCentro', password: '********' },
+  { id_sucursal: 2, nombre: 'Sucursal AxF Norte', direccion: 'Av. Principal 456', codigo_postal: '45010', usuario: 'adminNorte', password: '********' },
+]
 
 export default function Sucursales() {
-  const [activeTab, setActiveTab] = useState<'agregar' | 'modificar' | 'lista'>('agregar');
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'agregar' | 'buscar' | 'modificar'>('agregar')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showPasswordTable, setShowPasswordTable] = useState<Record<number, boolean>>({})
+  const [selectedSucursal, setSelectedSucursal] = useState<typeof DATOS_MOCK[0] | null>(null)
+  const [showModifyPassword, setShowModifyPassword] = useState(false)
 
-  // Columnas mapeadas exactamente a tu base de datos
-  const columns = [
-    { header: 'ID', accessor: 'id_sucursal' as const },
-    { header: 'Nombre', accessor: 'nombre' as const, className: 'font-bold text-[#071B2F]' },
-    { header: 'Dirección', accessor: 'direccion' as const },
-    { header: 'C.P.', accessor: 'codigo_postal' as const },
-    { header: 'Usuario', accessor: 'usuario' as const },
-    { 
-      header: 'Estado', 
-      accessor: (row: any) => <Badge text={row.activa === 1 ? 'Activa' : 'Inactiva'} variant={row.activa === 1 ? 'success' : 'danger'} />
-    },
-    {
-      header: 'Acciones',
-      accessor: (row: any) => (
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setActiveTab('modificar')}>
-            Modificar
-          </Button>
-          <Button variant="danger" size="sm" onClick={() => { setItemToDelete(row); setIsDeleteModalOpen(true); }}>
-            Desactivar
-          </Button>
-        </div>
-      )
-    }
-  ];
+  const handleModify = (sucursal: typeof DATOS_MOCK[0]) => {
+    setSelectedSucursal(sucursal)
+    setActiveTab('modificar')
+  }
+
+  const togglePasswordVisibility = (id: number) => {
+    setShowPasswordTable(prev => ({ ...prev, [id]: !prev[id] }))
+  }
 
   return (
-    <div className="space-y-6 animate-fade-in" style={{ fontFamily: 'sans-serif' }}>
-      
-      {/* HEADER COMO EN EL MAQUETADO */}
-      <div className="flex items-center gap-4 mb-8">
-        <h1 className="text-4xl font-black text-[#071B2F] tracking-wide" style={{ fontFamily: 'Jockey One, sans-serif' }}>
-          MÓDULO DE GESTIÓN DE SUCURSALES
-        </h1>
+    <div className="min-h-screen bg-[#e97632]">
+      {/* HEADER CON TABS */}
+      <div className="bg-[#1e293b] px-4 py-3">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('agregar')}
+            className={`px-6 py-2 rounded-full font-bold text-base transition-all border-2 ${
+              activeTab === 'agregar'
+                ? 'bg-[#ea580c] text-white border-[#ea580c]'
+                : 'bg-white text-black border-black'
+            }`}
+          >
+            Agregar Sucursales
+          </button>
+          <button
+            onClick={() => setActiveTab('buscar')}
+            className={`px-6 py-2 rounded-full font-bold text-base transition-all border-2 ${
+              activeTab === 'buscar'
+                ? 'bg-[#ea580c] text-white border-[#ea580c]'
+                : 'bg-white text-black border-black'
+            }`}
+          >
+            Buscar Sucursales
+          </button>
+          <button
+            onClick={() => setActiveTab('modificar')}
+            className={`px-6 py-2 rounded-full font-bold text-base transition-all border-2 ${
+              activeTab === 'modificar'
+                ? 'bg-[#ea580c] text-white border-[#ea580c]'
+                : 'bg-white text-black border-black'
+            }`}
+          >
+            Modificar
+          </button>
+        </div>
       </div>
 
-      {/* NAVEGACIÓN DE PESTAÑAS (Estilo clásico del maquetado) */}
-      <div className="flex border-b-2 border-[#071B2F]">
-        <button 
-          className={`px-8 py-3 text-lg font-bold transition-colors ${activeTab === 'agregar' ? 'bg-[#F26A21] text-white' : 'bg-gray-200 text-[#071B2F] hover:bg-gray-300'}`}
-          onClick={() => setActiveTab('agregar')}
-        >
-          Agregar Sucursal
-        </button>
-        <button 
-          className={`px-8 py-3 text-lg font-bold transition-colors ${activeTab === 'modificar' ? 'bg-[#F26A21] text-white' : 'bg-gray-200 text-[#071B2F] hover:bg-gray-300'}`}
-          onClick={() => setActiveTab('modificar')}
-        >
-          Modificar Sucursales
-        </button>
-        <button 
-          className={`px-8 py-3 text-lg font-bold transition-colors ${activeTab === 'lista' ? 'bg-[#F26A21] text-white' : 'bg-gray-200 text-[#071B2F] hover:bg-gray-300'}`}
-          onClick={() => setActiveTab('lista')}
-        >
-          Lista de Sucursales
-        </button>
-      </div>
-
-      {/* CONTENEDOR PRINCIPAL */}
-      <div className="bg-white rounded-b-xl shadow-lg border border-gray-200 p-8">
-        
-        {/* PESTAÑA 1: AGREGAR SUCURSAL */}
-        {activeTab === 'agregar' && (
-          <div className="max-w-2xl">
-            <h3 className="text-2xl font-bold text-[#F26A21] mb-6 border-b-2 border-gray-100 pb-2">Registrar Nueva Sucursal</h3>
-            
-            <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); alert('Listo para conectar al backend'); }}>
-              {/* Campos exactos de la BD */}
-              <Input label="Nombre de la Sucursal:" name="nombre" required placeholder="Ej. Sucursal Providencia" />
-              <Input label="Dirección Completa:" name="direccion" required placeholder="Calle, número, colonia" />
-              <Input label="Código Postal:" name="codigo_postal" required placeholder="Ej. 45000" />
+      {/* CONTENIDO PRINCIPAL */}
+      <div className="p-4">
+        <div className="bg-[#f5f5f5] rounded-lg border-[3px] border-[#ea580c] p-6">
+          
+          {/* TAB: AGREGAR SUCURSALES */}
+          {activeTab === 'agregar' && (
+            <div>
+              <h2 className="text-xl font-bold text-black mb-1">Agregar Nueva Sucursal</h2>
+              <hr className="border-gray-300 mb-4" />
               
-              <div className="pt-4 mt-4 border-t border-gray-100">
-                <h4 className="text-lg font-bold text-[#071B2F] mb-4">Credenciales de Acceso</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input label="Usuario:" name="usuario" required placeholder="Ej. admin_providencia" />
-                  <Input label="Contraseña:" name="password" type="password" required placeholder="••••••••" />
+              <form className="space-y-3">
+                <div>
+                  <label className="block text-sm font-bold text-black italic mb-1">Nombre Sucursal:</label>
+                  <input
+                    type="text"
+                    className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                  />
                 </div>
-              </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-black italic mb-1">Dirección:</label>
+                  <input
+                    type="text"
+                    className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-black italic mb-1">Código Postal:</label>
+                  <input
+                    type="text"
+                    className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-black italic mb-1">Usuario:</label>
+                  <input
+                    type="text"
+                    className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-black italic mb-1">Contraseña:</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 pr-10 text-black"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600"
+                    >
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="bg-[#ea580c] text-white font-bold px-8 py-2 rounded hover:bg-[#c94a0a] transition-colors"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* TAB: BUSCAR SUCURSALES */}
+          {activeTab === 'buscar' && (
+            <div>
+              <h2 className="text-xl font-bold text-black mb-1">Buscar y Administrar Sucursales</h2>
+              <hr className="border-gray-300 mb-4" />
               
-              <div className="pt-6">
-                <button type="submit" className="bg-[#071B2F] text-white font-bold text-lg py-3 px-8 rounded hover:bg-slate-800 transition-colors shadow-md">
-                  Guardar Sucursal
+              <div className="flex gap-4 mb-6">
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre, dirección y codigo postal"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="flex-1 max-w-md bg-white border border-gray-400 rounded px-3 py-2 text-black text-sm"
+                />
+                <button className="bg-[#d9d9d9] border border-gray-500 text-black font-semibold px-6 py-2 rounded hover:bg-gray-300 transition-colors">
+                  Guardar
                 </button>
               </div>
-            </form>
-          </div>
-        )}
-
-        {/* PESTAÑA 2: MODIFICAR SUCURSAL */}
-        {activeTab === 'modificar' && (
-          <div className="max-w-2xl">
-            <h3 className="text-2xl font-bold text-[#F26A21] mb-6 border-b-2 border-gray-100 pb-2">Modificar Información</h3>
-            <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); }}>
               
-              <Input 
-                label="Seleccione Sucursal a Modificar:" 
-                name="sucursal_select" 
-                type="select" 
-                options={[
-                  { value: '1', label: 'Sucursal Central AxF' }
-                ]} 
-              />
-              
-              <Input label="Nombre:" name="nombre_mod" defaultValue="Sucursal Central AxF" />
-              <Input label="Dirección:" name="direccion_mod" defaultValue="Av. Principal 123" />
-              <Input label="Código Postal:" name="cp_mod" defaultValue="45000" />
-              
-              <Input 
-                label="Estado de Operación:" 
-                name="estado_mod" 
-                type="select" 
-                options={[
-                  { value: '1', label: 'Activa' },
-                  { value: '0', label: 'Inactiva' }
-                ]} 
-              />
-              
-              <div className="pt-6">
-                <button type="submit" className="bg-[#071B2F] text-white font-bold text-lg py-3 px-8 rounded hover:bg-slate-800 transition-colors shadow-md">
-                  Actualizar Datos
-                </button>
+              {/* TABLA */}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-400">
+                  <thead>
+                    <tr className="bg-[#d9d9d9]">
+                      <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">ID</th>
+                      <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Nombre Sucursal</th>
+                      <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Dirección</th>
+                      <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">C. Postal</th>
+                      <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Usuario Admin</th>
+                      <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Contraseña</th>
+                      <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DATOS_MOCK.map((sucursal) => (
+                      <tr key={sucursal.id_sucursal} className="bg-white">
+                        <td className="border border-gray-400 px-4 py-2 text-center text-black">{sucursal.id_sucursal}</td>
+                        <td className="border border-gray-400 px-4 py-2 text-black">{sucursal.nombre}</td>
+                        <td className="border border-gray-400 px-4 py-2 text-black">{sucursal.direccion}</td>
+                        <td className="border border-gray-400 px-4 py-2 text-center text-black">{sucursal.codigo_postal}</td>
+                        <td className="border border-gray-400 px-4 py-2 text-black">{sucursal.usuario}</td>
+                        <td className="border border-gray-400 px-4 py-2 text-black">
+                          <div className="flex items-center justify-between">
+                            <span>{showPasswordTable[sucursal.id_sucursal] ? 'password123' : '********'}</span>
+                            <button
+                              onClick={() => togglePasswordVisibility(sucursal.id_sucursal)}
+                              className="text-gray-600 ml-2"
+                            >
+                              {showPasswordTable[sucursal.id_sucursal] ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="border border-gray-400 px-4 py-2">
+                          <div className="flex gap-2 justify-center">
+                            <button
+                              onClick={() => handleModify(sucursal)}
+                              className="bg-white border border-gray-400 text-black text-xs px-3 py-1 rounded hover:bg-gray-100 transition-colors"
+                            >
+                              Modificar
+                            </button>
+                            <button className="bg-white border border-gray-400 text-black text-xs px-3 py-1 rounded hover:bg-gray-100 transition-colors">
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </form>
-          </div>
-        )}
+            </div>
+          )}
 
-        {/* PESTAÑA 3: LISTA DE SUCURSALES */}
-        {activeTab === 'lista' && (
-          <div>
-            <h3 className="text-2xl font-bold text-[#F26A21] mb-6 border-b-2 border-gray-100 pb-2">Directorio de Sucursales</h3>
-            <Table columns={columns} data={DATOS_MOCK} emptyMessage="No hay sucursales registradas." />
-          </div>
-        )}
+          {/* TAB: MODIFICAR */}
+          {activeTab === 'modificar' && (
+            <div>
+              <h2 className="text-xl font-bold text-black mb-1">Modificar Sucursal</h2>
+              <hr className="border-gray-300 mb-4" />
+              
+              {!selectedSucursal ? (
+                <p className="text-black">
+                  <span className="font-bold">Paso 1:</span> Utilice la función &apos;Buscar Sucursales&apos; para seleccionar la sucursal a modificar.
+                </p>
+              ) : (
+                <form className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-bold text-black italic mb-1">Nombre Sucursal:</label>
+                    <input
+                      type="text"
+                      defaultValue={selectedSucursal.nombre}
+                      className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-bold text-black italic mb-1">Dirección:</label>
+                    <input
+                      type="text"
+                      defaultValue={selectedSucursal.direccion}
+                      className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-bold text-black italic mb-1">Código Postal:</label>
+                    <input
+                      type="text"
+                      defaultValue={selectedSucursal.codigo_postal}
+                      className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-bold text-black italic mb-1">Usuario:</label>
+                    <input
+                      type="text"
+                      defaultValue={selectedSucursal.usuario}
+                      className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-bold text-black italic mb-1">Contraseña:</label>
+                    <div className="relative">
+                      <input
+                        type={showModifyPassword ? 'text' : 'password'}
+                        defaultValue="********"
+                        className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 pr-10 text-black"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowModifyPassword(!showModifyPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600"
+                      >
+                        {showModifyPassword ? <Eye size={20} /> : <EyeOff size={20} />}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="bg-[#ea580c] text-white font-bold px-8 py-2 rounded hover:bg-[#c94a0a] transition-colors"
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
 
+        </div>
       </div>
-
-      <ConfirmDialog 
-        isOpen={isDeleteModalOpen}
-        title="Desactivar Sucursal"
-        message={`¿Estás seguro de que quieres desactivar la sucursal ${itemToDelete?.nombre}? (Se cambiará activa = 0)`}
-        confirmText="Sí, desactivar"
-        isDanger={true}
-        onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={() => {
-          alert('Sucursal desactivada (simulación)');
-          setIsDeleteModalOpen(false);
-        }}
-      />
     </div>
-  );
+  )
 }
