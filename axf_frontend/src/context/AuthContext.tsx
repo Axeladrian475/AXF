@@ -4,6 +4,7 @@ interface User {
   id: number;
   nombre: string;
   rol: string;
+  puesto?: string; // solo para rol 'personal': staff | entrenador | nutriologo | entrenador_nutriologo
 }
 
 interface AuthContextType {

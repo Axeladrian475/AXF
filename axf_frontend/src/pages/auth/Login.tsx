@@ -23,13 +23,22 @@ export default function Login() {
       
       console.log('[AUTH] Login exitoso:', data.user);
       
-      // Redireccionamos al dashboard
-      const rol = data.user.rol;
-      if (rol === 'maestro')   navigate('/sucursales');
-      else if (rol === 'sucursal') navigate('/sucursal');
-      else if (rol === 'entrenador' || rol === 'entrenador_nutriologo') navigate('/entrenamiento');
-      else if (rol === 'nutriologo') navigate('/nutricion');
-      else navigate('/dashboard');
+      const rol    = data.user.rol;
+      const puesto = data.user.puesto ?? '';
+
+      if (rol === 'maestro')  { navigate('/sucursales'); return; }
+      if (rol === 'sucursal') { navigate('/sucursal');   return; }
+
+      // Para el personal, el puesto decide a dónde va
+      if (rol === 'personal') {
+        if (puesto === 'entrenador')             { navigate('/dashboard'); return; }
+        if (puesto === 'nutriologo')             { navigate('/dashboard'); return; }
+        if (puesto === 'entrenador_nutriologo')  { navigate('/dashboard'); return; }
+        navigate('/dashboard'); // staff y cualquier otro
+        return;
+      }
+
+      navigate('/dashboard');
       
     } catch (err: any) {
       console.error('[AUTH] Error:', err);
