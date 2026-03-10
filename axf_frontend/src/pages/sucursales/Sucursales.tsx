@@ -25,15 +25,15 @@ export default function Sucursales() {
   }
 
   return (
-    <div className="min-h-screen bg-[#e97632]">
+    <div className="min-h-screen bg-[#F26A21]">
       {/* HEADER CON TABS */}
-      <div className="bg-[#1e293b] px-4 py-3">
+      <div className="bg-[#1e293b] px-4 py-3 rounded-full">
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab('agregar')}
             className={`px-6 py-2 rounded-full font-bold text-base transition-all border-2 ${
               activeTab === 'agregar'
-                ? 'bg-[#ea580c] text-white border-[#ea580c]'
+                ? 'bg-[#F26A21] text-white border-[#F26A21]'
                 : 'bg-white text-black border-black'
             }`}
           >
@@ -43,7 +43,7 @@ export default function Sucursales() {
             onClick={() => setActiveTab('buscar')}
             className={`px-6 py-2 rounded-full font-bold text-base transition-all border-2 ${
               activeTab === 'buscar'
-                ? 'bg-[#ea580c] text-white border-[#ea580c]'
+                ? 'bg-[#F26A21] text-white border-[#F26A21]'
                 : 'bg-white text-black border-black'
             }`}
           >
@@ -53,7 +53,7 @@ export default function Sucursales() {
             onClick={() => setActiveTab('modificar')}
             className={`px-6 py-2 rounded-full font-bold text-base transition-all border-2 ${
               activeTab === 'modificar'
-                ? 'bg-[#ea580c] text-white border-[#ea580c]'
+                ? 'bg-[#F26A21] text-white border-[#F26A21]'
                 : 'bg-white text-black border-black'
             }`}
           >

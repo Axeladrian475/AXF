@@ -8,7 +8,7 @@ interface MainLayoutProps {
 
 export default function MainLayout({ children }: MainLayoutProps) {
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#f3f4f6] overflow-hidden font-sans">
+    <div className="flex flex-col h-screen w-screen bg-[#F26A21] overflow-hidden font-sans">
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
@@ -18,4 +18,4 @@ export default function MainLayout({ children }: MainLayoutProps) {
       </div>
     </div>
   );
-} 
+}
