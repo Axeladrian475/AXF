@@ -4,7 +4,9 @@ interface User {
   id: number;
   nombre: string;
   rol: string;
-  puesto?: string; // solo para rol 'personal': staff | entrenador | nutriologo | entrenador_nutriologo
+  puesto?: string;          // staff | entrenador | nutriologo | entrenador_nutriologo
+  id_sucursal?: number;     // id de la sucursal asignada
+  nombre_sucursal?: string; // nombre legible de la sucursal
 }
 
 interface AuthContextType {

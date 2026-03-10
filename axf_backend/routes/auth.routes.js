@@ -28,18 +28,41 @@ router.post('/login', async (req, res) => {
             if (!valid) return res.status(401).json({ message: 'Contraseña incorrecta' });
             
             const token = jwt.sign({ id: user.id_sucursal, rol: 'sucursal' }, process.env.JWT_SECRET, { expiresIn: '8h' });
-            return res.json({ token, user: { nombre: user.nombre, rol: 'sucursal' } });
+            return res.json({
+                token,
+                user: {
+                    nombre: user.nombre,
+                    rol: 'sucursal',
+                    id_sucursal: user.id_sucursal,
+                    nombre_sucursal: user.nombre,
+                }
+            });
         }
 
         // 3. Validar Nivel 3: Personal (Staff / Entrenador / Nutriólogo)
-        let [personal] = await db.query('SELECT id_personal, nombres, puesto, password_hash FROM personal WHERE usuario = ? AND activo = 1', [usuario]);
+        let [personal] = await db.query(
+            `SELECT p.id_personal, p.nombres, p.puesto, p.password_hash, p.id_sucursal, s.nombre AS nombre_sucursal
+             FROM personal p
+             INNER JOIN sucursales s ON s.id_sucursal = p.id_sucursal
+             WHERE p.usuario = ? AND p.activo = 1`,
+            [usuario]
+        );
         if (personal.length > 0) {
             const user = personal[0];
             const valid = await bcrypt.compare(password, user.password_hash);
             if (!valid) return res.status(401).json({ message: 'Contraseña incorrecta' });
             
             const token = jwt.sign({ id: user.id_personal, rol: 'personal', puesto: user.puesto }, process.env.JWT_SECRET, { expiresIn: '8h' });
-            return res.json({ token, user: { nombre: user.nombres, rol: 'personal', puesto: user.puesto } });
+            return res.json({
+                token,
+                user: {
+                    nombre: user.nombres,
+                    rol: 'personal',
+                    puesto: user.puesto,
+                    id_sucursal: user.id_sucursal,
+                    nombre_sucursal: user.nombre_sucursal,
+                }
+            });
         }
 
         // Si no está en ninguna de las 3 jerarquías

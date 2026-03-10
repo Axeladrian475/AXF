@@ -52,7 +52,7 @@ export default function Dashboard() {
     <div className="p-4 space-y-4">
       {/* BANNER INFO */}
       <div className="bg-white rounded-xl border border-gray-200 px-6 py-3 flex flex-wrap gap-6 items-center text-sm shadow-sm">
-        <span><span className="font-bold text-gray-500">Sucursal Asignada:</span> <span className="font-bold text-black"> Central</span></span>
+        <span><span className="font-bold text-gray-500">Sucursal Asignada:</span> <span className="font-bold text-black"> {user?.nombre_sucursal ?? '—'}</span></span>
         <span><span className="font-bold text-gray-500">Mi Rango:</span> <span className="font-bold text-black"> {ROL_LABEL[acceso] ?? ROL_LABEL[rolRaw] ?? rolRaw}</span></span>
         <span><span className="font-bold text-gray-500">Nombre:</span> <span className="font-bold text-black"> {user?.nombre}</span></span>
       </div>
