@@ -52,11 +52,7 @@ const navByRole: Record<string, { to: string; label: string; icon: IconKey }[]> 
     { to: '/sucursales', label: 'Sucursales', icon: 'sucursales' },
   ],
   sucursal: [
-    { to: '/dashboard',  label: 'Panel',        icon: 'dashboard' },
-    { to: '/personal',   label: 'Personal',     icon: 'personal' },
-    { to: '/usuarios',   label: 'Suscriptores', icon: 'usuarios' },
-    { to: '/alertas',    label: 'Alertas',      icon: 'alertas' },
-    { to: '/chat',       label: 'Avisos',       icon: 'chat' },
+    { to: '/sucursal', label: 'Panel', icon: 'dashboard' },
   ],
   staff: [
     { to: '/dashboard',  label: 'Panel',        icon: 'dashboard' },

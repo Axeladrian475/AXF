@@ -24,7 +24,12 @@ export default function Login() {
       console.log('[AUTH] Login exitoso:', data.user);
       
       // Redireccionamos al dashboard
-      navigate('/dashboard');
+      const rol = data.user.rol;
+      if (rol === 'maestro')   navigate('/sucursales');
+      else if (rol === 'sucursal') navigate('/sucursal');
+      else if (rol === 'entrenador' || rol === 'entrenador_nutriologo') navigate('/entrenamiento');
+      else if (rol === 'nutriologo') navigate('/nutricion');
+      else navigate('/dashboard');
       
     } catch (err: any) {
       console.error('[AUTH] Error:', err);
