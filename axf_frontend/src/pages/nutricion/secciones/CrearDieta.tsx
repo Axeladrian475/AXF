@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { getRecetas, textoIngredientes } from '../../../store/recetasStore'
 
 interface Props { onBack: () => void }
 
@@ -12,15 +13,7 @@ const SUSCRIPTORES = [
 
 const DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']
 
-const RECETAS_MOCK = [
-  { id: 1, nombre: 'Ensalada de Pollo Fit',  kcal: 350, prot: 35 },
-  { id: 2, nombre: 'Batido Post-Entreno',     kcal: 480, prot: 40 },
-  { id: 3, nombre: 'Avena con Fruta',         kcal: 200, prot: 8  },
-  { id: 4, nombre: 'Hot Cakes Avena',         kcal: 450, prot: 20 },
-  { id: 5, nombre: 'Pollo y Verduras',        kcal: 500, prot: 40 },
-  { id: 6, nombre: 'Arroz con Atún',          kcal: 380, prot: 30 },
-  { id: 7, nombre: 'Batido Proteína',         kcal: 200, prot: 25 },
-]
+
 
 interface Comida {
   id: number
@@ -91,27 +84,27 @@ export default function CrearDieta({ onBack }: Props) {
   const actualizarComida = (id: number, campo: keyof Comida, val: string) =>
     setComidas(comidas.map(c => c.id === id ? { ...c, [campo]: val } : c))
 
-  // Soltar receta en una comida → AGREGA al texto existente
+  // Soltar receta → escribe ingredientes detallados en el campo de texto
   const soltarReceta = (comidaId: number, recetaId: number) => {
-    const receta = RECETAS_MOCK.find(r => r.id === recetaId)
+    const recetas = getRecetas()
+    const receta = recetas.find(r => r.id === recetaId)
     if (!receta) return
     setComidas(comidas.map(c => {
       if (c.id !== comidaId) return c
-      const linea = `${receta.nombre} (${receta.kcal} Kcal, ${receta.prot}g Prot)`
+      const texto = textoIngredientes(receta)
       return {
         ...c,
-        texto: c.texto ? `${c.texto}\n${linea}` : linea,
-        kcal:  c.kcal
-          ? String(parseInt(c.kcal) + receta.kcal)
-          : String(receta.kcal),
+        texto: c.texto ? `${c.texto}\n\n${texto}` : texto,
+        kcal: c.kcal ? String(parseInt(c.kcal) + receta.kcal) : String(receta.kcal),
       }
     }))
   }
 
   const totalKcal = comidas.reduce((s, c) => s + (parseInt(c.kcal) || 0), 0)
 
-  const recetasFiltradas = RECETAS_MOCK.filter(r =>
-    r.nombre.toLowerCase().includes(busReceta.toLowerCase())
+  const recetasFiltradas = useMemo(() =>
+    getRecetas().filter(r => r.nombre.toLowerCase().includes(busReceta.toLowerCase())),
+    [busReceta]
   )
 
   // ── MODAL VERIFICACIÓN ────────────────────────────────────────────────────
@@ -244,7 +237,7 @@ export default function CrearDieta({ onBack }: Props) {
                 <div key={r.id} draggable onDragStart={() => setDragId(r.id)}
                   className="bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-grab hover:border-[#ea580c] hover:shadow-sm transition-all">
                   <p className="text-xs font-bold text-black">{r.nombre}</p>
-                  <p className="text-xs text-gray-500">{r.kcal} Kcal | {r.prot}g Prot</p>
+                  <p className="text-xs text-gray-500">{r.kcal} Kcal | {r.proteinas}g Prot</p>
                 </div>
               ))}
               {recetasFiltradas.length === 0 && (
