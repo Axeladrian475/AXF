@@ -18,7 +18,7 @@ function RootRedirect() {
   const { isAuthenticated, user } = useContext(AuthContext);
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   const rol    = user?.rol    ?? '';
-  const puesto = user?.puesto ?? '';
+  //const puesto = user?.puesto ?? '';
   if (rol === 'maestro')  return <Navigate to="/sucursales" replace />;
   if (rol === 'sucursal') return <Navigate to="/sucursal"   replace />;
   // personal siempre al dashboard (el dashboard filtra por puesto)
