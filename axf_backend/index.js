@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import pool from './config/database.js';
 import authRoutes from './routes/auth.routes.js';
+import sucursalesRoutes from './routes/sucursales.routes.js';
 
 dotenv.config();
 
@@ -13,6 +14,7 @@ app.use(express.json());
 
 // Montar rutas
 app.use('/api/auth', authRoutes);
+app.use('/api/sucursales', sucursalesRoutes);
 
 async function startServer() {
   try {
