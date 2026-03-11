@@ -8,6 +8,8 @@ import personalRoutes     from './routes/personal.routes.js';
 import suscripcionesRoutes from './routes/suscripciones.routes.js';
 import promocionesRoutes  from './routes/promociones.routes.js';
 import incidenciasRoutes  from './routes/incidencias.routes.js';
+import avisosRoutes       from './routes/avisos.routes.js';
+import recompensasRoutes  from './routes/recompensas.routes.js';
 
 dotenv.config();
 
@@ -33,6 +35,8 @@ app.use('/api/personal',      personalRoutes);
 app.use('/api/suscripciones', suscripcionesRoutes);
 app.use('/api/promociones',   promocionesRoutes);
 app.use('/api/incidencias',   incidenciasRoutes);
+app.use('/api/avisos',        avisosRoutes);
+app.use('/api/recompensas',   recompensasRoutes);
 
 // ── Iniciar servidor ──────────────────────────────────────────────────────────
 async function startServer() {
