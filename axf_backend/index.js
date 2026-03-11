@@ -1,15 +1,19 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import pool from './config/database.js';
-import authRoutes         from './routes/auth.routes.js';
-import sucursalesRoutes   from './routes/sucursales.routes.js';
-import personalRoutes     from './routes/personal.routes.js';
-import suscripcionesRoutes from './routes/suscripciones.routes.js';
-import promocionesRoutes  from './routes/promociones.routes.js';
-import incidenciasRoutes  from './routes/incidencias.routes.js';
-import avisosRoutes       from './routes/avisos.routes.js';
-import recompensasRoutes  from './routes/recompensas.routes.js';
+import express  from 'express';
+import cors     from 'cors';
+import dotenv   from 'dotenv';
+import pool     from './config/database.js';
+
+// ── Rutas ─────────────────────────────────────────────────────────────────────
+import authRoutes           from './routes/auth.routes.js';
+import sucursalesRoutes     from './routes/sucursales.routes.js';
+import personalRoutes       from './routes/personal.routes.js';
+import suscriptoresRoutes   from './routes/suscriptores.routes.js';   // Módulo Usuarios
+import suscripcionesRoutes  from './routes/suscripciones.routes.js';
+import promocionesRoutes    from './routes/promociones.routes.js';
+import incidenciasRoutes    from './routes/incidencias.routes.js';
+import avisosRoutes         from './routes/avisos.routes.js';
+import recompensasRoutes    from './routes/recompensas.routes.js';
+import dashboardRoutes      from './routes/dashboard.routes.js';
 
 dotenv.config();
 
@@ -25,18 +29,20 @@ app.use(cors({
 
 app.use(express.json());
 
-// ── Servir fotos del personal estáticamente ───────────────────────────────────
+// ── Archivos estáticos ────────────────────────────────────────────────────────
 app.use('/uploads', express.static('uploads'));
 
-// ── Rutas ─────────────────────────────────────────────────────────────────────
-app.use('/api/auth',          authRoutes);
-app.use('/api/sucursales',    sucursalesRoutes);
-app.use('/api/personal',      personalRoutes);
-app.use('/api/suscripciones', suscripcionesRoutes);
-app.use('/api/promociones',   promocionesRoutes);
-app.use('/api/incidencias',   incidenciasRoutes);
-app.use('/api/avisos',        avisosRoutes);
-app.use('/api/recompensas',   recompensasRoutes);
+// ── Registro de rutas ─────────────────────────────────────────────────────────
+app.use('/api/auth',           authRoutes);
+app.use('/api/sucursales',     sucursalesRoutes);
+app.use('/api/personal',       personalRoutes);
+app.use('/api/suscriptores',   suscriptoresRoutes);
+app.use('/api/suscripciones',  suscripcionesRoutes);
+app.use('/api/promociones',    promocionesRoutes);
+app.use('/api/incidencias',    incidenciasRoutes);
+app.use('/api/avisos',         avisosRoutes);
+app.use('/api/recompensas',    recompensasRoutes);
+app.use('/api/dashboard',      dashboardRoutes);
 
 // ── Iniciar servidor ──────────────────────────────────────────────────────────
 async function startServer() {
