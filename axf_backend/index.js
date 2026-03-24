@@ -2,6 +2,8 @@ import express  from 'express';
 import cors     from 'cors';
 import dotenv   from 'dotenv';
 import pool     from './config/database.js';
+import hardwareRoutes from './routes/hardware.routes.js';
+
 
 // ── Rutas ─────────────────────────────────────────────────────────────────────
 import authRoutes           from './routes/auth.routes.js';
@@ -43,6 +45,8 @@ app.use('/api/incidencias',    incidenciasRoutes);
 app.use('/api/avisos',         avisosRoutes);
 app.use('/api/recompensas',    recompensasRoutes);
 app.use('/api/dashboard',      dashboardRoutes);
+app.use('/api/hardware', hardwareRoutes);
+
 
 // ── Iniciar servidor ──────────────────────────────────────────────────────────
 async function startServer() {
