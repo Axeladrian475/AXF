@@ -86,13 +86,13 @@ router.post('/config', verificarToken, soloSucursalOMaestro, async (req, res) =>
     await db.query(
       `INSERT INTO config_reportes_periodicos
          (id_sucursal, frecuencia_dias, frecuencia_tipo, valor, ultimo_envio, proximo_envio)
-       VALUES (?, ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL ? DAY))
+       VALUES (?, ?, ?, ?, CONVERT_TZ(NOW(), '+00:00', '-06:00'), DATE_ADD(CONVERT_TZ(NOW(), '+00:00', '-06:00'), INTERVAL ? DAY))
        ON DUPLICATE KEY UPDATE
          frecuencia_dias = VALUES(frecuencia_dias),
          frecuencia_tipo = VALUES(frecuencia_tipo),
          valor           = VALUES(valor),
-         ultimo_envio    = NOW(),
-         proximo_envio   = DATE_ADD(NOW(), INTERVAL ? DAY)`,
+         ultimo_envio    = CONVERT_TZ(NOW(), '+00:00', '-06:00'),
+         proximo_envio   = DATE_ADD(CONVERT_TZ(NOW(), '+00:00', '-06:00'), INTERVAL ? DAY)`,
       [id_sucursal, frecuencia_dias, frecuencia_tipo, parseInt(valor, 10), frecuencia_dias, frecuencia_dias]
     );
 
