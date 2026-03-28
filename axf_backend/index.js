@@ -1,6 +1,6 @@
+import './env.js';                           // ← PRIMERO: carga .env antes que todo
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import pool from './config/database.js';
 import hardwareRoutes from './routes/hardware.routes.js';
 import pagosRoutes from './routes/pagos.routes.js';
@@ -10,7 +10,7 @@ import pagosRoutes from './routes/pagos.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import sucursalesRoutes from './routes/sucursales.routes.js';
 import personalRoutes from './routes/personal.routes.js';
-import suscriptoresRoutes from './routes/suscriptores.routes.js';   // Módulo Usuarios
+import suscriptoresRoutes from './routes/suscriptores.routes.js';
 import suscripcionesRoutes from './routes/suscripciones.routes.js';
 import promocionesRoutes from './routes/promociones.routes.js';
 import incidenciasRoutes from './routes/incidencias.routes.js';
@@ -20,7 +20,7 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import nutricionRoutes from './routes/nutricion.routes.js';
 import entrenamientoRoutes from './routes/entrenamiento.routes.js';
 
-dotenv.config();
+
 
 const app = express();
 

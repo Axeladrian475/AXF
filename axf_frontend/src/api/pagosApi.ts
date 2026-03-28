@@ -37,12 +37,33 @@ export const crearPreferenciaPago = async (data: {
 };
 
 /**
- * Verifica si un pago ya fue procesado y la suscripción fue creada.
- * Acepta como :ref:
- *   - payment_id numérico (que MP añade al redirect URL)
- *   - external_reference  (que pusimos en back_urls como ?extref=)
+ * Verifica el estado de un pago usando el payment_id o external_reference.
  */
 export const verificarPago = async (ref: string): Promise<VerificacionPago> => {
   const response = await axiosClient.get(`/pagos/verificar/${encodeURIComponent(ref)}`);
   return response.data;
 };
+
+export interface EsperarExtrefResponse {
+  encontrado: boolean;
+  procesado?: boolean;
+  suscripcion?: {
+    id_suscripcion: number;
+    fecha_inicio: string;
+    fecha_fin: string;
+    estado: string;
+    plan_nombre: string;
+  };
+  error?: string;
+}
+
+/**
+ * Busca en Mercado Pago pagos que coincidan con el external_reference.
+ * Si encontrado+aprobado, crea la suscripción y devuelve los datos.
+ * Diseñado para polling mientras el usuario paga en otra pestaña.
+ */
+export const esperarPagoExtref = async (extref: string): Promise<EsperarExtrefResponse> => {
+  const response = await axiosClient.get(`/pagos/esperar-extref/${encodeURIComponent(extref)}`);
+  return response.data;
+};
+
