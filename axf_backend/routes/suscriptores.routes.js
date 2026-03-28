@@ -13,6 +13,7 @@
 // ============================================================================
 
 import express from 'express';
+import db from '../config/database.js';
 import {
   verificarToken,
   personalOSucursal,
@@ -38,6 +39,42 @@ router.use(verificarToken, personalOSucursal);
 router.get   ('/otras-sucursales', listarSuscriptoresOtrasSucursales);
 router.post  ('/',                 registrarSuscriptor);
 router.get   ('/',                 listarSuscriptores);
+
+// ── POST /api/suscriptores/identificar ──────────────────────────────────────
+// Identifica a un suscriptor por su uid NFC o template de huella (valor leído
+// por el ESP32). Usado por el flujo de canje de recompensas para saber quién
+// es el suscriptor sin que tenga que ingresar su ID manualmente.
+//
+// Body: { tipo: "nfc" | "huella", valor: string }
+// Response: { id_suscriptor, nombre, puntos, activo }
+router.post('/identificar', async (req, res) => {
+  const { tipo, valor } = req.body;
+  if (!tipo || !valor) {
+    return res.status(400).json({ message: 'tipo y valor son requeridos.' });
+  }
+  if (!['nfc', 'huella'].includes(tipo)) {
+    return res.status(400).json({ message: 'tipo debe ser "nfc" o "huella".' });
+  }
+  try {
+    const campo = tipo === 'nfc' ? 'nfc_uid' : 'huella_template';
+    const [[suscriptor]] = await db.query(
+      `SELECT id_suscriptor,
+              CONCAT(nombres, ' ', apellido_paterno) AS nombre,
+              puntos,
+              activo
+       FROM suscriptores
+       WHERE ${campo} = ? LIMIT 1`,
+      [valor]
+    );
+    if (!suscriptor) {
+      return res.status(404).json({ message: 'Suscriptor no encontrado.' });
+    }
+    res.json(suscriptor);
+  } catch (err) {
+    console.error('[POST /suscriptores/identificar]', err);
+    res.status(500).json({ message: 'Error interno al identificar suscriptor.' });
+  }
+});
 
 // ─── Rutas con parámetro :id ──────────────────────────────────────────────────
 router.get   ('/:id',                    obtenerSuscriptor);

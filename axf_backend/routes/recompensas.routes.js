@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt     from 'jsonwebtoken';
 import db      from '../config/database.js';
+import { getSucursalId } from '../middlewares/auth.js';
 
 const router = express.Router();
 
@@ -17,7 +18,15 @@ function verificarToken(req, res, next) {
   }
 }
 
-// ─── Middleware: solo sucursal o maestro ─────────────────────────────────────
+// ─── Middleware: personal, sucursal o maestro ────────────────────────────────
+function personalOSucursalOMaestro(req, res, next) {
+  if (!['personal', 'sucursal', 'maestro'].includes(req.usuario.rol)) {
+    return res.status(403).json({ message: 'Acceso no autorizado' });
+  }
+  next();
+}
+
+// ─── Middleware: solo sucursal o maestro (admin) ─────────────────────────────
 function soloSucursalOMaestro(req, res, next) {
   if (req.usuario.rol !== 'sucursal' && req.usuario.rol !== 'maestro') {
     return res.status(403).json({ message: 'Acceso no autorizado' });
@@ -33,9 +42,13 @@ function soloSucursalOMaestro(req, res, next) {
 // GET /api/recompensas
 // Lista todas las recompensas activas de la sucursal
 // ────────────────────────────────────────────────────────────────────────────
-router.get('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
+router.get('/', verificarToken, personalOSucursalOMaestro, async (req, res) => {
   try {
-    const id_sucursal = req.usuario.id;
+    // Resolución de id_sucursal según el rol del token
+    const id_sucursal = getSucursalId(req.usuario);
+    if (!id_sucursal) {
+      return res.status(400).json({ message: 'No se pudo determinar la sucursal.' });
+    }
 
     const [recompensas] = await db.query(
       `SELECT id_recompensa, nombre, costo_puntos, activa
@@ -182,12 +195,12 @@ router.delete('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => 
 // Body: { id_recompensa: number, id_suscriptor: number }
 // El id_personal se toma del token JWT (quien está logueado haciendo el canje)
 // ────────────────────────────────────────────────────────────────────────────
-router.post('/canjear', verificarToken, async (req, res) => {
+router.post('/canjear', verificarToken, personalOSucursalOMaestro, async (req, res) => {
   const conn = await db.getConnection();
   try {
-    const { id: id_personal, rol, id: id_sucursal_token } = req.usuario;
+    const { id: id_personal, rol } = req.usuario;
 
-    // Solo personal o sucursal pueden hacer canjes
+    // Solo personal o sucursal pueden registrar canjes (maestro no opera en sucursal)
     if (!['personal', 'sucursal'].includes(rol)) {
       return res.status(403).json({ message: 'No tienes permiso para realizar canjes.' });
     }
