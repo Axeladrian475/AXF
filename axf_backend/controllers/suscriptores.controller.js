@@ -316,6 +316,7 @@ export async function modificarSuscriptor(req, res) {
     const {
       nombres, apellido_paterno, apellido_materno,
       fecha_nacimiento, sexo, direccion, codigo_postal, telefono, correo,
+      password, nfc_uid, huella_template,
     } = req.body;
 
     // Verificar que el suscriptor existe
@@ -338,8 +339,28 @@ export async function modificarSuscriptor(req, res) {
       }
     }
 
+    // Verificar NFC duplicado en otro suscriptor
+    if (nfc_uid) {
+      const [dupNfc] = await db.query(
+        `SELECT id_suscriptor FROM suscriptores WHERE nfc_uid = ? AND id_suscriptor != ?`,
+        [nfc_uid.trim(), id]
+      );
+      if (dupNfc.length > 0) {
+        return res.status(409).json({ message: 'Esa tarjeta NFC ya está asignada a otro suscriptor.' });
+      }
+    }
+
     if (sexo && !['M', 'F', 'Otro'].includes(sexo)) {
       return res.status(400).json({ message: 'Sexo inválido. Valores aceptados: M, F, Otro.' });
+    }
+
+    // Hash de contraseña si se proveyó una nueva
+    let password_hash = null;
+    if (password && password.trim().length >= 6) {
+      const bcrypt = await import('bcrypt');
+      password_hash = await bcrypt.hash(password.trim(), 10);
+    } else if (password && password.trim().length > 0) {
+      return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres.' });
     }
 
     await db.query(
@@ -352,18 +373,24 @@ export async function modificarSuscriptor(req, res) {
          direccion         = COALESCE(?, direccion),
          codigo_postal     = COALESCE(?, codigo_postal),
          telefono          = COALESCE(?, telefono),
-         correo            = COALESCE(?, correo)
+         correo            = COALESCE(?, correo),
+         password_hash     = COALESCE(?, password_hash),
+         nfc_uid           = COALESCE(?, nfc_uid),
+         huella_template   = COALESCE(?, huella_template)
        WHERE id_suscriptor = ?`,
       [
-        nombres?.trim()           ?? null,
-        apellido_paterno?.trim()  ?? null,
-        apellido_materno?.trim()  ?? null,
-        fecha_nacimiento          ?? null,
-        sexo                      ?? null,
-        direccion?.trim()         ?? null,
-        codigo_postal?.trim()     ?? null,
-        telefono?.trim()          ?? null,
-        correo?.trim().toLowerCase() ?? null,
+        nombres?.trim()                    ?? null,
+        apellido_paterno?.trim()           ?? null,
+        apellido_materno?.trim()           ?? null,
+        fecha_nacimiento                   ?? null,
+        sexo                               ?? null,
+        direccion?.trim()                  ?? null,
+        codigo_postal?.trim()              ?? null,
+        telefono?.trim()                   ?? null,
+        correo?.trim().toLowerCase()       ?? null,
+        password_hash,
+        nfc_uid?.trim()                    ?? null,
+        huella_template?.trim()            ?? null,
         id,
       ]
     );
@@ -371,7 +398,7 @@ export async function modificarSuscriptor(req, res) {
     res.json({ message: 'Suscriptor actualizado correctamente.' });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ message: 'Correo electrónico ya registrado.' });
+      return res.status(409).json({ message: 'Correo electrónico o NFC ya registrado en otro suscriptor.' });
     }
     console.error('[PUT /suscriptores/:id]', error);
     res.status(500).json({ message: 'Error al modificar el suscriptor.' });
