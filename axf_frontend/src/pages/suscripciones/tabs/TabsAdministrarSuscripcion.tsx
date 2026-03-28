@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   getSuscripciones,
   getSuscripcionActiva,
@@ -7,6 +7,7 @@ import {
   type SuscripcionActiva,
   type SuscripcionItem,
 } from '../../../api/suscripcionesApi'
+import { crearPreferenciaPago, verificarPago } from '../../../api/pagosApi'
 
 const TERMINOS = [
   'Definición y Alcance del Servicio: Acceso a instalaciones y equipos.',
@@ -103,6 +104,9 @@ function TarjetaSuscripcion({
   )
 }
 
+// ── Constantes de retry (backoff exponencial) ─────────────────────────────────
+const RETRY_DELAYS = [3000, 5000, 8000, 12000, 20000] // ms entre intentos
+
 export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNombre }: Props) {
   const [planes, setPlanes]               = useState<TipoSuscripcion[]>([])
   const [estadoActivo, setEstadoActivo]   = useState<SuscripcionActiva | null>(null)
@@ -115,14 +119,23 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
   const [modalPago, setModalPago]                 = useState(false)
   const [aceptaTerminos, setAceptaTerminos]       = useState(false)
   const [procesando, setProcesando]               = useState(false)
-  const [toast, setToast] = useState<{ tipo: 'ok' | 'err'; msg: string } | null>(null)
+  const [procesandoMP, setProcesandoMP]           = useState(false)
 
-  const mostrarToast = (tipo: 'ok' | 'err', msg: string) => {
+  // Estado para el proceso de verificación post-pago MP
+  const [verificandoPago, setVerificandoPago]     = useState(false)
+  const [intentoVerif, setIntentoVerif]           = useState(0)
+
+  const [toast, setToast] = useState<{ tipo: 'ok' | 'err' | 'info'; msg: string } | null>(null)
+
+  // Ref para cancelar reintentos si el componente se desmonta
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const mostrarToast = (tipo: 'ok' | 'err' | 'info', msg: string, duracion = 6000) => {
     setToast({ tipo, msg })
-    setTimeout(() => setToast(null), 4000)
+    setTimeout(() => setToast(null), duracion)
   }
 
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async () => {
     setCargandoPlanes(true)
     setCargandoEstado(true)
     setErrorPlanes(null)
@@ -139,7 +152,108 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
       setCargandoPlanes(false)
       setCargandoEstado(false)
     }
-  }
+  }, [suscriptorId])
+
+  // ── Verificación con retry robusto tras redirect de Mercado Pago ─────────────
+  //   MP puede tardar varios segundos en enviar el webhook; hacemos polling.
+  //   Usamos tanto payment_id (que MP incluye en el redirect) como extref (que
+  //   pusimos nosotros en back_urls para triangular si el payment_id no llega).
+  const iniciarVerificacionMP = useCallback(async (
+    paymentId: string | null,
+    extref: string | null,
+    intento: number
+  ) => {
+    // Elegir la referencia de búsqueda: preferimos payment_id numérico
+    const ref = paymentId ?? extref
+    if (!ref) {
+      setVerificandoPago(false)
+      mostrarToast('err', '⚠️ No se encontró referencia de pago para verificar.')
+      cargarDatos()
+      return
+    }
+
+    setIntentoVerif(intento + 1)
+
+    try {
+      const result = await verificarPago(ref)
+
+      if (result.procesado) {
+        setVerificandoPago(false)
+        mostrarToast('ok', `✅ Pago con Mercado Pago aprobado. Suscripción activa hasta ${fmtFecha(result.suscripcion!.fecha_fin)}.`, 8000)
+        cargarDatos()
+        return
+      }
+
+      if (result.aprobado) {
+        // MP aprobó el pago pero el webhook aún no llegó → reintentamos
+        if (intento < RETRY_DELAYS.length - 1) {
+          retryTimeoutRef.current = setTimeout(
+            () => iniciarVerificacionMP(paymentId, extref, intento + 1),
+            RETRY_DELAYS[intento]
+          )
+        } else {
+          // Agotamos reintentos — el webhook llegará eventualmente
+          setVerificandoPago(false)
+          mostrarToast('info', '⏳ Pago aprobado por MP. La suscripción se activará en breve (puede tardar 1-2 min).', 10000)
+          cargarDatos()
+        }
+        return
+      }
+
+      // Pago no aprobado aún — seguimos reintentando por si cambia de estado
+      if (intento < RETRY_DELAYS.length - 1) {
+        retryTimeoutRef.current = setTimeout(
+          () => iniciarVerificacionMP(paymentId, extref, intento + 1),
+          RETRY_DELAYS[intento]
+        )
+      } else {
+        setVerificandoPago(false)
+        mostrarToast('err', '⚠️ El pago fue procesado pero está pendiente de confirmación.')
+        cargarDatos()
+      }
+
+    } catch {
+      if (intento < RETRY_DELAYS.length - 1) {
+        retryTimeoutRef.current = setTimeout(
+          () => iniciarVerificacionMP(paymentId, extref, intento + 1),
+          RETRY_DELAYS[intento]
+        )
+      } else {
+        setVerificandoPago(false)
+        mostrarToast('err', 'No se pudo verificar el estado del pago. Recarga la página.')
+        cargarDatos()
+      }
+    }
+  }, [cargarDatos]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Al montar: revisar si venimos de retorno de Mercado Pago ────────────────
+  useEffect(() => {
+    const params    = new URLSearchParams(window.location.search)
+    const tipoPago  = params.get('pago')
+    const paymentId = params.get('payment_id')   // MP lo agrega automáticamente
+    const extref    = params.get('extref')        // Lo pusimos nosotros en back_urls
+    const suscriptor = params.get('suscriptor')
+
+    if (tipoPago === 'exitoso' && suscriptor === suscriptorId) {
+      // Limpiar URL sin recargar página
+      window.history.replaceState({}, '', window.location.pathname)
+      setVerificandoPago(true)
+      iniciarVerificacionMP(paymentId, extref, 0)
+
+    } else if (tipoPago === 'fallido') {
+      window.history.replaceState({}, '', window.location.pathname)
+      mostrarToast('err', '❌ El pago fue cancelado o rechazado por Mercado Pago.')
+
+    } else if (tipoPago === 'pendiente') {
+      window.history.replaceState({}, '', window.location.pathname)
+      mostrarToast('info', '⏳ El pago está pendiente de confirmación por Mercado Pago.')
+    }
+
+    return () => {
+      // Cancelar reintentos pendientes al desmontar
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current)
+    }
+  }, [suscriptorId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { cargarDatos() }, [suscriptorId])
 
@@ -155,6 +269,7 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     setModalPago(true)
   }
 
+  // ── Pago en caja (sin MP) ───────────────────────────────────────────────────
   const handleConfirmarPago = async () => {
     if (!planSeleccionado) return
     setProcesando(true)
@@ -180,20 +295,63 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     }
   }
 
+  // ── Pago con Mercado Pago ───────────────────────────────────────────────────
+  const handlePagarMercadoPago = async () => {
+    if (!planSeleccionado) return
+    setProcesandoMP(true)
+    try {
+      const data = await crearPreferenciaPago({
+        id_suscriptor: Number(suscriptorId),
+        id_tipo:       planSeleccionado.id_tipo,
+      })
+      // Redirigir al sandbox de pruebas si existe, si no al link real
+      const url = data.sandbox_init_point ?? data.init_point
+      window.location.href = url
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? 'Error al conectar con Mercado Pago.'
+      mostrarToast('err', `❌ ${msg}`)
+      setProcesandoMP(false)
+    }
+  }
+
   const tieneActiva      = estadoActivo?.activa
   const subs             = estadoActivo?.suscripciones ?? []
   const vigente          = estadoActivo?.vigente
   const totales          = estadoActivo?.totales
   const vencimientoFinal = estadoActivo?.vencimiento_final
 
+  // ── Color del toast ──────────────────────────────────────────────────────────
+  const toastColor = toast?.tipo === 'ok'
+    ? 'bg-green-600'
+    : toast?.tipo === 'info'
+      ? 'bg-blue-600'
+      : 'bg-red-600'
+
   return (
     <div className="space-y-5 relative">
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-lg shadow-lg text-white text-sm font-bold
-          ${toast.tipo === 'ok' ? 'bg-green-600' : 'bg-red-600'}`}>
+        <div className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-lg shadow-lg text-white text-sm font-bold max-w-sm
+          ${toastColor}`}>
           {toast.msg}
+        </div>
+      )}
+
+      {/* Banner de verificación en curso */}
+      {verificandoPago && (
+        <div className="bg-blue-50 border border-blue-300 rounded-lg px-5 py-4 flex items-center gap-3">
+          <svg className="animate-spin h-5 w-5 text-blue-600 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+          </svg>
+          <div>
+            <p className="font-bold text-blue-800 text-sm">Verificando pago con Mercado Pago...</p>
+            <p className="text-blue-600 text-xs">
+              Intento {intentoVerif} de {RETRY_DELAYS.length}. Esto puede tardar unos segundos.
+            </p>
+          </div>
         </div>
       )}
 
@@ -372,18 +530,49 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
                 ⚡ Este plan se acumulará al vencimiento actual ({fmtFecha(vencimientoFinal!)}).
               </p>
             )}
-            <div className="space-y-2">
-              <button onClick={handleConfirmarPago} disabled={procesando}
+            <div className="space-y-3">
+
+              {/* Botón pago en caja */}
+              <button onClick={handleConfirmarPago} disabled={procesando || procesandoMP}
                 className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">
-                {procesando ? 'Procesando...' : '✅ Confirmar Pago en Caja'}
+                {procesando ? 'Procesando...' : '💵 Confirmar Pago en Caja'}
               </button>
-              <button disabled title="Próximamente disponible"
-                className="w-full bg-blue-300 text-white font-bold py-3 rounded-lg cursor-not-allowed opacity-60 text-sm">
-                💳 Pagar con Mercado Pago (próximamente)
+
+              {/* Separador */}
+              <div className="flex items-center gap-2 text-gray-400 text-xs">
+                <div className="flex-1 border-t border-gray-200" />
+                <span>o pagar en línea</span>
+                <div className="flex-1 border-t border-gray-200" />
+              </div>
+
+              {/* Botón Mercado Pago */}
+              <button
+                onClick={handlePagarMercadoPago}
+                disabled={procesandoMP || procesando}
+                className="w-full font-bold py-3 rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2 text-white"
+                style={{ backgroundColor: procesandoMP ? '#a0aec0' : '#009ee3' }}
+              >
+                {procesandoMP ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    Redirigiendo a Mercado Pago...
+                  </>
+                ) : (
+                  <>
+                    <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+                      <circle cx="16" cy="16" r="16" fill="white" fillOpacity="0.2"/>
+                      <text x="16" y="21" textAnchor="middle" fontSize="14" fontWeight="bold" fill="white">MP</text>
+                    </svg>
+                    Pagar con Mercado Pago
+                  </>
+                )}
               </button>
             </div>
-            <button onClick={() => setModalPago(false)} disabled={procesando}
-              className="mt-4 text-gray-400 text-sm hover:text-black">Cancelar</button>
+            <button onClick={() => setModalPago(false)} disabled={procesando || procesandoMP}
+              className="mt-4 text-gray-400 text-sm hover:text-black disabled:opacity-40">Cancelar</button>
           </div>
         </div>
       )}

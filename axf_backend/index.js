@@ -1,23 +1,24 @@
-import express  from 'express';
-import cors     from 'cors';
-import dotenv   from 'dotenv';
-import pool     from './config/database.js';
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import pool from './config/database.js';
 import hardwareRoutes from './routes/hardware.routes.js';
+import pagosRoutes from './routes/pagos.routes.js';
 
 
 // ── Rutas ─────────────────────────────────────────────────────────────────────
-import authRoutes           from './routes/auth.routes.js';
-import sucursalesRoutes     from './routes/sucursales.routes.js';
-import personalRoutes       from './routes/personal.routes.js';
-import suscriptoresRoutes   from './routes/suscriptores.routes.js';   // Módulo Usuarios
-import suscripcionesRoutes  from './routes/suscripciones.routes.js';
-import promocionesRoutes    from './routes/promociones.routes.js';
-import incidenciasRoutes    from './routes/incidencias.routes.js';
-import avisosRoutes         from './routes/avisos.routes.js';
-import recompensasRoutes    from './routes/recompensas.routes.js';
-import dashboardRoutes      from './routes/dashboard.routes.js';
-import nutricionRoutes      from './routes/nutricion.routes.js';
-import entrenamientoRoutes  from './routes/entrenamiento.routes.js';
+import authRoutes from './routes/auth.routes.js';
+import sucursalesRoutes from './routes/sucursales.routes.js';
+import personalRoutes from './routes/personal.routes.js';
+import suscriptoresRoutes from './routes/suscriptores.routes.js';   // Módulo Usuarios
+import suscripcionesRoutes from './routes/suscripciones.routes.js';
+import promocionesRoutes from './routes/promociones.routes.js';
+import incidenciasRoutes from './routes/incidencias.routes.js';
+import avisosRoutes from './routes/avisos.routes.js';
+import recompensasRoutes from './routes/recompensas.routes.js';
+import dashboardRoutes from './routes/dashboard.routes.js';
+import nutricionRoutes from './routes/nutricion.routes.js';
+import entrenamientoRoutes from './routes/entrenamiento.routes.js';
 
 dotenv.config();
 
@@ -37,19 +38,20 @@ app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
 // ── Registro de rutas ─────────────────────────────────────────────────────────
-app.use('/api/auth',           authRoutes);
-app.use('/api/sucursales',     sucursalesRoutes);
-app.use('/api/personal',       personalRoutes);
-app.use('/api/suscriptores',   suscriptoresRoutes);
-app.use('/api/suscripciones',  suscripcionesRoutes);
-app.use('/api/promociones',    promocionesRoutes);
-app.use('/api/incidencias',    incidenciasRoutes);
-app.use('/api/avisos',         avisosRoutes);
-app.use('/api/recompensas',    recompensasRoutes);
-app.use('/api/dashboard',      dashboardRoutes);
-app.use('/api/nutricion',      nutricionRoutes);
-app.use('/api/entrenamiento',  entrenamientoRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/sucursales', sucursalesRoutes);
+app.use('/api/personal', personalRoutes);
+app.use('/api/suscriptores', suscriptoresRoutes);
+app.use('/api/suscripciones', suscripcionesRoutes);
+app.use('/api/promociones', promocionesRoutes);
+app.use('/api/incidencias', incidenciasRoutes);
+app.use('/api/avisos', avisosRoutes);
+app.use('/api/recompensas', recompensasRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/nutricion', nutricionRoutes);
+app.use('/api/entrenamiento', entrenamientoRoutes);
 app.use('/api/hardware', hardwareRoutes);
+app.use('/api/pagos', pagosRoutes);
 
 
 // ── Iniciar servidor ──────────────────────────────────────────────────────────
