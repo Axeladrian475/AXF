@@ -27,11 +27,28 @@ function soloSucursalOMaestro(req, res, next) {
 
 // ────────────────────────────────────────────────────────────────────────────
 // GET /api/suscripciones
-// Lista los tipos de suscripción activos de la sucursal logueada
+// Lista los tipos de suscripción activos de la sucursal logueada.
+// Acepta roles: sucursal, maestro y personal.
 // ────────────────────────────────────────────────────────────────────────────
-router.get('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
+router.get('/', verificarToken, async (req, res) => {
   try {
-    const id_sucursal = req.usuario.id;
+    let id_sucursal;
+
+    if (req.usuario.rol === 'sucursal' || req.usuario.rol === 'maestro') {
+      id_sucursal = req.usuario.id;
+    } else if (req.usuario.rol === 'personal') {
+      const [[emp]] = await db.query(
+        `SELECT id_sucursal FROM personal WHERE id_personal = ? AND activo = 1`,
+        [req.usuario.id]
+      );
+      if (!emp) {
+        return res.status(403).json({ message: 'No se pudo verificar la sucursal del empleado.' });
+      }
+      id_sucursal = emp.id_sucursal;
+    } else {
+      return res.status(403).json({ message: 'Acceso no autorizado' });
+    }
+
     const [tipos] = await db.query(
       `SELECT id_tipo, nombre, duracion_dias, precio,
               limite_sesiones_nutriologo, limite_sesiones_entrenador
