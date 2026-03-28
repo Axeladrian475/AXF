@@ -16,6 +16,8 @@ import incidenciasRoutes    from './routes/incidencias.routes.js';
 import avisosRoutes         from './routes/avisos.routes.js';
 import recompensasRoutes    from './routes/recompensas.routes.js';
 import dashboardRoutes      from './routes/dashboard.routes.js';
+import nutricionRoutes      from './routes/nutricion.routes.js';
+import entrenamientoRoutes  from './routes/entrenamiento.routes.js';
 
 dotenv.config();
 
@@ -45,6 +47,8 @@ app.use('/api/incidencias',    incidenciasRoutes);
 app.use('/api/avisos',         avisosRoutes);
 app.use('/api/recompensas',    recompensasRoutes);
 app.use('/api/dashboard',      dashboardRoutes);
+app.use('/api/nutricion',      nutricionRoutes);
+app.use('/api/entrenamiento',  entrenamientoRoutes);
 app.use('/api/hardware', hardwareRoutes);
 
 

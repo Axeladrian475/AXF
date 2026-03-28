@@ -1,36 +1,29 @@
-import { useState, useMemo } from 'react'
-import { getRecetas, textoIngredientes } from '../../../store/recetasStore'
+import { useState, useEffect, useMemo } from 'react'
+import { getSuscriptoresNutricion, getRecetas, crearDieta } from '../../../api/nutricionApi'
+import type { SuscriptorNutricion, RecetaAPI } from '../../../api/nutricionApi'
+import { generarPDFDieta } from '../../../utils/pdfExport'
+import type { DietaPDFData } from '../../../utils/pdfExport'
 
 interface Props { onBack: () => void }
 
-const SUSCRIPTORES = [
-  { id: 1, nombre: 'Laura Mendiola',      sesiones: 3 },
-  { id: 2, nombre: 'Juan Perez',           sesiones: 0 },
-  { id: 3, nombre: 'Ana García',           sesiones: 5 },
-  { id: 4, nombre: 'Carlos Rivera',        sesiones: 2 },
-  { id: 5, nombre: 'María Fernanda López', sesiones: 1 },
-]
-
 const DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']
-
-
+const DIA_NUM: Record<string, number> = { Lunes:1, Martes:2, Miércoles:3, Jueves:4, Viernes:5, Sábado:6, Domingo:7 }
 
 interface Comida {
   id: number
-  nombre: string   // editable
-  texto: string    // contenido editable libre
+  nombre: string
+  texto: string
   kcal: string
   notas: string
+  id_receta?: number
 }
 
-// plan[dia] = Comida[]
 type Plan = Record<string, Comida[]>
 
 let comidaCounter = 0
-
-function nuevaComida(nombre?: string, texto?: string): Comida {
+function nuevaComida(nombre?: string): Comida {
   comidaCounter++
-  return { id: comidaCounter, nombre: nombre ?? `Comida ${comidaCounter}`, texto: texto ?? '', kcal: '', notas: '' }
+  return { id: comidaCounter, nombre: nombre ?? `Comida ${comidaCounter}`, texto: '', kcal: '', notas: '' }
 }
 
 export default function CrearDieta({ onBack }: Props) {
@@ -40,29 +33,54 @@ export default function CrearDieta({ onBack }: Props) {
   const [susSelId, setSusSelId]       = useState<number | null>(null)
   const [errorSesion, setErrorSesion] = useState('')
 
+  // ── Datos del servidor ─────────────────────────────────────────────────────
+  const [suscriptores, setSuscriptores] = useState<SuscriptorNutricion[]>([])
+  const [recetas, setRecetas]           = useState<RecetaAPI[]>([])
+  const [cargando, setCargando]         = useState(true)
+  const [loadError, setLoadError]       = useState('')
+
   // ── Plan ──────────────────────────────────────────────────────────────────
   const [diaActivo, setDiaActivo] = useState('Lunes')
   const [plan, setPlan]           = useState<Plan>({
     Lunes: [nuevaComida('Desayuno'), nuevaComida('Comida'), nuevaComida('Cena')],
   })
   const [busReceta, setBusReceta] = useState('')
-  const [dragId, setDragId]       = useState<number | null>(null) // receta id being dragged
-  const [email, setEmail]         = useState('')
+  const [dragId, setDragId]       = useState<number | null>(null)
+  const [guardando, setGuardando] = useState(false)
+  const [exito, setExito]         = useState('')
+  const [errorGuardar, setErrorGuardar] = useState('')
 
-  // ── Suscriptor seleccionado ───────────────────────────────────────────────
+  // ── Cargar datos ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        const [sus, recs] = await Promise.all([getSuscriptoresNutricion(), getRecetas()])
+        setSuscriptores(sus)
+        setRecetas(recs)
+      } catch (e: any) {
+        setLoadError(e?.response?.data?.message ?? 'Error al cargar datos. Verifica tu sesión.')
+      } finally { setCargando(false) }
+    }
+    cargar()
+  }, [])
+
   const susFiltrados = useMemo(() =>
-    SUSCRIPTORES.filter(s => s.nombre.toLowerCase().includes(busVerif.toLowerCase())),
-    [busVerif]
-  )
-  const susSel = SUSCRIPTORES.find(s => s.id === susSelId) ?? null
+    suscriptores.filter(s => {
+      const full = `${s.nombres} ${s.apellido_paterno} ${s.apellido_materno ?? ''}`.toLowerCase()
+      return full.includes(busVerif.toLowerCase())
+    }), [busVerif, suscriptores])
+
+  const susSel = suscriptores.find(s => s.id_suscriptor === susSelId) ?? null
+  const nombreCompleto = (s: SuscriptorNutricion) =>
+    `${s.nombres} ${s.apellido_paterno} ${s.apellido_materno ?? ''}`.trim()
 
   const metaDiaria = 2600
 
   // ── Verificar sesión ──────────────────────────────────────────────────────
   const verificar = () => {
     if (!susSel) { setErrorSesion('Selecciona un suscriptor.'); return }
-    if (susSel.sesiones <= 0) {
-      setErrorSesion(`Acceso denegado: ${susSel.nombre} no tiene sesiones de nutriólogo disponibles.`)
+    if (susSel.sesiones_nutriologo <= 0) {
+      setErrorSesion(`Acceso denegado: ${nombreCompleto(susSel)} no tiene sesiones de nutriólogo disponibles.`)
       return
     }
     setErrorSesion('')
@@ -84,18 +102,22 @@ export default function CrearDieta({ onBack }: Props) {
   const actualizarComida = (id: number, campo: keyof Comida, val: string) =>
     setComidas(comidas.map(c => c.id === id ? { ...c, [campo]: val } : c))
 
-  // Soltar receta → escribe ingredientes detallados en el campo de texto
+  // Receta drag & drop
   const soltarReceta = (comidaId: number, recetaId: number) => {
-    const recetas = getRecetas()
-    const receta = recetas.find(r => r.id === recetaId)
+    const receta = recetas.find(r => r.id_receta === recetaId)
     if (!receta) return
+    const ingsTexto = receta.ingredientes
+      .map(i => `• ${i.nombre}: ${i.cantidad} ${i.unidad_medicion}`)
+      .join('\n')
+    const texto = `📋 ${receta.nombre} (${receta.calorias ?? 0} Kcal | ${receta.proteinas_g ?? 0}g prot)\n${ingsTexto}`
+
     setComidas(comidas.map(c => {
       if (c.id !== comidaId) return c
-      const texto = textoIngredientes(receta)
       return {
         ...c,
         texto: c.texto ? `${c.texto}\n\n${texto}` : texto,
-        kcal: c.kcal ? String(parseInt(c.kcal) + receta.kcal) : String(receta.kcal),
+        kcal: c.kcal ? String(parseInt(c.kcal) + (receta.calorias ?? 0)) : String(receta.calorias ?? 0),
+        id_receta: receta.id_receta,
       }
     }))
   }
@@ -103,9 +125,63 @@ export default function CrearDieta({ onBack }: Props) {
   const totalKcal = comidas.reduce((s, c) => s + (parseInt(c.kcal) || 0), 0)
 
   const recetasFiltradas = useMemo(() =>
-    getRecetas().filter(r => r.nombre.toLowerCase().includes(busReceta.toLowerCase())),
-    [busReceta]
-  )
+    recetas.filter(r => r.nombre.toLowerCase().includes(busReceta.toLowerCase())),
+    [busReceta, recetas])
+
+  // ── Guardar dieta ─────────────────────────────────────────────────────────
+  const guardarDieta = async () => {
+    if (!susSel) return
+    setGuardando(true)
+    setErrorGuardar('')
+    try {
+      // Construir array de comidas para todos los días
+      const comidasPayload: { dia: number; orden_comida: number; descripcion: string; id_receta?: number; calorias?: number; notas?: string }[] = []
+
+      for (const [dia, coms] of Object.entries(plan)) {
+        const numDia = DIA_NUM[dia] ?? 1
+        coms.forEach((c, idx) => {
+          comidasPayload.push({
+            dia: numDia,
+            orden_comida: idx + 1,
+            descripcion: c.texto || c.nombre,
+            id_receta: c.id_receta,
+            calorias: parseInt(c.kcal) || undefined,
+            notas: c.notas || undefined,
+          })
+        })
+      }
+
+      await crearDieta({
+        id_suscriptor: susSel.id_suscriptor,
+        comidas: comidasPayload,
+      })
+
+      setExito('✅ Dieta guardada. Generando PDF...')
+
+      // — Generar PDF profesional automáticamente —
+      const fecha = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
+      const usuario = JSON.parse(localStorage.getItem('usuario') ?? '{}')
+      const nombreNutriologo = usuario.nombre ?? usuario.usuario ?? 'Nutriólogo'
+
+      const pdfData: DietaPDFData = {
+        suscriptor: {
+          nombre: nombreCompleto(susSel),
+          sesiones: susSel.sesiones_nutriologo - 1,
+        },
+        nutriologo: nombreNutriologo,
+        plan,
+        metaDiaria,
+        fecha,
+      }
+      setTimeout(() => generarPDFDieta(pdfData), 300)
+      setTimeout(() => setExito(''), 6000)
+    } catch (err: any) {
+      setErrorGuardar(err.response?.data?.message || 'Error al guardar dieta')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
 
   // ── MODAL VERIFICACIÓN ────────────────────────────────────────────────────
   if (verificando) {
@@ -115,7 +191,6 @@ export default function CrearDieta({ onBack }: Props) {
           <div className="flex items-center gap-3 mb-4 opacity-30 pointer-events-none">
             <h2 className="text-xl font-bold text-black">Crear Dieta</h2>
           </div>
-          {/* Fondo decorativo borroso */}
           <div className="opacity-20 pointer-events-none mb-4 flex gap-4">
             <div className="w-48 space-y-2">
               {['Desayuno','Comida','Cena'].map(n => (
@@ -128,7 +203,6 @@ export default function CrearDieta({ onBack }: Props) {
             <div className="flex-1 border-2 border-dashed border-gray-300 rounded-lg min-h-32" />
           </div>
 
-          {/* Modal superpuesto */}
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl">
               <div className="flex justify-center mb-3">
@@ -139,27 +213,34 @@ export default function CrearDieta({ onBack }: Props) {
               <h3 className="font-bold text-black text-lg mb-1 text-center">Verificación de Sesiones</h3>
               <p className="text-sm text-gray-500 mb-4 text-center">Seleccione al suscriptor para verificar disponibilidad.</p>
 
-              {/* Búsqueda */}
-              <input type="text" placeholder="Buscar suscriptor..." value={busVerif}
-                onChange={e => { setBusVerif(e.target.value); setSusSelId(null) }}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black mb-1" />
+              {cargando ? (
+                <p className="text-xs text-gray-400 text-center py-4">Cargando suscriptores...</p>
+              ) : loadError ? (
+                <p className="text-red-600 text-xs font-bold text-center py-4">❌ {loadError}</p>
+              ) : (
+                <>
+                  <input type="text" placeholder="Buscar suscriptor..." value={busVerif}
+                    onChange={e => { setBusVerif(e.target.value); setSusSelId(null) }}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black mb-1" />
 
-              {/* Lista filtrada */}
-              <div className="border border-gray-200 rounded-lg overflow-hidden mb-3 max-h-32 overflow-y-auto">
-                {susFiltrados.map(s => (
-                  <button key={s.id} onClick={() => { setSusSelId(s.id); setBusVerif(s.nombre) }}
-                    className={`w-full text-left px-3 py-2 text-sm border-b border-gray-100 last:border-0 transition-colors
-                      ${susSelId === s.id ? 'bg-[#ea580c] text-white font-bold' : 'text-black hover:bg-orange-50'}`}>
-                    <span>{s.nombre}</span>
-                    <span className={`ml-2 text-xs ${susSelId === s.id ? 'text-orange-100' : s.sesiones > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                      {s.sesiones} sesión{s.sesiones !== 1 ? 'es' : ''}
-                    </span>
-                  </button>
-                ))}
-                {susFiltrados.length === 0 && (
-                  <p className="px-3 py-2 text-xs text-gray-400">Sin resultados</p>
-                )}
-              </div>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden mb-3 max-h-32 overflow-y-auto">
+                    {susFiltrados.map(s => (
+                      <button key={s.id_suscriptor}
+                        onClick={() => { setSusSelId(s.id_suscriptor); setBusVerif(nombreCompleto(s)) }}
+                        className={`w-full text-left px-3 py-2 text-sm border-b border-gray-100 last:border-0 transition-colors
+                          ${susSelId === s.id_suscriptor ? 'bg-[#ea580c] text-white font-bold' : 'text-black hover:bg-orange-50'}`}>
+                        <span>{nombreCompleto(s)}</span>
+                        <span className={`ml-2 text-xs ${susSelId === s.id_suscriptor ? 'text-orange-100' : s.sesiones_nutriologo > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {s.sesiones_nutriologo} sesión{s.sesiones_nutriologo !== 1 ? 'es' : ''}
+                        </span>
+                      </button>
+                    ))}
+                    {susFiltrados.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-gray-400">Sin resultados</p>
+                    )}
+                  </div>
+                </>
+              )}
 
               {errorSesion && (
                 <p className="text-red-600 text-xs font-bold text-center mb-3">{errorSesion}</p>
@@ -197,19 +278,33 @@ export default function CrearDieta({ onBack }: Props) {
             </button>
             <div>
               <h2 className="text-xl font-bold text-black">Crear Dieta</h2>
-              <p className="text-xs text-gray-500">Diseñando para: <span className="font-bold text-[#ea580c]">{susSel?.nombre}</span>
-                <span className="ml-2 text-green-600">({susSel?.sesiones} sesiones disponibles)</span>
+              <p className="text-xs text-gray-500">Diseñando para: <span className="font-bold text-[#ea580c]">{susSel ? nombreCompleto(susSel) : ''}</span>
+                <span className="ml-2 text-green-600">({susSel?.sesiones_nutriologo} sesiones disponibles)</span>
               </p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500">Meta Diaria</p>
-            <p className="font-black text-black">{metaDiaria.toLocaleString()} Kcal</p>
-            <p className={`text-xs font-bold ${totalKcal > metaDiaria ? 'text-red-500' : 'text-green-600'}`}>
-              Total hoy: {totalKcal.toLocaleString()} Kcal
-            </p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 italic">PDF se genera al guardar</span>
+            <div className="text-right">
+              <p className="text-xs text-gray-500">Meta Diaria</p>
+              <p className="font-black text-black">{metaDiaria.toLocaleString()} Kcal</p>
+              <p className={`text-xs font-bold ${totalKcal > metaDiaria ? 'text-red-500' : 'text-green-600'}`}>
+                Total hoy: {totalKcal.toLocaleString()} Kcal
+              </p>
+            </div>
           </div>
         </div>
+
+        {exito && (
+          <div className="mb-4 bg-green-50 border border-green-300 text-green-800 text-sm font-bold px-4 py-3 rounded-lg">
+            ✅ {exito}
+          </div>
+        )}
+        {errorGuardar && (
+          <div className="mb-4 bg-red-50 border border-red-300 text-red-800 text-sm font-bold px-4 py-3 rounded-lg">
+            ❌ {errorGuardar}
+          </div>
+        )}
 
         {/* Selector día */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
@@ -225,19 +320,19 @@ export default function CrearDieta({ onBack }: Props) {
           ))}
         </div>
 
-        <div className="flex gap-4">
+        <div id="pdf-dieta" className="flex gap-4">
           {/* Panel recetas */}
           <div className="w-52 shrink-0">
             <p className="font-bold text-sm text-black mb-2">🔍 Buscar Receta</p>
             <input type="text" placeholder="Buscar receta por nombre..." value={busReceta}
               onChange={e => setBusReceta(e.target.value)}
               className="w-full border border-gray-300 rounded px-3 py-1.5 text-xs text-black mb-2 bg-white" />
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
               {recetasFiltradas.map(r => (
-                <div key={r.id} draggable onDragStart={() => setDragId(r.id)}
+                <div key={r.id_receta} draggable onDragStart={() => setDragId(r.id_receta)}
                   className="bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-grab hover:border-[#ea580c] hover:shadow-sm transition-all">
                   <p className="text-xs font-bold text-black">{r.nombre}</p>
-                  <p className="text-xs text-gray-500">{r.kcal} Kcal | {r.proteinas}g Prot</p>
+                  <p className="text-xs text-gray-500">{r.calorias ?? 0} Kcal | {r.proteinas_g ?? 0}g Prot</p>
                 </div>
               ))}
               {recetasFiltradas.length === 0 && (
@@ -245,21 +340,8 @@ export default function CrearDieta({ onBack }: Props) {
               )}
             </div>
 
-            {/* Opciones entrega */}
-            <div className="mt-4 space-y-2">
-              <p className="font-bold text-xs text-black uppercase">Opciones de Entrega</p>
-              <button className="w-full bg-gray-700 text-white font-bold py-1.5 rounded text-xs hover:bg-gray-800 flex items-center justify-center gap-1">
-                🖨 Imprimir Dieta (PDF)
-              </button>
-              <button className="w-full bg-purple-600 text-white font-bold py-1.5 rounded text-xs hover:bg-purple-700 flex items-center justify-center gap-1">
-                📱 Enviar por App
-              </button>
-              <input type="email" placeholder="Correo del suscriptor" value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs text-black bg-white" />
-              <button className="w-full bg-blue-600 text-white font-bold py-1.5 rounded text-xs hover:bg-blue-700 flex items-center justify-center gap-1">
-                📧 Enviar por Correo
-              </button>
+            <div className="mt-4">
+              <p className="text-xs text-gray-400 italic text-center">📄 PDF se genera automáticamente al guardar</p>
             </div>
           </div>
 
@@ -277,7 +359,6 @@ export default function CrearDieta({ onBack }: Props) {
               {comidas.map(comida => (
                 <div key={comida.id}
                   className="border border-gray-200 rounded-lg bg-white overflow-hidden">
-                  {/* Header comida */}
                   <div className="flex items-center justify-between bg-gray-50 px-3 py-2 border-b border-gray-200">
                     <input
                       value={comida.nombre}
@@ -288,7 +369,6 @@ export default function CrearDieta({ onBack }: Props) {
                   </div>
 
                   <div className="p-3 space-y-2">
-                    {/* Zona drag & drop + textarea editable */}
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">
                         Ingredientes y Detalles <span className="text-gray-400">(arrastra una receta o escribe manualmente)</span>
@@ -332,8 +412,9 @@ export default function CrearDieta({ onBack }: Props) {
 
             {comidas.length > 0 && (
               <div className="flex justify-end mt-4">
-                <button className="bg-[#ea580c] text-white font-bold px-6 py-2 rounded hover:bg-[#c94a0a] transition-colors text-sm">
-                  💾 Guardar Dieta del Día
+                <button onClick={guardarDieta} disabled={guardando}
+                  className="bg-[#ea580c] text-white font-bold px-6 py-2 rounded hover:bg-[#c94a0a] transition-colors text-sm disabled:opacity-50">
+                  {guardando ? 'Guardando...' : '💾 Guardar Dieta Completa'}
                 </button>
               </div>
             )}
