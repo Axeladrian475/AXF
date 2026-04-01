@@ -520,7 +520,7 @@ export async function obtenerSuscripcionActiva(req, res) {
          sub.estado,
          sub.sesiones_nutriologo_restantes,
          sub.sesiones_entrenador_restantes,
-         sub.mp_payment_id,
+         sub.paypal_order_id,
          ts.nombre          AS plan_nombre,
          ts.duracion_dias   AS plan_duracion_dias,
          ts.precio          AS plan_precio,
@@ -568,7 +568,7 @@ export async function obtenerSuscripcionActiva(req, res) {
 // {
 //   id_tipo         → ID del tipo de suscripción
 //   fecha_inicio?   → fecha de inicio (default hoy, YYYY-MM-DD)
-//   mp_payment_id?  → ID de pago de Mercado Pago (null por ahora, se integrará después)
+//   paypal_order_id?  → ID de pago de PayPal (null por ahora, se integrará después)
 // }
 //
 // Si ya tiene una suscripción activa, la nueva fecha_inicio será el día
@@ -577,7 +577,7 @@ export async function obtenerSuscripcionActiva(req, res) {
 export async function suscribirSuscriptor(req, res) {
   try {
     const { id } = req.params;
-    const { id_tipo, fecha_inicio, mp_payment_id = null } = req.body;
+    const { id_tipo, fecha_inicio, paypal_order_id = null } = req.body;
 
     if (!id_tipo) {
       return res.status(400).json({ message: 'El campo id_tipo es requerido.' });
@@ -632,7 +632,7 @@ export async function suscribirSuscriptor(req, res) {
 
     const fmtDate = (d) => d.toISOString().split('T')[0];
 
-    // TODO: Cuando se integre Mercado Pago, aquí se validará mp_payment_id
+    // TODO: Cuando se integre PayPal, aquí se validará paypal_order_id
     //       contra la API de MP antes de insertar la suscripción.
     //       Por ahora se permite sin validación de pago.
 
@@ -640,7 +640,7 @@ export async function suscribirSuscriptor(req, res) {
       `INSERT INTO suscripciones
          (id_suscriptor, id_tipo, fecha_inicio, fecha_fin,
           sesiones_nutriologo_restantes, sesiones_entrenador_restantes,
-          estado, mp_payment_id)
+          estado, paypal_order_id)
        VALUES (?, ?, ?, ?, ?, ?, 'Activa', ?)`,
       [
         id,
@@ -649,7 +649,7 @@ export async function suscribirSuscriptor(req, res) {
         fmtDate(fin),
         tipo.limite_sesiones_nutriologo,
         tipo.limite_sesiones_entrenador,
-        mp_payment_id,
+        paypal_order_id,
       ]
     );
 

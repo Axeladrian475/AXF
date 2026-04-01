@@ -1,9 +1,8 @@
 import axiosClient from './axiosClient';
 
-export interface PreferenciaResponse {
-  preference_id:      string;
-  url_pago:           string;   // sandbox_init_point o init_point según credenciales
-  external_reference: string;
+export interface OrdenResponse {
+  order_id:    string;
+  approve_url: string;   // URL de aprobación en PayPal
 }
 
 export interface ConfirmarPagoResponse {
@@ -19,17 +18,23 @@ export interface ConfirmarPagoResponse {
   };
 }
 
-/** Crea preferencia de pago en MP y devuelve la URL de pago */
-export const crearPreferenciaPago = async (data: {
+/** Crea una orden de pago en PayPal y devuelve la URL de aprobación */
+export const crearOrdenPago = async (data: {
   id_suscriptor: number;
   id_tipo:        number;
-}): Promise<PreferenciaResponse> => {
-  const response = await axiosClient.post('/pagos/crear-preferencia', data);
+}): Promise<OrdenResponse> => {
+  const response = await axiosClient.post('/pagos/crear-orden', data);
   return response.data;
 };
 
-/** Confirma el pago consultando MP y crea la suscripción en BD */
-export const confirmarPago = async (ref: string): Promise<ConfirmarPagoResponse> => {
-  const response = await axiosClient.get(`/pagos/confirmar/${encodeURIComponent(ref)}`);
+/** Captura el pago en PayPal y crea la suscripción en BD */
+export const confirmarPago = async (
+  token: string,
+  sus:   string,
+  tipo:  string,
+): Promise<ConfirmarPagoResponse> => {
+  const response = await axiosClient.get(
+    `/pagos/confirmar/${encodeURIComponent(token)}?sus=${sus}&tipo=${tipo}`
+  );
   return response.data;
 };

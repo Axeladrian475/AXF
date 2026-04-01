@@ -7,7 +7,7 @@ import {
   type SuscripcionActiva,
   type SuscripcionItem,
 } from '../../../api/suscripcionesApi'
-import { crearPreferenciaPago, confirmarPago } from '../../../api/pagosApi'
+import { crearOrdenPago, confirmarPago } from '../../../api/pagosApi'
 
 const TERMINOS = [
   'Definición y Alcance del Servicio: Acceso a instalaciones y equipos.',
@@ -97,15 +97,12 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
   const [modalPago,        setModalPago]        = useState(false)
   const [aceptaTerminos,   setAceptaTerminos]   = useState(false)
 
-  // Estado de proceso de pago
-  const [procesandoCaja,  setProcesandoCaja]  = useState(false)
-  const [procesandoMP,    setProcesandoMP]    = useState(false)
-  const [confirmandoPago, setConfirmandoPago] = useState(false)
+  const [procesandoCaja,    setProcesandoCaja]    = useState(false)
+  const [procesandoPayPal,  setProcesandoPayPal]  = useState(false)
+  const [confirmandoPago,   setConfirmandoPago]   = useState(false)
 
-  // Resultado exitoso
   const [pagoOk, setPagoOk] = useState<{ plan_nombre: string; fecha_fin: string } | null>(null)
-
-  const [toast, setToast] = useState<{ tipo: 'ok' | 'err' | 'info'; msg: string } | null>(null)
+  const [toast,  setToast]  = useState<{ tipo: 'ok' | 'err' | 'info'; msg: string } | null>(null)
 
   const mostrarToast = (tipo: 'ok' | 'err' | 'info', msg: string) => {
     setToast({ tipo, msg })
@@ -131,21 +128,20 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     }
   }, [suscriptorId])
 
-  // ── Al montar: ver si venimos del redirect de Mercado Pago ──────────────────
+  // ── Al montar: ver si venimos del redirect de PayPal ─────────────────────────
   useEffect(() => {
     const params   = new URLSearchParams(window.location.search)
     const tipoPago = params.get('pago')
-    const extref   = params.get('extref')
+    const token    = params.get('token')   // order_id que PayPal devuelve
+    const sus      = params.get('sus')
+    const tipo     = params.get('tipo')
 
-    if (tipoPago === 'exitoso' && extref) {
-      // Limpiar URL para que no quede el query string visible
+    if (tipoPago === 'exitoso' && token && sus && tipo) {
       window.history.replaceState({}, '', window.location.pathname)
       setConfirmandoPago(true)
 
-      // Llamar al backend para confirmar el pago y crear la suscripción
-      confirmarPago(extref)
+      confirmarPago(token, sus, tipo)
         .then((result) => {
-          console.log('[Pago] confirmar result:', result)
           if (result.ok && result.suscripcion) {
             setPagoOk({
               plan_nombre: result.suscripcion.plan_nombre,
@@ -162,13 +158,9 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
         })
         .finally(() => setConfirmandoPago(false))
 
-    } else if (tipoPago === 'fallido') {
+    } else if (tipoPago === 'cancelado') {
       window.history.replaceState({}, '', window.location.pathname)
-      mostrarToast('err', '❌ El pago fue cancelado o rechazado por Mercado Pago.')
-
-    } else if (tipoPago === 'pendiente') {
-      window.history.replaceState({}, '', window.location.pathname)
-      mostrarToast('info', '⏳ Pago pendiente de confirmación por Mercado Pago.')
+      mostrarToast('info', '⚠️ El pago fue cancelado en PayPal.')
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -192,8 +184,7 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     setProcesandoCaja(true)
     try {
       const res = await suscribirSuscriptor(Number(suscriptorId), {
-        id_tipo:       planSeleccionado.id_tipo,
-        mp_payment_id: null,
+        id_tipo: planSeleccionado.id_tipo,
       })
       setModalPago(false)
       mostrarToast('ok',
@@ -211,25 +202,22 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     }
   }
 
-  // ── Pago con Mercado Pago ─────────────────────────────────────────────────────
-  // Crea la preferencia y redirige en la misma pestaña.
-  // MP redirigirá de vuelta a /suscripciones?pago=exitoso&extref=SUS-...
-  const handlePagarMP = async () => {
+  // ── Pago con PayPal ──────────────────────────────────────────────────────────
+  const handlePagarPayPal = async () => {
     if (!planSeleccionado) return
-    setProcesandoMP(true)
+    setProcesandoPayPal(true)
     try {
-      const data = await crearPreferenciaPago({
+      const data = await crearOrdenPago({
         id_suscriptor: Number(suscriptorId),
         id_tipo:       planSeleccionado.id_tipo,
       })
-      console.log('[Pago] Preferencia creada:', data)
-      // Redirigir en la misma pestaña
-      window.location.href = data.url_pago
+      // Redirigir a PayPal en la misma pestaña
+      window.location.href = data.approve_url
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-        ?? 'Error al conectar con Mercado Pago.'
+        ?? 'Error al conectar con PayPal.'
       mostrarToast('err', `❌ ${msg}`)
-      setProcesandoMP(false)
+      setProcesandoPayPal(false)
     }
   }
 
@@ -252,14 +240,14 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
         </div>
       )}
 
-      {/* Banner: confirmando pago (al volver de MP) */}
+      {/* Banner: confirmando pago (al volver de PayPal) */}
       {confirmandoPago && (
         <div className="bg-blue-600 text-white rounded-xl px-5 py-4 flex items-center gap-3">
           <svg className="animate-spin h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
           </svg>
-          <p className="font-bold text-sm">Confirmando pago con Mercado Pago...</p>
+          <p className="font-bold text-sm">Confirmando pago con PayPal...</p>
         </div>
       )}
 
@@ -440,7 +428,7 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
               {/* Pago en caja */}
               <button
                 onClick={handlePagarCaja}
-                disabled={procesandoCaja || procesandoMP}
+                disabled={procesandoCaja || procesandoPayPal}
                 className="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">
                 {procesandoCaja ? 'Procesando...' : '💵 Confirmar Pago en Caja'}
               </button>
@@ -451,29 +439,34 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
                 <div className="flex-1 border-t border-gray-200" />
               </div>
 
-              {/* Pago con MP */}
+              {/* Pago con PayPal */}
               <button
-                onClick={handlePagarMP}
-                disabled={procesandoMP || procesandoCaja}
+                onClick={handlePagarPayPal}
+                disabled={procesandoPayPal || procesandoCaja}
                 className="w-full font-bold py-3 rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2 text-white"
-                style={{ backgroundColor: '#009ee3' }}>
-                {procesandoMP ? (
+                style={{ backgroundColor: '#003087' }}>
+                {procesandoPayPal ? (
                   <>
                     <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                     </svg>
-                    Redirigiendo...
+                    Redirigiendo a PayPal...
                   </>
                 ) : (
-                  'Pagar con Mercado Pago'
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                      <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.93 4.778-4.005 7.201-9.138 7.201h-2.19a.563.563 0 0 0-.556.479l-1.187 7.527h-.506l-.24 1.516a.56.56 0 0 0 .554.647h3.882c.46 0 .85-.334.922-.788.06-.26.76-4.852.816-5.09a.932.932 0 0 1 .92-.788h.58c3.76 0 6.705-1.528 7.565-5.946.36-1.847.174-3.388-.773-4.471z"/>
+                    </svg>
+                    Pagar con PayPal
+                  </>
                 )}
               </button>
             </div>
 
             <button
               onClick={() => setModalPago(false)}
-              disabled={procesandoCaja || procesandoMP}
+              disabled={procesandoCaja || procesandoPayPal}
               className="mt-4 text-gray-400 text-sm hover:text-black disabled:opacity-40">
               Cancelar
             </button>

@@ -1,78 +1,64 @@
 // ============================================================================
 //  routes/pagos.routes.js
-//  Integración con Mercado Pago — Checkout Pro (MODO DESARROLLO / SANDBOX)
+//  Integración con PayPal — Orders API v2
 //
 //  Flujo:
-//    1. POST /api/pagos/crear-preferencia  → crea preferencia en MP
-//    2. Frontend redirige al usuario a url_pago (sandbox_init_point)
-//    3. Usuario paga en MP sandbox
-//    4. MP redirige a FRONTEND_URL/suscripciones?pago=exitoso&payment_id=XXX&extref=YYY
-//    5. Frontend llama GET /api/pagos/confirmar/:payment_id  (o /:extref)
-//    6. Backend consulta MP → si aprobado → inserta suscripción en BD
+//    1. POST /api/pagos/crear-orden     → crea orden en PayPal
+//    2. Frontend redirige al usuario a approve_url
+//    3. Usuario aprueba en PayPal
+//    4. PayPal redirige a FRONTEND_URL/suscripciones?pago=exitoso&token=ORDER_ID&sus=X&tipo=Y
+//    5. Frontend llama GET /api/pagos/confirmar/:token?sus=X&tipo=Y
+//    6. Backend captura la orden en PayPal → si COMPLETED → inserta suscripción en BD
 // ============================================================================
 
 import express from 'express';
-import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import db from '../config/database.js';
 import { verificarToken, personalOSucursal } from '../middlewares/auth.js';
 
 const router = express.Router();
 
-// ── Inicializar cliente MP ───────────────────────────────────────────────────
-function getMpClient() {
-  const token = process.env.MP_ACCESS_TOKEN;
-  if (!token) throw new Error('[MP] MP_ACCESS_TOKEN no está definido en .env');
-  return new MercadoPagoConfig({ accessToken: token });
-}
+// Sandbox: https://api-m.sandbox.paypal.com  |  Producción: https://api-m.paypal.com
+const PAYPAL_BASE = process.env.PAYPAL_BASE_URL || 'https://api-m.sandbox.paypal.com';
 
-// ── Extraer id_suscriptor e id_tipo del pago ─────────────────────────────────
-// MP puede convertir snake_case a camelCase en metadata, cubrimos ambos.
-// external_reference tiene formato: SUS-{id_suscriptor}-TIPO-{id_tipo}-{ts}
-function extraerIds(pago) {
-  const meta = pago.metadata ?? {};
-  let id_suscriptor = meta.id_suscriptor ?? meta.idSuscriptor ?? null;
-  let id_tipo       = meta.id_tipo       ?? meta.idTipo       ?? null;
+// ── Obtener access token de PayPal ───────────────────────────────────────────
+async function getPayPalToken() {
+  const clientId = process.env.PAYPAL_CLIENT_ID;
+  const secret   = process.env.PAYPAL_SECRET;
+  if (!clientId || !secret) throw new Error('[PayPal] PAYPAL_CLIENT_ID o PAYPAL_SECRET no definidos en .env');
 
-  if (!id_suscriptor || !id_tipo) {
-    const m = (pago.external_reference ?? '').match(/^SUS-(\d+)-TIPO-(\d+)-/);
-    if (m) {
-      id_suscriptor = Number(m[1]);
-      id_tipo       = Number(m[2]);
-      console.log(`[MP] IDs desde external_reference → suscriptor=${id_suscriptor}, tipo=${id_tipo}`);
-    }
+  const res = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/x-www-form-urlencoded',
+      'Authorization': 'Basic ' + Buffer.from(`${clientId}:${secret}`).toString('base64'),
+    },
+    body: 'grant_type=client_credentials',
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`[PayPal] Error obteniendo token: ${res.status} ${txt}`);
   }
 
-  return {
-    id_suscriptor: id_suscriptor ? Number(id_suscriptor) : null,
-    id_tipo:       id_tipo       ? Number(id_tipo)       : null,
-  };
+  const data = await res.json();
+  return data.access_token;
 }
 
-// ── Registrar suscripción en BD (idempotente) ────────────────────────────────
-async function registrarSuscripcion(pago) {
-  const fmt          = (d) => d.toISOString().split('T')[0];
-  const paymentIdStr = String(pago.id);
-
-  console.log(`[MP] registrarSuscripcion → payment_id=${paymentIdStr}, status=${pago.status}`);
+// ── Registrar suscripción en BD (idempotente) ─────────────────────────────────
+async function registrarSuscripcion(orderId, id_suscriptor, id_tipo) {
+  const fmt = (d) => d.toISOString().split('T')[0];
+  console.log(`[PayPal] registrarSuscripcion → order_id=${orderId}, suscriptor=${id_suscriptor}, tipo=${id_tipo}`);
 
   // Idempotencia
   const [[existe]] = await db.query(
     `SELECT s.id_suscripcion, s.fecha_inicio, s.fecha_fin, s.estado, t.nombre AS plan_nombre
      FROM suscripciones s JOIN tipos_suscripcion t ON t.id_tipo = s.id_tipo
-     WHERE s.mp_payment_id = ?`,
-    [paymentIdStr]
+     WHERE s.paypal_order_id = ?`,
+    [orderId]
   );
   if (existe) {
-    console.log(`[MP] Pago ${paymentIdStr} ya registrado (id_suscripcion=${existe.id_suscripcion})`);
+    console.log(`[PayPal] Orden ${orderId} ya registrada (id_suscripcion=${existe.id_suscripcion})`);
     return existe;
-  }
-
-  const { id_suscriptor, id_tipo } = extraerIds(pago);
-  if (!id_suscriptor || !id_tipo) {
-    console.error(`[MP] ❌ Sin id_suscriptor/id_tipo para pago ${paymentIdStr}`);
-    console.error(`[MP]    metadata: ${JSON.stringify(pago.metadata)}`);
-    console.error(`[MP]    external_reference: ${pago.external_reference}`);
-    return null;
   }
 
   const [[tipo]] = await db.query(
@@ -81,7 +67,7 @@ async function registrarSuscripcion(pago) {
     [id_tipo]
   );
   if (!tipo) {
-    console.error(`[MP] ❌ Tipo suscripción id_tipo=${id_tipo} no encontrado`);
+    console.error(`[PayPal] Tipo suscripcion id_tipo=${id_tipo} no encontrado`);
     return null;
   }
 
@@ -97,7 +83,6 @@ async function registrarSuscripcion(pago) {
   if (activa) {
     inicio = new Date(activa.fecha_fin);
     inicio.setDate(inicio.getDate() + 1);
-    console.log(`[MP] Acumulando. Inicio después de suscripción activa.`);
   } else {
     inicio = new Date();
   }
@@ -109,18 +94,18 @@ async function registrarSuscripcion(pago) {
     `INSERT INTO suscripciones
        (id_suscriptor, id_tipo, fecha_inicio, fecha_fin,
         sesiones_nutriologo_restantes, sesiones_entrenador_restantes,
-        estado, mp_payment_id)
+        estado, paypal_order_id)
      VALUES (?, ?, ?, ?, ?, ?, 'Activa', ?)`,
     [
       id_suscriptor, id_tipo,
       fmt(inicio), fmt(fin),
       tipo.limite_sesiones_nutriologo,
       tipo.limite_sesiones_entrenador,
-      paymentIdStr,
+      orderId,
     ]
   );
 
-  console.log(`[MP] ✅ Suscripción creada → id=${result.insertId}, suscriptor=${id_suscriptor}, plan="${tipo.nombre}", ${fmt(inicio)} → ${fmt(fin)}`);
+  console.log(`[PayPal] Suscripcion creada → id=${result.insertId}, suscriptor=${id_suscriptor}, plan="${tipo.nombre}", ${fmt(inicio)} → ${fmt(fin)}`);
 
   return {
     id_suscripcion: result.insertId,
@@ -132,18 +117,16 @@ async function registrarSuscripcion(pago) {
 }
 
 // ============================================================================
-//  POST /api/pagos/crear-preferencia
+//  POST /api/pagos/crear-orden
 // ============================================================================
-router.post('/crear-preferencia', verificarToken, personalOSucursal, async (req, res) => {
+router.post('/crear-orden', verificarToken, personalOSucursal, async (req, res) => {
   try {
     const { id_suscriptor, id_tipo } = req.body;
-    console.log(`[MP] crear-preferencia → suscriptor=${id_suscriptor}, tipo=${id_tipo}, rol=${req.usuario.rol}`);
 
     if (!id_suscriptor || !id_tipo) {
       return res.status(400).json({ message: 'id_suscriptor e id_tipo son requeridos.' });
     }
 
-    // Determinar id_sucursal
     let id_sucursal;
     const { rol, id: uid } = req.usuario;
 
@@ -157,190 +140,155 @@ router.post('/crear-preferencia', verificarToken, personalOSucursal, async (req,
       id_sucursal = emp.id_sucursal;
     }
 
-    console.log(`[MP] id_sucursal=${id_sucursal}`);
-
     const [[plan]] = await db.query(
       `SELECT id_tipo, nombre, precio, duracion_dias
        FROM tipos_suscripcion WHERE id_tipo = ? AND id_sucursal = ? AND activo = 1`,
       [id_tipo, id_sucursal]
     );
-    if (!plan) {
-      console.error(`[MP] ❌ Plan id_tipo=${id_tipo} no existe en sucursal=${id_sucursal}`);
-      return res.status(404).json({ message: 'Plan no encontrado para esta sucursal.' });
-    }
+    if (!plan) return res.status(404).json({ message: 'Plan no encontrado para esta sucursal.' });
 
     const [[suscriptor]] = await db.query(
       `SELECT id_suscriptor, nombres, apellido_paterno, correo
        FROM suscriptores WHERE id_suscriptor = ? AND activo = 1`,
       [id_suscriptor]
     );
-    if (!suscriptor) {
-      console.error(`[MP] ❌ Suscriptor id=${id_suscriptor} no encontrado`);
-      return res.status(404).json({ message: 'Suscriptor no encontrado.' });
-    }
+    if (!suscriptor) return res.status(404).json({ message: 'Suscriptor no encontrado.' });
 
-    const external_reference = `SUS-${id_suscriptor}-TIPO-${id_tipo}-${Date.now()}`;
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const backendUrl  = process.env.BACKEND_URL  || 'http://localhost:3001';
+    const customId    = `SUS-${id_suscriptor}-TIPO-${id_tipo}-${Date.now()}`;
 
-    const preferenceApi = new Preference(getMpClient());
-    const resultado = await preferenceApi.create({
-      body: {
-        items: [{
-          id:          String(plan.id_tipo),
-          title:       `AXF Gym – ${plan.nombre}`,
-          description: `Suscripción por ${plan.duracion_dias} días`,
-          quantity:    1,
-          unit_price:  Number(plan.precio),
-          currency_id: 'MXN',
+    const token = await getPayPalToken();
+
+    const orderRes = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':    'application/json',
+        'Authorization':   `Bearer ${token}`,
+        'PayPal-Request-Id': customId,
+      },
+      body: JSON.stringify({
+        intent: 'CAPTURE',
+        purchase_units: [{
+          custom_id:   customId,
+          description: `AXF Gym - ${plan.nombre} (${plan.duracion_dias} dias)`,
+          amount: {
+            currency_code: 'MXN',
+            value:         Number(plan.precio).toFixed(2),
+          },
         }],
         payer: {
-          name:  suscriptor.nombres,
-          email: suscriptor.correo,
+          name: {
+            given_name: suscriptor.nombres,
+            surname:    suscriptor.apellido_paterno,
+          },
+          email_address: suscriptor.correo,
         },
-        metadata: {
-          id_suscriptor: Number(id_suscriptor),
-          id_tipo:       Number(id_tipo),
-          id_sucursal:   Number(id_sucursal),
+        application_context: {
+          brand_name:          'AXF Gym',
+          locale:              'es-MX',
+          landing_page:        'BILLING',
+          shipping_preference: 'NO_SHIPPING',
+          user_action:         'PAY_NOW',
+          return_url: `${frontendUrl}/suscripciones?pago=exitoso&sus=${id_suscriptor}&tipo=${id_tipo}`,
+          cancel_url: `${frontendUrl}/suscripciones?pago=cancelado`,
         },
-        backUrls: {
-          success: `${frontendUrl}/suscripciones?pago=exitoso&extref=${external_reference}`,
-          failure: `${frontendUrl}/suscripciones?pago=fallido`,
-          pending: `${frontendUrl}/suscripciones?pago=pendiente`,
-        },
-        autoReturn:        'approved',
-        notificationUrl:   `${backendUrl}/api/pagos/webhook`,
-        externalReference: external_reference,
-      },
+      }),
     });
 
-    // sandbox_init_point → aparece solo con credenciales de PRUEBA
-    // init_point         → aparece con credenciales de PRODUCCIÓN
-    const url_pago = resultado.sandbox_init_point || resultado.init_point;
+    if (!orderRes.ok) {
+      const err = await orderRes.text();
+      console.error(`[PayPal] Error creando orden: ${orderRes.status}`, err);
+      return res.status(502).json({ message: 'Error al crear la orden en PayPal.', detalle: err });
+    }
 
-    console.log(`[MP] ✅ Preferencia creada → preference_id=${resultado.id}`);
-    console.log(`[MP]    url_pago (sandbox): ${resultado.sandbox_init_point}`);
-    console.log(`[MP]    url_pago (prod):    ${resultado.init_point}`);
-    console.log(`[MP]    external_reference: ${external_reference}`);
+    const order       = await orderRes.json();
+    const approveLink = order.links?.find(l => l.rel === 'approve')?.href;
 
-    res.json({ preference_id: resultado.id, url_pago, external_reference });
+    console.log(`[PayPal] Orden creada → id=${order.id}, approve_url=${approveLink}`);
+
+    res.json({ order_id: order.id, approve_url: approveLink });
 
   } catch (error) {
-    console.error('[MP] ❌ Error en crear-preferencia:');
-    console.error('  message:', error?.message);
-    if (error?.cause)    console.error('  cause:',    error.cause);
-    if (error?.response) console.error('  MP response:', JSON.stringify(error.response, null, 2));
-    console.error(error);
-    res.status(500).json({ message: 'Error al crear preferencia de pago.', detalle: error?.message });
+    console.error('[PayPal] Error en crear-orden:', error?.message);
+    res.status(500).json({ message: 'Error al crear la orden de pago.', detalle: error?.message });
   }
 });
 
 // ============================================================================
-//  GET /api/pagos/confirmar/:ref
-//
-//  El frontend llama este endpoint después del redirect de MP.
-//  :ref puede ser un payment_id numérico O una external_reference SUS-...
-//
-//  Consulta MP, verifica que esté aprobado, y registra la suscripción.
-//  (Funciona en localhost porque es el FRONTEND quien llama al BACKEND,
-//   no MP directamente como el webhook.)
+//  GET /api/pagos/confirmar/:token?sus=ID_SUSCRIPTOR&tipo=ID_TIPO
+//  PayPal redirige al frontend con ?token=ORDER_ID&PayerID=XXX
+//  El frontend llama a este endpoint con esos parámetros.
 // ============================================================================
-router.get('/confirmar/:ref', verificarToken, personalOSucursal, async (req, res) => {
+router.get('/confirmar/:token', verificarToken, personalOSucursal, async (req, res) => {
   try {
-    const { ref } = req.params;
-    console.log(`[MP] confirmar → ref=${ref}`);
+    const { token: orderId } = req.params;
+    const sus  = req.query.sus;
+    const tipo = req.query.tipo;
 
-    // --- Caso A: payment_id numérico ---
-    if (/^\d+$/.test(ref)) {
-      const paymentApi = new Payment(getMpClient());
-      let pago;
-      try {
-        pago = await paymentApi.get({ id: ref });
-      } catch (mpErr) {
-        console.error(`[MP] ❌ Error consultando payment_id=${ref}:`, mpErr?.message);
-        return res.status(502).json({ ok: false, message: 'No se pudo consultar el pago en Mercado Pago.' });
-      }
-
-      console.log(`[MP] payment_id=${ref} → status=${pago.status}, ext_ref=${pago.external_reference}`);
-
-      if (pago.status !== 'approved') {
-        return res.json({ ok: false, status: pago.status, message: `Estado del pago: ${pago.status}` });
-      }
-
-      const suscripcion = await registrarSuscripcion(pago);
-      if (!suscripcion) {
-        return res.status(500).json({ ok: false, message: 'Pago aprobado pero falló la creación de suscripción. Ver logs.' });
-      }
-      return res.json({ ok: true, suscripcion });
+    if (!orderId || !sus || !tipo) {
+      return res.status(400).json({ ok: false, message: 'Faltan parametros: token, sus o tipo.' });
     }
 
-    // --- Caso B: external_reference (SUS-...) → Search API ---
-    if (ref.startsWith('SUS-')) {
-      console.log(`[MP] Buscando por external_reference en Search API...`);
+    const accessToken = await getPayPalToken();
 
-      const searchResp = await fetch(
-        `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(ref)}&limit=5`,
-        { headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` } }
-      );
+    // Capturar la orden
+    const captureRes = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${orderId}/capture`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
 
-      if (!searchResp.ok) {
-        const body = await searchResp.text();
-        console.error(`[MP] ❌ Search API → ${searchResp.status}: ${body}`);
-        return res.status(502).json({ ok: false, message: 'Error en Search API de Mercado Pago.' });
-      }
+    const captured = await captureRes.json();
+    console.log(`[PayPal] capture status=${captured.status}, order=${orderId}`);
 
-      const data     = await searchResp.json();
-      const pagos    = data.results ?? [];
-      const aprobado = pagos.find(p => p.status === 'approved');
-
-      console.log(`[MP] Search API → ${pagos.length} resultados, aprobado: ${aprobado?.id ?? 'ninguno'}`);
-
-      if (!aprobado) {
-        return res.json({ ok: false, status: 'pending', message: 'No hay pago aprobado para esta referencia todavía.' });
-      }
-
-      const suscripcion = await registrarSuscripcion(aprobado);
-      if (!suscripcion) {
-        return res.status(500).json({ ok: false, message: 'Pago aprobado pero falló la creación de suscripción. Ver logs.' });
-      }
-      return res.json({ ok: true, suscripcion });
+    if (captured.status !== 'COMPLETED') {
+      return res.json({
+        ok:      false,
+        status:  captured.status,
+        message: `Estado del pago: ${captured.status}`,
+      });
     }
 
-    return res.status(400).json({ ok: false, message: 'Referencia inválida.' });
+    const suscripcion = await registrarSuscripcion(orderId, Number(sus), Number(tipo));
+    if (!suscripcion) {
+      return res.status(500).json({ ok: false, message: 'Pago capturado pero fallo la creacion de suscripcion. Ver logs.' });
+    }
+
+    return res.json({ ok: true, suscripcion });
 
   } catch (error) {
-    console.error('[MP] ❌ Error en confirmar:');
-    console.error('  message:', error?.message);
-    console.error(error);
+    console.error('[PayPal] Error en confirmar:', error?.message);
     res.status(500).json({ ok: false, message: 'Error al confirmar el pago.' });
   }
 });
 
 // ============================================================================
-//  POST /api/pagos/webhook
-//  MP llama aquí en producción. En localhost NO llega (MP no puede contactar 127.0.0.1).
+//  POST /api/pagos/webhook  (Produccion)
 // ============================================================================
 router.get('/webhook',  (_req, res) => res.sendStatus(200));
 router.post('/webhook', async (req, res) => {
-  res.sendStatus(200); // Siempre responder 200 inmediato
+  res.sendStatus(200);
 
-  const { type, data } = req.body;
-  console.log(`[MP WEBHOOK] type=${type}, data=${JSON.stringify(data)}`);
+  const eventType = req.body?.event_type;
+  console.log(`[PayPal WEBHOOK] event_type=${eventType}`);
 
-  if (type !== 'payment') return;
+  if (eventType !== 'PAYMENT.CAPTURE.COMPLETED') return;
 
-  const paymentId = data?.id;
-  if (!paymentId) { console.warn('[MP WEBHOOK] Sin payment_id'); return; }
+  const resource = req.body?.resource;
+  const orderId  = resource?.supplementary_data?.related_ids?.order_id;
+  const customId = resource?.custom_id ?? '';
+
+  if (!orderId) { console.warn('[PayPal WEBHOOK] Sin order_id en el recurso'); return; }
+
+  const m = customId.match(/^SUS-(\d+)-TIPO-(\d+)-/);
+  if (!m) { console.error('[PayPal WEBHOOK] No se pudo extraer IDs de custom_id:', customId); return; }
 
   try {
-    const paymentApi = new Payment(getMpClient());
-    const pago = await paymentApi.get({ id: paymentId });
-    console.log(`[MP WEBHOOK] payment ${pago.id} → status=${pago.status}`);
-    if (pago.status !== 'approved') return;
-    await registrarSuscripcion(pago);
+    await registrarSuscripcion(orderId, Number(m[1]), Number(m[2]));
   } catch (err) {
-    console.error('[MP WEBHOOK] ❌ Error:', err?.message);
-    console.error(err);
+    console.error('[PayPal WEBHOOK] Error:', err?.message);
   }
 });
 
