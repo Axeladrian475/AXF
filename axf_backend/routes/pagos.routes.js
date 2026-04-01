@@ -265,6 +265,53 @@ router.get('/confirmar/:token', verificarToken, personalOSucursal, async (req, r
 });
 
 // ============================================================================
+//  POST /api/pagos/capturar-orden
+//  Usado por el flujo de Card Fields (pago inline, sin redirect).
+//  El SDK de PayPal en el frontend crea la orden y aprueba el pago con la
+//  tarjeta; este endpoint la captura y registra la suscripción en BD.
+//  Body: { order_id, id_suscriptor, id_tipo }
+// ============================================================================
+router.post('/capturar-orden', verificarToken, personalOSucursal, async (req, res) => {
+  try {
+    const { order_id, id_suscriptor, id_tipo } = req.body;
+
+    if (!order_id || !id_suscriptor || !id_tipo) {
+      return res.status(400).json({ ok: false, message: 'Faltan parametros: order_id, id_suscriptor o id_tipo.' });
+    }
+
+    const accessToken = await getPayPalToken();
+
+    const captureRes = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${order_id}/capture`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    const captured = await captureRes.json();
+    console.log(`[PayPal CardFields] capture status=${captured.status}, order=${order_id}`);
+
+    if (captured.status !== 'COMPLETED') {
+      // Intentar extraer mensaje de error de PayPal
+      const detalleError = captured?.details?.[0]?.description ?? captured?.message ?? `Estado: ${captured.status}`;
+      return res.json({ ok: false, status: captured.status, message: detalleError });
+    }
+
+    const suscripcion = await registrarSuscripcion(order_id, Number(id_suscriptor), Number(id_tipo));
+    if (!suscripcion) {
+      return res.status(500).json({ ok: false, message: 'Pago capturado pero fallo la creacion de suscripcion. Ver logs.' });
+    }
+
+    return res.json({ ok: true, suscripcion });
+
+  } catch (error) {
+    console.error('[PayPal] Error en capturar-orden:', error?.message);
+    res.status(500).json({ ok: false, message: 'Error al capturar el pago.', detalle: error?.message });
+  }
+});
+
+// ============================================================================
 //  POST /api/pagos/webhook  (Produccion)
 // ============================================================================
 router.get('/webhook',  (_req, res) => res.sendStatus(200));

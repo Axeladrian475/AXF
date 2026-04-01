@@ -2,7 +2,7 @@ import axiosClient from './axiosClient';
 
 export interface OrdenResponse {
   order_id:    string;
-  approve_url: string;   // URL de aprobación en PayPal
+  approve_url: string;
 }
 
 export interface ConfirmarPagoResponse {
@@ -18,7 +18,7 @@ export interface ConfirmarPagoResponse {
   };
 }
 
-/** Crea una orden de pago en PayPal y devuelve la URL de aprobación */
+/** Crea una orden en PayPal (usada por el flujo redirect Y por Card Fields) */
 export const crearOrdenPago = async (data: {
   id_suscriptor: number;
   id_tipo:        number;
@@ -27,7 +27,7 @@ export const crearOrdenPago = async (data: {
   return response.data;
 };
 
-/** Captura el pago en PayPal y crea la suscripción en BD */
+/** Confirma un pago del flujo redirect (GET, con token en URL) */
 export const confirmarPago = async (
   token: string,
   sus:   string,
@@ -36,5 +36,15 @@ export const confirmarPago = async (
   const response = await axiosClient.get(
     `/pagos/confirmar/${encodeURIComponent(token)}?sus=${sus}&tipo=${tipo}`
   );
+  return response.data;
+};
+
+/** Captura una orden ya aprobada por Card Fields (POST, inline) */
+export const capturarOrden = async (data: {
+  order_id:      string;
+  id_suscriptor: number;
+  id_tipo:       number;
+}): Promise<ConfirmarPagoResponse> => {
+  const response = await axiosClient.post('/pagos/capturar-orden', data);
   return response.data;
 };

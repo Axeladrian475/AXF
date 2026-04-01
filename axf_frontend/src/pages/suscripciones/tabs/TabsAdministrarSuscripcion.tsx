@@ -8,6 +8,7 @@ import {
   type SuscripcionItem,
 } from '../../../api/suscripcionesApi'
 import { crearOrdenPago, confirmarPago } from '../../../api/pagosApi'
+import ModalTarjeta from './ModalTarjeta'
 
 const TERMINOS = [
   'Definición y Alcance del Servicio: Acceso a instalaciones y equipos.',
@@ -100,6 +101,7 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
   const [procesandoCaja,    setProcesandoCaja]    = useState(false)
   const [procesandoPayPal,  setProcesandoPayPal]  = useState(false)
   const [confirmandoPago,   setConfirmandoPago]   = useState(false)
+  const [modalTarjeta,      setModalTarjeta]      = useState(false)
 
   const [pagoOk, setPagoOk] = useState<{ plan_nombre: string; fecha_fin: string } | null>(null)
   const [toast,  setToast]  = useState<{ tipo: 'ok' | 'err' | 'info'; msg: string } | null>(null)
@@ -462,6 +464,14 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
                   </>
                 )}
               </button>
+
+              {/* Pagar con Tarjeta (Card Fields — sin cuenta PayPal) */}
+              <button
+                onClick={() => { setModalPago(false); setModalTarjeta(true) }}
+                disabled={procesandoPayPal || procesandoCaja}
+                className="w-full font-bold py-3 rounded-lg border-2 border-gray-300 text-gray-700 hover:border-gray-500 hover:text-black transition-colors disabled:opacity-60 flex items-center justify-center gap-2 bg-white">
+                💳 Pagar con Tarjeta
+              </button>
             </div>
 
             <button
@@ -472,6 +482,24 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
             </button>
           </div>
         </div>
+      )}
+
+      {/* MODAL TARJETA — Card Fields PayPal (sin cuenta PayPal) */}
+      {modalTarjeta && planSeleccionado && (
+        <ModalTarjeta
+          plan={planSeleccionado}
+          suscriptorId={Number(suscriptorId)}
+          tieneActiva={!!tieneActiva}
+          vencimientoFinal={vencimientoFinal}
+          fmtFecha={fmtFecha}
+          onSuccess={(planNombre, fechaFin) => {
+            setModalTarjeta(false)
+            setPagoOk({ plan_nombre: planNombre, fecha_fin: fechaFin })
+            cargarDatos()
+          }}
+          onError={(msg) => mostrarToast('err', `❌ ${msg}`)}
+          onClose={() => setModalTarjeta(false)}
+        />
       )}
     </div>
   )
