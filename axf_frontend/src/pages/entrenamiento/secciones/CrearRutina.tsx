@@ -6,6 +6,8 @@ import type { EjercicioPDF, RutinaPDFData } from '../../../utils/pdfExport'
 
 interface Props { onBack: () => void }
 
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'
+
 // ── Tipos ──────────────────────────────────────────────────────────────────
 interface EjRutina {
   uid: number
@@ -445,10 +447,26 @@ export default function CrearRutina({ onBack }: Props) {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {rutina.ejercicios.map(ej => (
+                  {rutina.ejercicios.map(ej => {
+                    const ejDb = ejerciciosDB.find(e => e.id_ejercicio === ej.id_ejercicio)
+                    const imgUrl = ejDb?.imagen_url
+                      ? `${import.meta.env.VITE_SOCKET_URL || API_BASE}${ejDb.imagen_url}`
+                      : null
+                    return (
                     <div key={ej.uid}
                       className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                      <div className="w-8 h-8 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-sm shrink-0">💪</div>
+                      <div className="w-8 h-8 bg-gray-200 rounded overflow-hidden shrink-0 flex items-center justify-center">
+                        {imgUrl ? (
+                          <img
+                            src={imgUrl}
+                            alt={ej.nombre}
+                            className="w-full h-full object-cover"
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                          />
+                        ) : (
+                          <span className="text-gray-400 text-sm">💪</span>
+                        )}
+                      </div>
                       <span className="font-bold text-sm text-black w-36 shrink-0">{ej.nombre}</span>
                       <div className="flex gap-3 items-center flex-1">
                         <div className="flex items-center gap-1">
@@ -473,7 +491,8 @@ export default function CrearRutina({ onBack }: Props) {
                       <button onClick={() => eliminarEj(ej.uid)}
                         className="text-red-400 hover:text-red-600 text-sm font-bold shrink-0">✕</button>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

@@ -135,16 +135,25 @@ router.put('/ejercicios/:id', verificarToken, soloPersonal, soloEntrenador, uplo
 
 // DELETE /api/entrenamiento/ejercicios/:id
 router.delete('/ejercicios/:id', verificarToken, soloPersonal, soloEntrenador, async (req, res) => {
+  const conn = await db.getConnection();
   try {
-    const [[ej]] = await db.query('SELECT imagen_url FROM ejercicios WHERE id_ejercicio = ?', [req.params.id]);
-    if (!ej) return res.status(404).json({ message: 'Ejercicio no encontrado' });
+    const [[ej]] = await conn.query('SELECT imagen_url FROM ejercicios WHERE id_ejercicio = ?', [req.params.id]);
+    if (!ej) { conn.release(); return res.status(404).json({ message: 'Ejercicio no encontrado' }); }
+
+    await conn.beginTransaction();
+    // Eliminar referencias en rutina_ejercicios primero (FK sin CASCADE)
+    await conn.query('DELETE FROM rutina_ejercicios WHERE id_ejercicio = ?', [req.params.id]);
+    await conn.query('DELETE FROM ejercicios WHERE id_ejercicio = ?', [req.params.id]);
+    await conn.commit();
 
     borrarImagen(ej.imagen_url);
-    await db.query('DELETE FROM ejercicios WHERE id_ejercicio = ?', [req.params.id]);
     res.json({ message: 'Ejercicio eliminado' });
   } catch (err) {
+    await conn.rollback();
     console.error('[DELETE /entrenamiento/ejercicios/:id]', err);
     res.status(500).json({ message: 'Error al eliminar ejercicio' });
+  } finally {
+    conn.release();
   }
 });
 
