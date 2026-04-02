@@ -1,12 +1,13 @@
 import { createContext, useState, useEffect, type ReactNode } from 'react';
 
 interface User {
-  id: number;
+  id?: number;
   nombre: string;
   rol: string;
-  puesto?: string;          // staff | entrenador | nutriologo | entrenador_nutriologo
-  id_sucursal?: number;     // id de la sucursal asignada
-  nombre_sucursal?: string; // nombre legible de la sucursal
+  puesto?: string;
+  id_sucursal?: number;
+  nombre_sucursal?: string;
+  foto_url?: string | null;   // ← NUEVO
 }
 
 interface AuthContextType {
@@ -21,14 +22,13 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser]       = useState<User | null>(null);
+  const [token, setToken]     = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('usuario');
-
+    const storedUser  = localStorage.getItem('usuario');
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = (userData: User, authToken: string) => {
     setToken(authToken);
     setUser(userData);
-    localStorage.setItem('token', authToken);
+    localStorage.setItem('token',   authToken);
     localStorage.setItem('usuario', JSON.stringify(userData));
   };
 
