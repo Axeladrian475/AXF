@@ -12,6 +12,12 @@ export const getIngredientes = () =>
 export const crearIngrediente = (data: { nombre: string; unidad_medicion: string }) =>
   axiosClient.post('/nutricion/ingredientes', data).then(r => r.data);
 
+export const actualizarIngrediente = (id: number, data: { nombre: string; unidad_medicion: string }) =>
+  axiosClient.put(`/nutricion/ingredientes/${id}`, data).then(r => r.data);
+
+export const eliminarIngrediente = (id: number) =>
+  axiosClient.delete(`/nutricion/ingredientes/${id}`).then(r => r.data);
+
 // ── Recetas ──────────────────────────────────────────────────────────────────
 
 export interface RecetaAPI {

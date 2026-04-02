@@ -141,20 +141,27 @@ export default function CargarReceta({ onBack }: Props) {
 
             <div className="mb-4">
               <label className="block text-xs font-bold text-black mb-1">Ingredientes *</label>
-              <div className="flex gap-2 mb-2">
-                <div className="relative flex-1">
+
+              {/* Buscador + lista siempre visible */}
+              <div className="border border-gray-200 rounded-lg overflow-hidden mb-2">
+                <div className="p-2 border-b border-gray-100 bg-gray-50">
                   <input placeholder="Buscar ingrediente..." value={busIng}
                     onChange={e => setBusIng(e.target.value)}
-                    className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-black text-sm focus:outline-none focus:border-[#ea580c]" />
-                  {busIng && filtrados.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-b shadow-lg z-10 max-h-36 overflow-y-auto">
-                      {filtrados.map(i => (
-                        <button key={i.id_ingrediente} onClick={() => agregarIngrediente(i)}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 text-black border-b border-gray-50 last:border-0">
-                          {i.nombre} <span className="text-gray-400 text-xs">({i.unidad_medicion})</span>
-                        </button>
-                      ))}
-                    </div>
+                    className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-black text-sm focus:outline-none focus:border-[#ea580c]" />
+                </div>
+                <div className="max-h-36 overflow-y-auto">
+                  {filtrados.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-gray-400 italic">
+                      {ingredientesDB.length === 0 ? 'No hay ingredientes en la base de datos' : 'Sin coincidencias'}
+                    </p>
+                  ) : (
+                    filtrados.map(i => (
+                      <button key={i.id_ingrediente} onClick={() => agregarIngrediente(i)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 text-black border-b border-gray-50 last:border-0 flex justify-between items-center group">
+                        <span className="font-bold">{i.nombre}</span>
+                        <span className="text-gray-400 text-xs group-hover:text-[#ea580c]">+ {i.unidad_medicion}</span>
+                      </button>
+                    ))
                   )}
                 </div>
               </div>
@@ -178,7 +185,7 @@ export default function CargarReceta({ onBack }: Props) {
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-gray-400 italic py-1">Busca y agrega ingredientes de la base de datos</p>
+                <p className="text-xs text-gray-400 italic py-1">Selecciona ingredientes de la lista de arriba</p>
               )}
             </div>
 

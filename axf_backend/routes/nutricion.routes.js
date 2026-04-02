@@ -65,6 +65,52 @@ router.post('/ingredientes', verificarToken, soloPersonal, soloNutriologo, async
   }
 });
 
+// PUT /api/nutricion/ingredientes/:id
+router.put('/ingredientes/:id', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
+  try {
+    const { nombre, unidad_medicion } = req.body;
+    if (!nombre?.trim() || !unidad_medicion) {
+      return res.status(400).json({ message: 'Nombre y unidad de medición son obligatorios' });
+    }
+    const [[ing]] = await db.query('SELECT id_ingrediente FROM ingredientes WHERE id_ingrediente = ?', [req.params.id]);
+    if (!ing) return res.status(404).json({ message: 'Ingrediente no encontrado' });
+
+    await db.query(
+      'UPDATE ingredientes SET nombre = ?, unidad_medicion = ? WHERE id_ingrediente = ?',
+      [nombre.trim(), unidad_medicion, req.params.id]
+    );
+    res.json({ message: 'Ingrediente actualizado' });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'Ya existe un ingrediente con ese nombre' });
+    }
+    console.error('[PUT /nutricion/ingredientes/:id]', err);
+    res.status(500).json({ message: 'Error al actualizar ingrediente' });
+  }
+});
+
+// DELETE /api/nutricion/ingredientes/:id
+router.delete('/ingredientes/:id', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
+  const conn = await db.getConnection();
+  try {
+    const [[ing]] = await conn.query('SELECT id_ingrediente FROM ingredientes WHERE id_ingrediente = ?', [req.params.id]);
+    if (!ing) { conn.release(); return res.status(404).json({ message: 'Ingrediente no encontrado' }); }
+
+    await conn.beginTransaction();
+    // Eliminar referencias en receta_ingredientes (FK sin CASCADE)
+    await conn.query('DELETE FROM receta_ingredientes WHERE id_ingrediente = ?', [req.params.id]);
+    await conn.query('DELETE FROM ingredientes WHERE id_ingrediente = ?', [req.params.id]);
+    await conn.commit();
+    res.json({ message: 'Ingrediente eliminado' });
+  } catch (err) {
+    await conn.rollback();
+    console.error('[DELETE /nutricion/ingredientes/:id]', err);
+    res.status(500).json({ message: 'Error al eliminar ingrediente' });
+  } finally {
+    conn.release();
+  }
+});
+
 // ════════════════════════════════════════════════════════════════════════════════
 //  RECETAS
 // ════════════════════════════════════════════════════════════════════════════════

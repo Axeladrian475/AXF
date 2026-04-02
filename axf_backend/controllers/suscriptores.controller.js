@@ -668,25 +668,45 @@ export async function suscribirSuscriptor(req, res) {
 
 // ════════════════════════════════════════════════════════════════════════════
 // DELETE /api/suscriptores/:id
-// Soft delete: desactiva el suscriptor (activo = 0).
-// No se borra físicamente para preservar historial de accesos, canjes, etc.
+// Hard delete: elimina el suscriptor y todos sus datos relacionados.
 // ════════════════════════════════════════════════════════════════════════════
 export async function eliminarSuscriptor(req, res) {
+  const conn = await db.getConnection();
   try {
     const { id } = req.params;
 
-    const [result] = await db.query(
-      `UPDATE suscriptores SET activo = 0 WHERE id_suscriptor = ? AND activo = 1`,
-      [id]
+    const [[sus]] = await conn.query(
+      'SELECT id_suscriptor FROM suscriptores WHERE id_suscriptor = ?', [id]
     );
+    if (!sus) return res.status(404).json({ message: 'Suscriptor no encontrado.' });
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Suscriptor no encontrado.' });
-    }
+    await conn.beginTransaction();
 
+    // Borrar tablas relacionadas sin CASCADE (en orden para evitar FK conflicts)
+    await conn.query('DELETE FROM historial_accesos WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM canjes WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM chat_mensajes WHERE id_suscriptor = ?', [id]);
+    // dieta_comidas se borra en cascada al borrar dietas
+    await conn.query('DELETE FROM dietas WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM registros_fisicos WHERE id_suscriptor = ?', [id]);
+    // registro_entrenamiento referencia rutinas → borrar primero
+    await conn.query('DELETE FROM registro_entrenamiento WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM reportes WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM reporte_sumados WHERE id_suscriptor = ?', [id]);
+    // rutina_ejercicios se borra en cascada al borrar rutinas
+    await conn.query('DELETE FROM rutinas WHERE id_suscriptor = ?', [id]);
+    // sensor_huella_posiciones tiene ON DELETE CASCADE
+    await conn.query('DELETE FROM suscripciones WHERE id_suscriptor = ?', [id]);
+
+    await conn.query('DELETE FROM suscriptores WHERE id_suscriptor = ?', [id]);
+
+    await conn.commit();
     res.json({ message: 'Suscriptor eliminado correctamente.' });
   } catch (error) {
+    await conn.rollback();
     console.error('[DELETE /suscriptores/:id]', error);
     res.status(500).json({ message: 'Error al eliminar el suscriptor.' });
+  } finally {
+    conn.release();
   }
 }

@@ -585,7 +585,7 @@ export default function TabsDirectorioDeUsuarios() {
   }
 
   const handleEliminar = async (s: Suscriptor) => {
-    if (!window.confirm(`¿Deseas eliminar a "${s.nombre_completo}"?\n\nEsta acción desactivará su cuenta.`)) return
+    if (!window.confirm(`¿Eliminar permanentemente a "${s.nombre_completo}"?\n\nSe borrarán todos sus datos: suscripciones, rutinas, dietas, registros y accesos.\n\nEsta acción NO se puede deshacer.`)) return
     setAlerta(null)
     setEliminando(s.id_suscriptor)
     try {

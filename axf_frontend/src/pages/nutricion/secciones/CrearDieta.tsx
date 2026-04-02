@@ -23,7 +23,7 @@ type Plan = Record<string, Comida[]>
 let comidaCounter = 0
 function nuevaComida(nombre?: string): Comida {
   comidaCounter++
-  return { id: comidaCounter, nombre: nombre ?? `Comida ${comidaCounter}`, texto: '', kcal: '', notas: '' }
+  return { id: comidaCounter, nombre: nombre ?? 'Comida', texto: '', kcal: '', notas: '' }
 }
 
 export default function CrearDieta({ onBack }: Props) {

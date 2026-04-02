@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { getIngredientes, crearIngrediente } from '../../../api/nutricionApi'
+import { getIngredientes, crearIngrediente, actualizarIngrediente, eliminarIngrediente } from '../../../api/nutricionApi'
 
 interface Props { onBack: () => void }
 
-const UNIDADES = ['g', 'ml', 'pz', 'tz', 'cdas']
+const UNIDADES = ['g', 'ml', 'pz', 'tz', 'cdas', 'cdita']
 
 interface IngredienteDB {
   id_ingrediente: number
@@ -19,6 +19,13 @@ export default function CargarIngrediente({ onBack }: Props) {
   const [error, setError]         = useState('')
   const [lista, setLista]         = useState<IngredienteDB[]>([])
   const [cargando, setCargando]   = useState(true)
+
+  // ── Modal edición ──────────────────────────────────────────────────────────
+  const [editando, setEditando]           = useState<IngredienteDB | null>(null)
+  const [editNombre, setEditNombre]       = useState('')
+  const [editUnidad, setEditUnidad]       = useState('g')
+  const [editGuardando, setEditGuardando] = useState(false)
+  const [editError, setEditError]         = useState('')
 
   const cargar = async () => {
     try {
@@ -49,6 +56,52 @@ export default function CargarIngrediente({ onBack }: Props) {
     }
   }
 
+  const borrar = async (id: number) => {
+    if (!confirm('¿Eliminar este ingrediente? También se quitará de las recetas donde fue usado.')) return
+    try {
+      await eliminarIngrediente(id)
+      setLista(prev => prev.filter(i => i.id_ingrediente !== id))
+      setExito('Ingrediente eliminado correctamente.')
+      setTimeout(() => setExito(''), 3000)
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Error al eliminar ingrediente')
+      setTimeout(() => setError(''), 4000)
+    }
+  }
+
+  // ── Edición helpers ────────────────────────────────────────────────────────
+  const abrirEditar = (ing: IngredienteDB) => {
+    setEditando(ing)
+    setEditNombre(ing.nombre)
+    setEditUnidad(ing.unidad_medicion)
+    setEditError('')
+  }
+
+  const cerrarEditar = () => {
+    setEditando(null)
+    setEditNombre('')
+    setEditUnidad('g')
+    setEditError('')
+  }
+
+  const guardarEdicion = async () => {
+    if (!editando) return
+    if (!editNombre.trim()) { setEditError('El nombre es obligatorio'); return }
+    setEditError('')
+    setEditGuardando(true)
+    try {
+      await actualizarIngrediente(editando.id_ingrediente, { nombre: editNombre.trim(), unidad_medicion: editUnidad })
+      setExito(`Ingrediente "${editNombre.trim()}" actualizado.`)
+      setTimeout(() => setExito(''), 4000)
+      cerrarEditar()
+      cargar()
+    } catch (err: any) {
+      setEditError(err.response?.data?.message || 'Error al actualizar')
+    } finally {
+      setEditGuardando(false)
+    }
+  }
+
   return (
     <div className="p-4">
       <div className="bg-[#f5f5f5] rounded-xl border border-gray-200 shadow-sm p-6">
@@ -66,6 +119,11 @@ export default function CargarIngrediente({ onBack }: Props) {
             ✅ {exito}
           </div>
         )}
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-300 text-red-800 text-sm font-bold px-4 py-3 rounded-lg">
+            ❌ {error}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-5">
           {/* Formulario */}
@@ -78,7 +136,7 @@ export default function CargarIngrediente({ onBack }: Props) {
                 <label className="block text-xs font-bold text-black mb-1">Nombre del Ingrediente</label>
                 <input value={nombre} onChange={e => setNombre(e.target.value)}
                   placeholder="Ej. Pechuga de Pollo"
-                  className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-black text-sm" />
+                  className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-black text-sm focus:outline-none focus:border-[#ea580c]" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-black mb-1">Unidad de Medida</label>
@@ -88,8 +146,6 @@ export default function CargarIngrediente({ onBack }: Props) {
                 </select>
               </div>
             </div>
-
-            {error && <p className="text-red-500 text-xs mb-3 font-bold">{error}</p>}
 
             <button onClick={guardar} disabled={guardando}
               className="w-full bg-[#1e293b] text-white font-bold py-2 rounded hover:bg-[#0f172a] transition-colors text-sm disabled:opacity-50">
@@ -108,12 +164,24 @@ export default function CargarIngrediente({ onBack }: Props) {
             {cargando ? (
               <p className="text-xs text-gray-400 py-4 text-center">Cargando...</p>
             ) : (
-              <div className="space-y-1 max-h-[350px] overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-[350px] overflow-y-auto pr-1">
                 {lista.map(ing => (
                   <div key={ing.id_ingrediente}
-                    className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                    <span className="text-sm font-bold text-black">{ing.nombre}</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{ing.unidad_medicion}</span>
+                    className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 group">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-sm font-bold text-black truncate">{ing.nombre}</span>
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded shrink-0">{ing.unidad_medicion}</span>
+                    </div>
+                    <div className="flex gap-1.5 ml-2 shrink-0">
+                      <button onClick={() => abrirEditar(ing)}
+                        className="bg-[#1e293b] text-white text-xs font-bold px-2.5 py-1 rounded hover:bg-[#0f172a] transition-colors">
+                        ✏️
+                      </button>
+                      <button onClick={() => borrar(ing.id_ingrediente)}
+                        className="bg-red-500 text-white text-xs font-bold px-2.5 py-1 rounded hover:bg-red-600 transition-colors">
+                        🗑
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {lista.length === 0 && (
@@ -124,6 +192,52 @@ export default function CargarIngrediente({ onBack }: Props) {
           </div>
         </div>
       </div>
+
+      {/* ── Modal Editar ──────────────────────────────────────────────────────── */}
+      {editando && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-black">Editar Ingrediente</h3>
+              <button onClick={cerrarEditar} className="text-gray-400 hover:text-black text-xl font-bold leading-none">✕</button>
+            </div>
+
+            <div className="space-y-4 mb-5">
+              <div>
+                <label className="block text-xs font-bold text-black mb-1">Nombre del Ingrediente</label>
+                <input
+                  value={editNombre}
+                  onChange={e => setEditNombre(e.target.value)}
+                  placeholder="Nombre del ingrediente"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black text-sm focus:outline-none focus:border-[#ea580c]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-black mb-1">Unidad de Medida</label>
+                <select
+                  value={editUnidad}
+                  onChange={e => setEditUnidad(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black text-sm focus:outline-none focus:border-[#ea580c]">
+                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {editError && <p className="text-red-500 text-xs font-bold mb-3">{editError}</p>}
+
+            <div className="flex gap-3">
+              <button onClick={cerrarEditar}
+                className="flex-1 border border-gray-300 text-black font-bold py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={guardarEdicion} disabled={editGuardando}
+                className="flex-1 bg-[#ea580c] text-white font-bold py-2 rounded-lg text-sm hover:bg-[#c94a0a] transition-colors disabled:opacity-50">
+                {editGuardando ? 'Guardando...' : '💾 Guardar Cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
