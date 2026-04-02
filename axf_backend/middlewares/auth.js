@@ -1,7 +1,7 @@
 // ============================================================================
 //  middlewares/auth.js
 //  Middlewares de autenticación y autorización compartidos entre todas las rutas.
-//  Importar así:  import { verificarToken, soloPersonal, soloSucursal, soloSucursalOMaestro } from '../middlewares/auth.js'
+//  Importar así:  import { verificarToken, soloPersonal, soloSucursal, soloMaestro, soloSucursalOMaestro } from '../middlewares/auth.js'
 // ============================================================================
 
 import jwt from 'jsonwebtoken';
@@ -31,6 +31,16 @@ export function soloPersonal(req, res, next) {
 export function soloSucursal(req, res, next) {
   if (req.usuario.rol !== 'sucursal') {
     return res.status(403).json({ message: 'Acceso exclusivo para Sucursal' });
+  }
+  next();
+}
+
+// ─── Solo maestro ─────────────────────────────────────────────────────────────
+// Usar para endpoints de configuración crítica (ej: tiempos SLA de strikes).
+// Solo el rol 'maestro' tiene acceso.
+export function soloMaestro(req, res, next) {
+  if (req.usuario.rol !== 'maestro') {
+    return res.status(403).json({ message: 'Solo el maestro puede modificar esta configuración.' });
   }
   next();
 }

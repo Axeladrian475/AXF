@@ -6,7 +6,7 @@
 //  GET  /api/reportes                      → listar con filtros
 //  GET  /api/reportes/resumen              → contadores para dashboard
 //  GET  /api/reportes/strikes/config       → tiempos de escalada
-//  PUT  /api/reportes/strikes/config       → actualizar tiempos
+//  PUT  /api/reportes/strikes/config       → actualizar tiempos (SOLO MAESTRO)
 //  POST /api/reportes/strikes/procesar     → forzar procesamiento (maestro)
 //  GET  /api/reportes/:id                  → detalle + historial strikes
 //  PUT  /api/reportes/:id/estado           → actualizar estado
@@ -15,7 +15,7 @@
 // ============================================================================
 
 import express from 'express';
-import { verificarToken, personalOSucursal, soloSucursalOMaestro } from '../middlewares/auth.js';
+import { verificarToken, personalOSucursal, soloMaestro } from '../middlewares/auth.js';
 import {
   listarReportes,
   obtenerReporte,
@@ -38,16 +38,16 @@ router.use(verificarToken);
 // ─── Rutas de configuración y herramientas (sin param :id) ───────────────────
 // IMPORTANTE: deben ir ANTES de /:id para evitar conflictos de routing
 
-router.get('/resumen',          personalOSucursal,   resumenReportes);
-router.get('/strikes/config',   personalOSucursal,   getConfigStrikes);
-router.put('/strikes/config',   soloSucursalOMaestro, setConfigStrikes);
-router.post('/strikes/procesar', verificarToken,      procesarManual);
+router.get('/resumen',           personalOSucursal, resumenReportes);
+router.get('/strikes/config',    personalOSucursal, getConfigStrikes);
+router.put('/strikes/config',    soloMaestro,       setConfigStrikes);  // ← Solo maestro
+router.post('/strikes/procesar', soloMaestro,       procesarManual);    // ← Solo maestro
 
 // ─── CRUD de reportes ─────────────────────────────────────────────────────────
-router.get('/',           personalOSucursal, listarReportes);
-router.get('/:id',        personalOSucursal, obtenerReporte);
-router.put('/:id/estado', personalOSucursal, actualizarEstado);
+router.get('/',              personalOSucursal, listarReportes);
+router.get('/:id',           personalOSucursal, obtenerReporte);
+router.put('/:id/estado',    personalOSucursal, actualizarEstado);
 router.post('/:id/resolver', personalOSucursal, resolverReporte);
-router.get('/:id/strikes', personalOSucursal, historialStrikes);
+router.get('/:id/strikes',   personalOSucursal, historialStrikes);
 
 export default router;

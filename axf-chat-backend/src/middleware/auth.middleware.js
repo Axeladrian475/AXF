@@ -3,6 +3,13 @@ const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+export function soloMaestro(req, res, next) {
+  if (req.usuario.rol !== 'maestro') {
+    return res.status(403).json({ message: 'Solo el maestro puede modificar esta configuración.' });
+  }
+  next();
+}
+
 async function authMiddleware(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
