@@ -187,7 +187,8 @@ router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
 
     for (const rutina of rutinas) {
       const [ejercicios] = await db.query(
-        `SELECT re.orden, re.series, re.repeticiones,
+        `SELECT re.id AS id_rutina_ejercicio,
+                re.orden, re.series, re.repeticiones,
                 re.descanso_seg, re.peso_kg, re.descripcion_tecnica,
                 e.nombre, e.imagen_url
          FROM rutina_ejercicios re
@@ -347,6 +348,49 @@ router.get('/movil/sucursales', verificarSuscriptor, async (_req, res) => {
 // ENDPOINTS DEL PANEL WEB — requieren token de personal / sucursal / maestro
 // A partir de aquí todos los endpoints usan verificarToken + personalOSucursal
 // ════════════════════════════════════════════════════════════════════════════
+
+router.post('/movil/entrenamiento/serie', verificarSuscriptor, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+    const { id_rutina_ejercicio, num_serie, peso_levantado, reps_realizadas } = req.body;
+ 
+    if (!id_rutina_ejercicio || !num_serie) {
+      return res.status(400).json({ message: 'id_rutina_ejercicio y num_serie son requeridos.' });
+    }
+ 
+    // Verificar que el ejercicio pertenece a una rutina asignada a este suscriptor
+    const [[ejercicio]] = await db.query(
+      `SELECT re.id, r.id_suscriptor
+       FROM rutina_ejercicios re
+       JOIN rutinas r ON r.id_rutina = re.id_rutina
+       WHERE re.id = ? AND r.id_suscriptor = ?`,
+      [id_rutina_ejercicio, id_suscriptor]
+    );
+ 
+    if (!ejercicio) {
+      return res.status(403).json({ message: 'Ejercicio no encontrado o no pertenece a tu rutina.' });
+    }
+ 
+    // Insertar o actualizar si ya existe esa serie (por si se re-completa)
+    await db.query(
+      `INSERT INTO registro_entrenamiento
+         (id_rutina_ejercicio, id_suscriptor, num_serie, peso_levantado, reps_realizadas)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         peso_levantado  = VALUES(peso_levantado),
+         reps_realizadas = VALUES(reps_realizadas),
+         registrado_en   = CURRENT_TIMESTAMP`,
+      [id_rutina_ejercicio, id_suscriptor, num_serie, peso_levantado ?? null, reps_realizadas ?? null]
+    );
+ 
+    res.status(201).json({ message: 'Serie registrada correctamente.' });
+ 
+  } catch (err) {
+    console.error('[POST /suscriptores/movil/entrenamiento/serie]', err);
+    res.status(500).json({ message: 'Error al registrar la serie.' });
+  }
+});
+
 router.use(verificarToken, personalOSucursal);
 
 // ─── Rutas sin parámetro :id ──────────────────────────────────────────────────
