@@ -10,11 +10,26 @@
 //  POST   /api/suscriptores/:id/migrar               → Migrar suscriptor a sucursal actual
 //  GET    /api/suscriptores/:id/suscripcion-activa   → Suscripción vigente del suscriptor
 //  POST   /api/suscriptores/:id/suscribir            → Suscribir a un tipo de suscripción
+//
+//  App móvil (token de suscriptor — ANTES del router.use):
+//  POST   /api/suscriptores/login                    → Login de suscriptor
+//  GET    /api/suscriptores/movil/suscripcion        → Suscripción activa
+//  GET    /api/suscriptores/movil/rutinas            → Rutinas asignadas
+//  GET    /api/suscriptores/movil/dietas             → Dieta más reciente
+//  GET    /api/suscriptores/movil/registros          → Historial físico
+//  GET    /api/suscriptores/movil/reportes           → Reportes públicos de una sucursal
+//  POST   /api/suscriptores/movil/reportes           → Crear reporte/incidencia
+//  GET    /api/suscriptores/movil/sucursales         → Lista de sucursales activas
 // ============================================================================
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import express from 'express';
-import db from '../config/database.js';
+
+import multer          from 'multer';
+import path            from 'path';
+import fs              from 'fs';
+import { fileURLToPath } from 'url';
+import bcrypt          from 'bcryptjs';
+import jwt             from 'jsonwebtoken';
+import express         from 'express';
+import db              from '../config/database.js';
 import {
   verificarToken,
   personalOSucursal,
@@ -33,6 +48,28 @@ import {
 
 const router = express.Router();
 
+// ── Configuración multer para fotos de incidencias (app móvil) ───────────────
+const __filename2 = fileURLToPath(import.meta.url);
+const __dirname2  = path.dirname(__filename2);
+const UPLOADS_INC = path.resolve(__dirname2, '..', 'uploads', 'incidencias');
+if (!fs.existsSync(UPLOADS_INC)) fs.mkdirSync(UPLOADS_INC, { recursive: true });
+
+const uploadInc = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_INC),
+    filename:    (_req, file, cb) =>
+      cb(null, `inc_${Date.now()}${path.extname(file.originalname).toLowerCase()}`),
+  }),
+  limits:     { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Solo imágenes'));
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/suscriptores/login
+// ════════════════════════════════════════════════════════════════════════════
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -41,7 +78,6 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Correo y contraseña son requeridos.' });
     }
 
-    // Buscar suscriptor por correo
     const [[suscriptor]] = await db.query(
       `SELECT id_suscriptor, nombres, apellido_paterno, correo,
               id_sucursal_registro, password_hash, activo
@@ -54,13 +90,11 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Correo o contraseña incorrectos.' });
     }
 
-    // Verificar contraseña
     const valida = await bcrypt.compare(password, suscriptor.password_hash);
     if (!valida) {
       return res.status(401).json({ success: false, message: 'Correo o contraseña incorrectos.' });
     }
 
-    // Verificar si tiene suscripción activa
     const [[sub]] = await db.query(
       `SELECT fecha_fin FROM suscripciones
        WHERE id_suscriptor = ? AND estado = 'Activa' AND fecha_fin >= CURDATE()
@@ -79,14 +113,14 @@ router.post('/login', async (req, res) => {
       message: 'Login exitoso.',
       token,
       suscriptor: {
-        id: suscriptor.id_suscriptor,
-        nombres: suscriptor.nombres,
-        apellidoPaterno: suscriptor.apellido_paterno,
-        correo: suscriptor.correo,
-        sucursalId: suscriptor.id_sucursal_registro,
+        id:               suscriptor.id_suscriptor,
+        nombres:          suscriptor.nombres,
+        apellidoPaterno:  suscriptor.apellido_paterno,
+        correo:           suscriptor.correo,
+        sucursalId:       suscriptor.id_sucursal_registro,
         suscripcionActiva: !!sub,
         fechaVencimiento: sub ? sub.fecha_fin : null,
-      }
+      },
     });
 
   } catch (error) {
@@ -95,63 +129,13 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ─── Todos los endpoints requieren token válido ───────────────────────────────
-router.use(verificarToken, personalOSucursal);
+// ════════════════════════════════════════════════════════════════════════════
+// ENDPOINTS PARA LA APP MÓVIL
+// Deben estar ANTES de router.use(verificarToken, personalOSucursal) porque
+// usan tokens con rol='suscriptor', que personalOSucursal rechaza con 403.
+// ════════════════════════════════════════════════════════════════════════════
 
-// ─── Rutas sin parámetro :id (deben ir antes para evitar conflicto con /:id) ──
-router.get   ('/otras-sucursales', listarSuscriptoresOtrasSucursales);
-router.post  ('/',                 registrarSuscriptor);
-router.get   ('/',                 listarSuscriptores);
-
-// ── POST /api/suscriptores/identificar ──────────────────────────────────────
-// Identifica a un suscriptor por su uid NFC o template de huella (valor leído
-// por el ESP32). Usado por el flujo de canje de recompensas para saber quién
-// es el suscriptor sin que tenga que ingresar su ID manualmente.
-//
-// Body: { tipo: "nfc" | "huella", valor: string }
-// Response: { id_suscriptor, nombre, puntos, activo }
-router.post('/identificar', async (req, res) => {
-  const { tipo, valor } = req.body;
-  if (!tipo || !valor) {
-    return res.status(400).json({ message: 'tipo y valor son requeridos.' });
-  }
-  if (!['nfc', 'huella'].includes(tipo)) {
-    return res.status(400).json({ message: 'tipo debe ser "nfc" o "huella".' });
-  }
-  try {
-    const campo = tipo === 'nfc' ? 'nfc_uid' : 'huella_template';
-    const [[suscriptor]] = await db.query(
-      `SELECT id_suscriptor,
-              CONCAT(nombres, ' ', apellido_paterno) AS nombre,
-              puntos,
-              activo
-       FROM suscriptores
-       WHERE ${campo} = ? LIMIT 1`,
-      [valor]
-    );
-    if (!suscriptor) {
-      return res.status(404).json({ message: 'Suscriptor no encontrado.' });
-    }
-    res.json(suscriptor);
-  } catch (err) {
-    console.error('[POST /suscriptores/identificar]', err);
-    res.status(500).json({ message: 'Error interno al identificar suscriptor.' });
-  }
-});
-
-// ─── Rutas con parámetro :id ──────────────────────────────────────────────────
-router.get   ('/:id',                    obtenerSuscriptor);
-router.put   ('/:id',                    modificarSuscriptor);
-router.delete('/:id',                    eliminarSuscriptor);
-router.post  ('/:id/migrar',             migrarSuscriptor);
-router.get   ('/:id/suscripcion-activa', obtenerSuscripcionActiva);
-router.post  ('/:id/suscribir',          suscribirSuscriptor);
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ENDPOINTS PARA LA APP MÓVIL DE SUSCRIPTORES
-// ══════════════════════════════════════════════════════════════════════════════
-
-// Middleware para verificar token de suscriptor
+// Middleware exclusivo para tokens de suscriptor
 function verificarSuscriptor(req, res, next) {
   const token = req.headers['authorization']?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'Token requerido' });
@@ -166,8 +150,27 @@ function verificarSuscriptor(req, res, next) {
   }
 }
 
+// ── GET /api/suscriptores/movil/suscripcion ──────────────────────────────────
+router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
+  try {
+    const id = req.usuario.id;
+    const [[sub]] = await db.query(
+      `SELECT fecha_fin FROM suscripciones
+       WHERE id_suscriptor = ? AND estado = 'Activa' AND fecha_fin >= CURDATE()
+       ORDER BY fecha_fin DESC LIMIT 1`,
+      [id]
+    );
+    res.json({
+      activa:            !!sub,
+      vencimiento_final: sub ? sub.fecha_fin : null,
+    });
+  } catch (err) {
+    console.error('[GET /suscriptores/movil/suscripcion]', err);
+    res.status(500).json({ message: 'Error al obtener suscripción' });
+  }
+});
+
 // ── GET /api/suscriptores/movil/rutinas ──────────────────────────────────────
-// Devuelve las rutinas del suscriptor autenticado, ordenadas por fecha DESC
 router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
   try {
     const id = req.usuario.id;
@@ -204,7 +207,6 @@ router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
 });
 
 // ── GET /api/suscriptores/movil/dietas ───────────────────────────────────────
-// Devuelve la dieta más reciente del suscriptor autenticado
 router.get('/movil/dietas', verificarSuscriptor, async (req, res) => {
   try {
     const id = req.usuario.id;
@@ -243,7 +245,6 @@ router.get('/movil/dietas', verificarSuscriptor, async (req, res) => {
 });
 
 // ── GET /api/suscriptores/movil/registros ────────────────────────────────────
-// Devuelve el historial de medidas físicas del suscriptor
 router.get('/movil/registros', verificarSuscriptor, async (req, res) => {
   try {
     const id = req.usuario.id;
@@ -271,31 +272,7 @@ router.get('/movil/registros', verificarSuscriptor, async (req, res) => {
   }
 });
 
-// ── GET  /api/suscriptores/movil/reportes ────────────────────────────────────
-// ── POST /api/suscriptores/movil/reportes ────────────────────────────────────
-// Listar reportes públicos de una sucursal y crear un reporte nuevo
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-
-const __filename2 = fileURLToPath(import.meta.url);
-const __dirname2  = path.dirname(__filename2);
-const UPLOADS_INC = path.resolve(__dirname2, '..', 'uploads', 'incidencias');
-if (!fs.existsSync(UPLOADS_INC)) fs.mkdirSync(UPLOADS_INC, { recursive: true });
-
-const uploadInc = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_INC),
-    filename:    (_req, file, cb) => cb(null, `inc_${Date.now()}${path.extname(file.originalname).toLowerCase()}`),
-  }),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Solo imágenes'));
-  },
-});
-
+// ── GET /api/suscriptores/movil/reportes ─────────────────────────────────────
 router.get('/movil/reportes', verificarSuscriptor, async (req, res) => {
   try {
     const { id_sucursal } = req.query;
@@ -321,6 +298,7 @@ router.get('/movil/reportes', verificarSuscriptor, async (req, res) => {
   }
 });
 
+// ── POST /api/suscriptores/movil/reportes ────────────────────────────────────
 router.post('/movil/reportes', verificarSuscriptor, uploadInc.single('foto'), async (req, res) => {
   try {
     const id_suscriptor = req.usuario.id;
@@ -330,7 +308,7 @@ router.post('/movil/reportes', verificarSuscriptor, uploadInc.single('foto'), as
       return res.status(400).json({ message: 'Sucursal, categoría y descripción son requeridos' });
     }
 
-    const foto_url = req.file ? `/uploads/incidencias/${req.file.filename}` : null;
+    const foto_url   = req.file ? `/uploads/incidencias/${req.file.filename}` : null;
     const es_privado = privado === 'true' || privado === true ? 1 : 0;
 
     const [result] = await db.query(
@@ -341,8 +319,8 @@ router.post('/movil/reportes', verificarSuscriptor, uploadInc.single('foto'), as
     );
 
     res.status(201).json({
-      message: 'Reporte enviado correctamente',
-      id_incidencia: result.insertId
+      message:       'Reporte enviado correctamente',
+      id_incidencia: result.insertId,
     });
   } catch (err) {
     console.error('[POST /suscriptores/movil/reportes]', err);
@@ -351,7 +329,6 @@ router.post('/movil/reportes', verificarSuscriptor, uploadInc.single('foto'), as
 });
 
 // ── GET /api/suscriptores/movil/sucursales ───────────────────────────────────
-// Lista todas las sucursales activas (para el dropdown de reportes)
 router.get('/movil/sucursales', verificarSuscriptor, async (_req, res) => {
   try {
     const [sucursales] = await db.query(
@@ -365,5 +342,54 @@ router.get('/movil/sucursales', verificarSuscriptor, async (_req, res) => {
     res.status(500).json({ message: 'Error al obtener sucursales' });
   }
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// ENDPOINTS DEL PANEL WEB — requieren token de personal / sucursal / maestro
+// A partir de aquí todos los endpoints usan verificarToken + personalOSucursal
+// ════════════════════════════════════════════════════════════════════════════
+router.use(verificarToken, personalOSucursal);
+
+// ─── Rutas sin parámetro :id ──────────────────────────────────────────────────
+router.get   ('/otras-sucursales', listarSuscriptoresOtrasSucursales);
+router.post  ('/',                 registrarSuscriptor);
+router.get   ('/',                 listarSuscriptores);
+
+// ── POST /api/suscriptores/identificar ──────────────────────────────────────
+router.post('/identificar', async (req, res) => {
+  const { tipo, valor } = req.body;
+  if (!tipo || !valor) {
+    return res.status(400).json({ message: 'tipo y valor son requeridos.' });
+  }
+  if (!['nfc', 'huella'].includes(tipo)) {
+    return res.status(400).json({ message: 'tipo debe ser "nfc" o "huella".' });
+  }
+  try {
+    const campo = tipo === 'nfc' ? 'nfc_uid' : 'huella_template';
+    const [[suscriptor]] = await db.query(
+      `SELECT id_suscriptor,
+              CONCAT(nombres, ' ', apellido_paterno) AS nombre,
+              puntos,
+              activo
+       FROM suscriptores
+       WHERE ${campo} = ? LIMIT 1`,
+      [valor]
+    );
+    if (!suscriptor) {
+      return res.status(404).json({ message: 'Suscriptor no encontrado.' });
+    }
+    res.json(suscriptor);
+  } catch (err) {
+    console.error('[POST /suscriptores/identificar]', err);
+    res.status(500).json({ message: 'Error interno al identificar suscriptor.' });
+  }
+});
+
+// ─── Rutas con parámetro :id ──────────────────────────────────────────────────
+router.get   ('/:id',                    obtenerSuscriptor);
+router.put   ('/:id',                    modificarSuscriptor);
+router.delete('/:id',                    eliminarSuscriptor);
+router.post  ('/:id/migrar',             migrarSuscriptor);
+router.get   ('/:id/suscripcion-activa', obtenerSuscripcionActiva);
+router.post  ('/:id/suscribir',          suscribirSuscriptor);
 
 export default router;
