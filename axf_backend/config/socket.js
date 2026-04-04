@@ -1,25 +1,5 @@
 // ============================================================================
 //  config/socket.js
-//
-//  Motor WebSocket para chat en tiempo real.
-//  Usa el mismo JWT y estructura de roles que el resto del backend AXF.
-//
-//  SALAS:
-//    personal:{id_personal}     → sala del entrenador/nutriólogo
-//    suscriptor:{id_suscriptor} → sala del suscriptor
-//
-//  EVENTOS cliente → servidor:
-//    chat:enviar         → enviar mensaje
-//    chat:leer           → marcar mensajes como leídos
-//    chat:escribiendo    → indicador "está escribiendo..."
-//    chat:parar_escribir → detener indicador
-//
-//  EVENTOS servidor → cliente:
-//    chat:mensaje_nuevo  → nuevo mensaje recibido
-//    chat:mensajes_leidos → confirmación de lectura
-//    chat:escribiendo    → el otro está escribiendo
-//    chat:parar_escribir → el otro dejó de escribir
-//    chat:no_leidos      → badge actualizado
 // ============================================================================
 
 import { Server } from 'socket.io';
@@ -31,26 +11,25 @@ let io = null;
 export function initSocket(httpServer) {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-      credentials: true,
+      origin: '*',          // ← acepta web Y app móvil
+      credentials: false,   // ← false cuando origin es '*'
     },
   });
 
-  // ─── Middleware de autenticación ────────────────────────────────────────────
+  // ─── Middleware de autenticación ─────────────────────────────────────────
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error('Token requerido'));
-
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.usuario = decoded; // { id, rol, puesto?, id_sucursal? }
+      socket.usuario = decoded;
       next();
     } catch {
       next(new Error('Token inválido o expirado'));
     }
   });
 
-  // ─── Conexión ───────────────────────────────────────────────────────────────
+  // ─── Conexión ─────────────────────────────────────────────────────────────
   io.on('connection', (socket) => {
     const { id, rol } = socket.usuario;
     const sala = rol === 'personal' ? `personal:${id}` : `suscriptor:${id}`;
@@ -58,7 +37,7 @@ export function initSocket(httpServer) {
     socket.join(sala);
     console.log(`[WS] Conectado → ${sala}`);
 
-    // ─── ENVIAR MENSAJE ───────────────────────────────────────────────────────
+    // ─── ENVIAR MENSAJE ───────────────────────────────────────────────────
     socket.on('chat:enviar', async (data, callback) => {
       try {
         const { contenido } = data;
@@ -80,7 +59,6 @@ export function initSocket(httpServer) {
           if (!id_personal) return callback?.({ ok: false, error: 'id_personal requerido' });
         }
 
-        // Guardar en BD
         const [result] = await db.query(
           `INSERT INTO chat_mensajes (id_personal, id_suscriptor, enviado_por, contenido)
            VALUES (?, ?, ?, ?)`,
@@ -104,7 +82,6 @@ export function initSocket(httpServer) {
           mensaje,
         });
 
-        // Confirmar al emisor
         callback?.({ ok: true, mensaje });
 
       } catch (err) {
@@ -113,7 +90,7 @@ export function initSocket(httpServer) {
       }
     });
 
-    // ─── MARCAR COMO LEÍDOS ───────────────────────────────────────────────────
+    // ─── MARCAR COMO LEÍDOS ───────────────────────────────────────────────
     socket.on('chat:leer', async (data) => {
       try {
         const enviado_por_otro = rol === 'personal' ? 'suscriptor' : 'personal';
@@ -137,17 +114,12 @@ export function initSocket(httpServer) {
           [id_personal, id_suscriptor, enviado_por_otro]
         );
 
-        // Notificar al otro que sus mensajes fueron leídos
         const sala_destino = rol === 'personal'
           ? `suscriptor:${id_suscriptor}`
           : `personal:${id_personal}`;
 
-        io.to(sala_destino).emit('chat:mensajes_leidos', {
-          id_personal,
-          id_suscriptor,
-        });
+        io.to(sala_destino).emit('chat:mensajes_leidos', { id_personal, id_suscriptor });
 
-        // Actualizar badge del lector
         const [[{ total }]] = await db.query(
           `SELECT COUNT(*) AS total FROM chat_mensajes
            WHERE ${rol === 'personal' ? 'id_personal' : 'id_suscriptor'} = ?
@@ -162,12 +134,11 @@ export function initSocket(httpServer) {
       }
     });
 
-    // ─── INDICADOR "ESTÁ ESCRIBIENDO..." ─────────────────────────────────────
+    // ─── ESCRIBIENDO ──────────────────────────────────────────────────────
     socket.on('chat:escribiendo', (data) => {
       const sala_destino = rol === 'personal'
         ? `suscriptor:${data.id_suscriptor}`
         : `personal:${data.id_personal}`;
-
       io.to(sala_destino).emit('chat:escribiendo', { de: rol, id });
     });
 
@@ -175,11 +146,10 @@ export function initSocket(httpServer) {
       const sala_destino = rol === 'personal'
         ? `suscriptor:${data.id_suscriptor}`
         : `personal:${data.id_personal}`;
-
       io.to(sala_destino).emit('chat:parar_escribir', { de: rol, id });
     });
 
-    // ─── DESCONEXIÓN ─────────────────────────────────────────────────────────
+    // ─── DESCONEXIÓN ──────────────────────────────────────────────────────
     socket.on('disconnect', () => {
       console.log(`[WS] Desconectado → ${sala}`);
     });
@@ -188,7 +158,6 @@ export function initSocket(httpServer) {
   return io;
 }
 
-// Exportar instancia para usar en otros módulos (ej. chat.controller.js)
 export function getIO() {
   if (!io) throw new Error('[Socket] No inicializado. Llama initSocket primero.');
   return io;

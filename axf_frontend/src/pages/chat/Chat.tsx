@@ -1,8 +1,5 @@
 // ============================================================================
-//  pages/chat/Chat.tsx  — VERSIÓN FUNCIONAL
-//  Chat en tiempo real entre personal y suscriptores
-//  REST: /api/chat/conversaciones · /api/chat/mensajes/:id · /api/chat/suscriptores-disponibles
-//  WS:   socket.io → mismo servidor backend (puerto 3001)
+//  pages/chat/Chat.tsx
 // ============================================================================
 
 import { useState, useEffect, useRef, useContext, useCallback } from 'react'
@@ -10,8 +7,6 @@ import { io, Socket } from 'socket.io-client'
 import axiosClient from '../../api/axiosClient'
 import { AuthContext } from '../../context/AuthContext'
 import Spinner from '../../components/ui/Spinner'
-
-// ─── Tipos ────────────────────────────────────────────────────────────────────
 
 interface Conversacion {
   id_suscriptor:      number
@@ -38,7 +33,6 @@ interface SuscriptorDisponible {
   tiene_chat:    number
 }
 
-// ─── Formatear timestamp ──────────────────────────────────────────────────────
 function formatHora(isoString: string | null): string {
   if (!isoString) return ''
   const fecha = new Date(isoString)
@@ -53,25 +47,24 @@ function formatHora(isoString: string | null): string {
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3001'
 
-// =============================================================================
 export default function Chat() {
   const { token, user } = useContext(AuthContext)
 
-  const [conversaciones, setConversaciones]     = useState<Conversacion[]>([])
-  const [suscActivoId, setSuscActivoId]         = useState<number | null>(null)
-  const [mensajes, setMensajes]                 = useState<Mensaje[]>([])
-  const [texto, setTexto]                       = useState('')
-  const [busqueda, setBusqueda]                 = useState('')
-  const [cargandoConvs, setCargandoConvs]       = useState(true)
-  const [cargandoMsgs, setCargandoMsgs]         = useState(false)
-  const [enviando, setEnviando]                 = useState(false)
-  const [escribiendo, setEscribiendo]           = useState(false)
-  const [modalNuevo, setModalNuevo]             = useState(false)
-  const [suscDisp, setSuscDisp]                 = useState<SuscriptorDisponible[]>([])
-  const [buscandoNuevo, setBuscandoNuevo]       = useState('')
-  const [cargandoDisp, setCargandoDisp]         = useState(false)
-  const [errorConvs, setErrorConvs]             = useState<string | null>(null)
-  const [wsConectado, setWsConectado]           = useState(false)
+  const [conversaciones, setConversaciones]   = useState<Conversacion[]>([])
+  const [suscActivoId, setSuscActivoId]       = useState<number | null>(null)
+  const [mensajes, setMensajes]               = useState<Mensaje[]>([])
+  const [texto, setTexto]                     = useState('')
+  const [busqueda, setBusqueda]               = useState('')
+  const [cargandoConvs, setCargandoConvs]     = useState(true)
+  const [cargandoMsgs, setCargandoMsgs]       = useState(false)
+  const [enviando, setEnviando]               = useState(false)
+  const [escribiendo, setEscribiendo]         = useState(false)
+  const [modalNuevo, setModalNuevo]           = useState(false)
+  const [suscDisp, setSuscDisp]               = useState<SuscriptorDisponible[]>([])
+  const [buscandoNuevo, setBuscandoNuevo]     = useState('')
+  const [cargandoDisp, setCargandoDisp]       = useState(false)
+  const [errorConvs, setErrorConvs]           = useState<string | null>(null)
+  const [wsConectado, setWsConectado]         = useState(false)
 
   const socketRef        = useRef<Socket | null>(null)
   const msgEndRef        = useRef<HTMLDivElement>(null)
@@ -79,7 +72,6 @@ export default function Chat() {
   const escribiendoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const suscActivoRef    = useRef<number | null>(null)
 
-  // Mantener ref sincronizada para usarla dentro de closures de socket
   useEffect(() => { suscActivoRef.current = suscActivoId }, [suscActivoId])
 
   const suscActivo = conversaciones.find(c => c.id_suscriptor === suscActivoId) ?? null
@@ -94,15 +86,15 @@ export default function Chat() {
     socket.on('connect_error', () => setWsConectado(false))
 
     socket.on('chat:mensaje_nuevo', ({ id_suscriptor, mensaje }: { id_suscriptor: number; mensaje: Mensaje }) => {
-      // Agregar mensaje si el chat está abierto
+      // Si el chat con ese suscriptor está abierto → agregar mensaje
       if (suscActivoRef.current === id_suscriptor) {
         setMensajes(prev => [...prev, mensaje])
         socket.emit('chat:leer', { id_suscriptor })
       }
-      // Actualizar lista de conversaciones
+      // Actualizar la lista de conversaciones
       setConversaciones(prev => {
         const existe = prev.find(c => c.id_suscriptor === id_suscriptor)
-        const nuevaLista = existe
+        const actualizada = existe
           ? prev.map(c => c.id_suscriptor === id_suscriptor
               ? {
                   ...c,
@@ -112,8 +104,8 @@ export default function Chat() {
                   no_leidos: suscActivoRef.current === id_suscriptor ? 0 : c.no_leidos + 1,
                 }
               : c)
-          : prev // la recargamos abajo
-        return [...nuevaLista].sort((a, b) =>
+          : prev  // si es una conv nueva, se recargará en el próximo poll
+        return [...actualizada].sort((a, b) =>
           new Date(b.ultimo_mensaje_en ?? 0).getTime() - new Date(a.ultimo_mensaje_en ?? 0).getTime()
         )
       })
@@ -190,17 +182,17 @@ export default function Chat() {
     if (!contenido || suscActivoId === null || enviando) return
 
     if (!wsConectado) {
-      // Fallback REST si no hay WebSocket
       setEnviando(true)
       axiosClient.post('/chat/mensajes', { id_suscriptor: suscActivoId, contenido })
         .then(({ data }) => {
           setMensajes(prev => [...prev, data.mensaje])
           setConversaciones(prev => prev.map(c =>
             c.id_suscriptor === suscActivoId
-              ? { ...c, ultimo_mensaje: contenido, ultimo_mensaje_en: data.mensaje.enviado_en, ultimo_enviado_por: 'personal' }
+              ? { ...c, ultimo_mensaje: contenido, ultimo_mensaje_en: data.mensaje.enviado_en, ultimo_enviado_por: 'personal' as const }
               : c
           ))
         })
+        .catch(() => {/* silencioso */})
         .finally(() => setEnviando(false))
       setTexto('')
       return
@@ -216,7 +208,7 @@ export default function Chat() {
           setMensajes(prev => [...prev, resp.mensaje!])
           setConversaciones(prev =>
             prev.map(c => c.id_suscriptor === suscActivoId
-              ? { ...c, ultimo_mensaje: contenido, ultimo_mensaje_en: resp.mensaje!.enviado_en, ultimo_enviado_por: 'personal' }
+              ? { ...c, ultimo_mensaje: contenido, ultimo_mensaje_en: resp.mensaje!.enviado_en, ultimo_enviado_por: 'personal' as const }
               : c
             ).sort((a, b) =>
               new Date(b.ultimo_mensaje_en ?? 0).getTime() - new Date(a.ultimo_mensaje_en ?? 0).getTime()
@@ -259,13 +251,13 @@ export default function Chat() {
     setModalNuevo(false)
     if (!conversaciones.find(c => c.id_suscriptor === s.id_suscriptor)) {
       setConversaciones(prev => [{
-        id_suscriptor: s.id_suscriptor,
-        nombre_suscriptor: s.nombre,
-        correo: s.correo,
-        ultimo_mensaje: null,
-        ultimo_mensaje_en: null,
+        id_suscriptor:      s.id_suscriptor,
+        nombre_suscriptor:  s.nombre,
+        correo:             s.correo,
+        ultimo_mensaje:     null,
+        ultimo_mensaje_en:  null,
         ultimo_enviado_por: null,
-        no_leidos: 0,
+        no_leidos:          0,
       }, ...prev])
     }
     setSuscActivoId(s.id_suscriptor)
@@ -291,7 +283,6 @@ export default function Chat() {
         <div className="p-3 border-b border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <p className="font-bold text-black text-sm">Contactos / Historial</p>
-            {/* Indicador WS */}
             <div className="flex items-center gap-1">
               <div className={`w-2 h-2 rounded-full ${wsConectado ? 'bg-green-500' : 'bg-gray-300'}`} />
               <span className="text-[9px] text-gray-400">{wsConectado ? 'En línea' : 'Offline'}</span>
@@ -343,7 +334,6 @@ export default function Chat() {
               >
                 <div className="flex justify-between items-center gap-1">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    {/* Avatar inicial */}
                     <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold
                       ${suscActivoId === c.id_suscriptor ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-600'}`}>
                       {c.nombre_suscriptor.charAt(0).toUpperCase()}
@@ -461,7 +451,6 @@ export default function Chat() {
                     )
                   })}
 
-                  {/* Indicador de escritura */}
                   {escribiendo && (
                     <div className="flex items-end gap-2 justify-start">
                       <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold shrink-0">
