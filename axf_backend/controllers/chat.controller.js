@@ -40,7 +40,6 @@ export async function listarConversaciones(req, res) {
     if (!actor) return res.status(403).json({ message: 'Rol no autorizado.' });
 
     if (actor.tipo === 'personal') {
-      // Traer suscriptores con quienes este personal tiene mensajes
       const { q = '' } = req.query;
       const busqueda = `%${q.trim()}%`;
 
@@ -49,7 +48,6 @@ export async function listarConversaciones(req, res) {
            s.id_suscriptor,
            CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre_suscriptor,
            s.correo,
-           -- Último mensaje
            (SELECT cm2.contenido
             FROM chat_mensajes cm2
             WHERE cm2.id_personal = ? AND cm2.id_suscriptor = s.id_suscriptor
@@ -62,7 +60,6 @@ export async function listarConversaciones(req, res) {
             FROM chat_mensajes cm4
             WHERE cm4.id_personal = ? AND cm4.id_suscriptor = s.id_suscriptor
             ORDER BY cm4.enviado_en DESC LIMIT 1) AS ultimo_enviado_por,
-           -- No leídos (mensajes del suscriptor que el personal no ha leído)
            (SELECT COUNT(*)
             FROM chat_mensajes cm5
             WHERE cm5.id_personal = ?
@@ -81,7 +78,7 @@ export async function listarConversaciones(req, res) {
       return res.json(conversaciones);
     }
 
-    // Para suscriptor: lista el personal con quien ha chateado
+    // ── Para suscriptor ──────────────────────────────────────────────────────
     if (actor.tipo === 'suscriptor') {
       const [conversaciones] = await db.query(
         `SELECT
@@ -104,15 +101,38 @@ export async function listarConversaciones(req, res) {
               AND cm5.enviado_por = 'personal'
               AND cm5.leido = 0) AS no_leidos
          FROM personal p
-         INNER JOIN chat_mensajes cm ON cm.id_personal = p.id_personal AND cm.id_suscriptor = ?
+         INNER JOIN chat_mensajes cm
+           ON cm.id_personal = p.id_personal AND cm.id_suscriptor = ?
          WHERE p.activo = 1
          GROUP BY p.id_personal
          ORDER BY ultimo_mensaje_en DESC`,
         [actor.id, actor.id, actor.id, actor.id]
       );
 
+      // Si no hay conversaciones aún, devolver lista de personal disponible
+      if (conversaciones.length === 0) {
+        const [personalDisponible] = await db.query(
+          `SELECT
+             p.id_personal,
+             CONCAT(p.nombres, ' ', p.apellido_paterno) AS nombre_personal,
+             p.puesto,
+             p.foto_url,
+             NULL AS ultimo_mensaje,
+             NULL AS ultimo_mensaje_en,
+             0    AS no_leidos
+           FROM personal p
+           INNER JOIN suscriptores s ON s.id_suscriptor = ?
+           WHERE p.id_sucursal = s.id_sucursal_registro AND p.activo = 1
+           ORDER BY p.nombres ASC`,
+          [actor.id]
+        );
+        return res.json(personalDisponible);
+      }
+
       return res.json(conversaciones);
     }
+
+    return res.status(403).json({ message: 'Rol no autorizado.' });
 
   } catch (error) {
     console.error('[GET /chat/conversaciones]', error);

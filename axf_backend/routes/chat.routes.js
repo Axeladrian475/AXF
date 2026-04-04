@@ -1,12 +1,5 @@
 // ============================================================================
 //  routes/chat.routes.js
-//
-//  GET  /api/chat/conversaciones              → lista de chats activos
-//  GET  /api/chat/mensajes/:id_suscriptor     → historial (personal lo usa)
-//  GET  /api/chat/mensajes/personal/:id_personal → historial (suscriptor lo usa)
-//  POST /api/chat/mensajes                    → enviar mensaje (REST fallback)
-//  GET  /api/chat/no-leidos                   → badge de no leídos
-//  GET  /api/chat/suscriptores-disponibles    → para "Iniciar Nueva Conversación"
 // ============================================================================
 
 import express from 'express';
@@ -18,28 +11,31 @@ import {
   contarNoLeidos,
   listarSuscriptoresDisponibles,
 } from '../controllers/chat.controller.js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
-// Todos los endpoints requieren token válido
+// ─── Middleware que acepta AMBOS: personal/sucursal/maestro Y suscriptor ──────
+function verificarTokenAny(req, res, next) {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'Token requerido' });
+  try {
+    req.usuario = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch {
+    return res.status(403).json({ message: 'Token inválido o expirado' });
+  }
+}
+
+// ─── Endpoints para AMBOS roles (personal y suscriptor) ──────────────────────
+router.get('/conversaciones',                 verificarTokenAny, listarConversaciones);
+router.get('/mensajes/personal/:id_personal', verificarTokenAny, obtenerMensajes);
+router.post('/mensajes',                      verificarTokenAny, enviarMensaje);
+router.get('/no-leidos',                      verificarTokenAny, contarNoLeidos);
+
+// ─── Endpoints SOLO para personal ────────────────────────────────────────────
 router.use(verificarToken);
-
-// ─── Conversaciones ───────────────────────────────────────────────────────────
-router.get('/conversaciones',           personalOSucursal, listarConversaciones);
-
-// ─── Mensajes ────────────────────────────────────────────────────────────────
-// Personal consulta mensajes con un suscriptor específico
-router.get('/mensajes/:id_suscriptor',  personalOSucursal, obtenerMensajes);
-
-// Suscriptor consulta mensajes con un personal específico
-// (preparado para cuando los suscriptores tengan login en app móvil)
-router.get('/mensajes/personal/:id_personal', obtenerMensajes);
-
-// Enviar mensaje (REST fallback — el WebSocket es la vía principal)
-router.post('/mensajes',                personalOSucursal, enviarMensaje);
-
-// ─── Utilidades ───────────────────────────────────────────────────────────────
-router.get('/no-leidos',                personalOSucursal, contarNoLeidos);
-router.get('/suscriptores-disponibles', personalOSucursal, listarSuscriptoresDisponibles);
+router.get('/mensajes/:id_suscriptor',        personalOSucursal, obtenerMensajes);
+router.get('/suscriptores-disponibles',       personalOSucursal, listarSuscriptoresDisponibles);
 
 export default router;
