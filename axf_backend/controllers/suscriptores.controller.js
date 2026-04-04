@@ -666,6 +666,85 @@ export async function suscribirSuscriptor(req, res) {
   }
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/suscriptores/:id/aplicar-promo
+// Aplica una promoción a un suscriptor (sesiones y/o días adicionales).
+// Body: { id_promocion: number, paypal_order_id?: string }
+// ════════════════════════════════════════════════════════════════════════════
+export async function aplicarPromocion(req, res) {
+  try {
+    const { id } = req.params;
+    const { id_promocion, paypal_order_id = null } = req.body;
+
+    if (!id_promocion) {
+      return res.status(400).json({ message: 'El campo id_promocion es requerido.' });
+    }
+
+    const [[suscriptor]] = await db.query(
+      `SELECT id_suscriptor FROM suscriptores WHERE id_suscriptor = ? AND activo = 1`,
+      [id]
+    );
+    if (!suscriptor) return res.status(404).json({ message: 'Suscriptor no encontrado.' });
+
+    const [[promo]] = await db.query(
+      `SELECT id_promocion, nombre, duracion_dias, precio,
+              sesiones_nutriologo, sesiones_entrenador
+       FROM promociones
+       WHERE id_promocion = ? AND activo = 1`,
+      [id_promocion]
+    );
+    if (!promo) return res.status(404).json({ message: 'Promoción no encontrada o inactiva.' });
+
+    const fmtDate = (d) => d.toISOString().split('T')[0];
+
+    const [[activa]] = await db.query(
+      `SELECT fecha_fin FROM suscripciones
+       WHERE id_suscriptor = ? AND estado = 'Activa' AND fecha_fin >= CURDATE()
+       ORDER BY fecha_fin DESC LIMIT 1`,
+      [id]
+    );
+
+    let inicio, fin;
+    if (promo.duracion_dias > 0) {
+      if (activa) {
+        const d = new Date(activa.fecha_fin);
+        d.setDate(d.getDate() + 1);
+        inicio = d;
+      } else {
+        inicio = new Date();
+      }
+      fin = new Date(inicio);
+      fin.setDate(fin.getDate() + promo.duracion_dias - 1);
+    } else {
+      // Solo sesiones, sin días
+      inicio = new Date();
+      fin    = new Date();
+    }
+
+    const [result] = await db.query(
+      `INSERT INTO suscripciones
+         (id_suscriptor, id_tipo, id_promocion, fecha_inicio, fecha_fin,
+          sesiones_nutriologo_restantes, sesiones_entrenador_restantes,
+          estado, paypal_order_id)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, 'Activa', ?)`,
+      [id, id_promocion, fmtDate(inicio), fmtDate(fin),
+       promo.sesiones_nutriologo, promo.sesiones_entrenador, paypal_order_id]
+    );
+
+    res.status(201).json({
+      message:        `Promoción "${promo.nombre}" aplicada correctamente.`,
+      id_suscripcion: result.insertId,
+      fecha_inicio:   fmtDate(inicio),
+      fecha_fin:      fmtDate(fin),
+      acumulada:      !!(activa && promo.duracion_dias > 0),
+    });
+  } catch (error) {
+    console.error('[POST /suscriptores/:id/aplicar-promo]', error);
+    res.status(500).json({ message: 'Error al aplicar la promoción.' });
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // DELETE /api/suscriptores/:id
 // Hard delete: elimina el suscriptor y todos sus datos relacionados.

@@ -10,6 +10,7 @@ import {
   getSuscripciones,
   getSuscripcionActiva,
   suscribirSuscriptor,
+  aplicarPromocion,
   type TipoSuscripcion,
   type SuscripcionActiva,
   type SuscripcionItem,
@@ -186,14 +187,16 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     setCargandoEstado(true)
     setErrorPlanes(null)
     try {
-      const [p, e, promos] = await Promise.all([
+      const [resP, resE, resPromos] = await Promise.allSettled([
         getSuscripciones(),
         getSuscripcionActiva(Number(suscriptorId)),
         getPromociones(),
       ])
-      setPlanes(p)
-      setEstadoActivo(e)
-      setPromociones(promos)
+      if (resP.status === 'fulfilled') setPlanes(resP.value)
+      else setErrorPlanes('No se pudieron cargar los planes.')
+      if (resE.status === 'fulfilled') setEstadoActivo(resE.value)
+      if (resPromos.status === 'fulfilled') setPromociones(resPromos.value)
+      else setPromociones([])
     } catch {
       setErrorPlanes('No se pudieron cargar los datos.')
     } finally {
@@ -276,9 +279,9 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
       // Para promos usamos id_tipo con el id_promocion — el backend de suscribir
       // acepta cualquier id_tipo válido. Si la promo no tiene id en tipos_suscripcion
       // se puede extender el backend, pero por ahora reutilizamos el endpoint existente.
-      const res = await suscribirSuscriptor(Number(suscriptorId), {
-        id_tipo: planSeleccionado.id_tipo,
-      })
+      const res = planSeleccionado.es_promocion
+        ? await aplicarPromocion(Number(suscriptorId), { id_promocion: planSeleccionado.id_tipo })
+        : await suscribirSuscriptor(Number(suscriptorId), { id_tipo: planSeleccionado.id_tipo })
       setModalPago(false)
       mostrarToast('ok',
         res.acumulada
@@ -302,7 +305,8 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     try {
       const data = await crearOrdenPago({
         id_suscriptor: Number(suscriptorId),
-        id_tipo:       planSeleccionado.id_tipo,
+        id_tipo:       planSeleccionado.es_promocion ? undefined : planSeleccionado.id_tipo,
+        id_promocion:  planSeleccionado.es_promocion ? planSeleccionado.id_tipo : undefined,
       })
       window.location.href = data.approve_url
     } catch (err: unknown) {

@@ -44,6 +44,7 @@ import {
   migrarSuscriptor,
   obtenerSuscripcionActiva,
   suscribirSuscriptor,
+  aplicarPromocion,
 } from '../controllers/suscriptores.controller.js';
 
 const router = express.Router();
@@ -435,5 +436,6 @@ router.delete('/:id',                    eliminarSuscriptor);
 router.post  ('/:id/migrar',             migrarSuscriptor);
 router.get   ('/:id/suscripcion-activa', obtenerSuscripcionActiva);
 router.post  ('/:id/suscribir',          suscribirSuscriptor);
+router.post  ('/:id/aplicar-promo',      aplicarPromocion);
 
 export default router;
