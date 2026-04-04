@@ -1,6 +1,15 @@
+// ============================================================================
+//  routes/promociones.routes.js
+//
+//  CAMBIO: GET / ahora acepta también rol 'personal' (para que puedan
+//  aplicar promociones en el módulo de suscripciones).
+//  El personal consulta las promociones de SU sucursal (obtenida del JWT).
+//  POST / PUT / DELETE siguen siendo solo sucursal/maestro.
+// ============================================================================
+
 import express from 'express';
-import jwt from 'jsonwebtoken';
-import db from '../config/database.js';
+import jwt     from 'jsonwebtoken';
+import db      from '../config/database.js';
 
 const router = express.Router();
 
@@ -17,7 +26,7 @@ function verificarToken(req, res, next) {
   }
 }
 
-// ─── Middleware: solo sucursal o maestro ─────────────────────────────────────
+// ─── Middleware: solo sucursal o maestro (para escritura) ─────────────────────
 function soloSucursalOMaestro(req, res, next) {
   if (req.usuario.rol !== 'sucursal' && req.usuario.rol !== 'maestro') {
     return res.status(403).json({ message: 'Acceso no autorizado' });
@@ -25,19 +34,39 @@ function soloSucursalOMaestro(req, res, next) {
   next();
 }
 
+// ─── Helper: obtener id_sucursal según el rol del token ───────────────────────
+async function getSucursalId(usuario) {
+  if (usuario.rol === 'sucursal') return usuario.id;
+  if (usuario.rol === 'maestro')  return usuario.id; // maestro también tiene id_sucursal
+  if (usuario.rol === 'personal') {
+    // Personal: buscar su sucursal en la tabla personal
+    const [[emp]] = await db.query(
+      `SELECT id_sucursal FROM personal WHERE id_personal = ? AND activo = 1`,
+      [usuario.id]
+    );
+    return emp?.id_sucursal ?? null;
+  }
+  return null;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // GET /api/promociones
-// Lista las promociones activas de la sucursal logueada
+// Lista las promociones activas de la sucursal del usuario logueado.
+// Accesible por: sucursal, maestro Y personal (lectura para aplicar promos)
 // ────────────────────────────────────────────────────────────────────────────
-router.get('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
+router.get('/', verificarToken, async (req, res) => {
   try {
-    const id_sucursal = req.usuario.id;
+    const id_sucursal = await getSucursalId(req.usuario);
+    if (!id_sucursal) {
+      return res.status(403).json({ message: 'No se pudo determinar la sucursal.' });
+    }
+
     const [promociones] = await db.query(
       `SELECT id_promocion, nombre, descripcion, duracion_dias, precio,
               sesiones_nutriologo, sesiones_entrenador
        FROM promociones
        WHERE id_sucursal = ? AND activo = 1
-       ORDER BY nombre ASC`,
+       ORDER BY precio ASC, nombre ASC`,
       [id_sucursal]
     );
     res.json(promociones);
@@ -48,8 +77,7 @@ router.get('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// POST /api/promociones
-// Crea una nueva promoción
+// POST /api/promociones  — solo sucursal/maestro
 // ────────────────────────────────────────────────────────────────────────────
 router.post('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
   try {
@@ -60,7 +88,6 @@ router.post('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
       return res.status(400).json({ message: 'Nombre y precio son requeridos' });
     }
 
-    // Verificar nombre único en la misma sucursal
     const [existe] = await db.query(
       'SELECT id_promocion FROM promociones WHERE nombre = ? AND id_sucursal = ? AND activo = 1',
       [nombre, id_sucursal]
@@ -73,15 +100,7 @@ router.post('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
       `INSERT INTO promociones
         (id_sucursal, nombre, descripcion, duracion_dias, precio, sesiones_nutriologo, sesiones_entrenador)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id_sucursal,
-        nombre,
-        descripcion || null,
-        duracion_dias || 0,
-        precio,
-        sesiones_nutriologo || 0,
-        sesiones_entrenador || 0,
-      ]
+      [id_sucursal, nombre, descripcion || null, duracion_dias || 0, precio, sesiones_nutriologo || 0, sesiones_entrenador || 0]
     );
 
     res.status(201).json({ message: 'Promoción creada correctamente', id_promocion: result.insertId });
@@ -92,8 +111,7 @@ router.post('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// PUT /api/promociones/:id
-// Modifica una promoción existente
+// PUT /api/promociones/:id  — solo sucursal/maestro
 // ────────────────────────────────────────────────────────────────────────────
 router.put('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
   try {
@@ -105,7 +123,6 @@ router.put('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
       return res.status(400).json({ message: 'Nombre y precio son requeridos' });
     }
 
-    // Verificar nombre único en otra promoción de la misma sucursal
     const [existe] = await db.query(
       'SELECT id_promocion FROM promociones WHERE nombre = ? AND id_sucursal = ? AND id_promocion != ? AND activo = 1',
       [nombre, id_sucursal, id]
@@ -118,22 +135,10 @@ router.put('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
       `UPDATE promociones
        SET nombre=?, descripcion=?, duracion_dias=?, precio=?, sesiones_nutriologo=?, sesiones_entrenador=?
        WHERE id_promocion=? AND id_sucursal=?`,
-      [
-        nombre,
-        descripcion || null,
-        duracion_dias || 0,
-        precio,
-        sesiones_nutriologo || 0,
-        sesiones_entrenador || 0,
-        id,
-        id_sucursal,
-      ]
+      [nombre, descripcion || null, duracion_dias || 0, precio, sesiones_nutriologo || 0, sesiones_entrenador || 0, id, id_sucursal]
     );
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Promoción no encontrada' });
-    }
-
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Promoción no encontrada' });
     res.json({ message: 'Promoción actualizada correctamente' });
   } catch (error) {
     console.error('[PUT /promociones/:id]', error);
@@ -142,8 +147,7 @@ router.put('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// DELETE /api/promociones/:id
-// Elimina una promoción (hard delete)
+// DELETE /api/promociones/:id  — solo sucursal/maestro
 // ────────────────────────────────────────────────────────────────────────────
 router.delete('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
   try {
@@ -155,10 +159,7 @@ router.delete('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => 
       [id, id_sucursal]
     );
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Promoción no encontrada' });
-    }
-
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Promoción no encontrada' });
     res.json({ message: 'Promoción eliminada correctamente' });
   } catch (error) {
     console.error('[DELETE /promociones/:id]', error);

@@ -139,7 +139,7 @@ export default function TabSuscripciones() {
             <h3 className="text-lg font-bold text-black mb-2">¿Eliminar suscripción?</h3>
             <p className="text-gray-600 text-sm mb-5">
               El tipo <span className="font-bold text-black">{confirmEliminar.nombre}</span> será
-              eliminado permanentemente.
+              eliminado permanentemente. Los suscriptores actuales con este plan conservarán sus fechas y sesiones vigentes, pero el tipo quedará desvinculado.
             </p>
             <div className="flex gap-3 justify-end">
               <button onClick={() => setConfirmEliminar(null)}

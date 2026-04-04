@@ -50,11 +50,15 @@ export default function TabPersonal() {
   const [selectedPersonal, setSelectedPersonal] = useState<Personal | null>(null)
   const [formMod, setFormMod] = useState(FORM_VACIO)
   const [fotoMod, setFotoMod] = useState<File | null>(null)
+  const [fotoModPreview, setFotoModPreview] = useState<string | null>(null)
   const [showPasswordMod, setShowPasswordMod] = useState(false)
   const [loadingMod, setLoadingMod] = useState(false)
 
   // ── Confirmar eliminación ──────────────────────────────────────────────────
   const [confirmEliminar, setConfirmEliminar] = useState<Personal | null>(null)
+
+  // ── Cache-buster por empleado tras cambio de foto ──────────────────────────
+  const [fotoTimestamps, setFotoTimestamps] = useState<Record<number, number>>({})
 
   // ────────────────────────────────────────────────────────────────────────────
   useEffect(() => { cargarPersonal() }, [])
@@ -83,8 +87,9 @@ export default function TabPersonal() {
   // ── Foto helper ────────────────────────────────────────────────────────────
   // foto_url en BD es "/uploads/personal/archivo.jpg"
   // La construimos como "http://localhost:3001/uploads/personal/archivo.jpg"
-  const fotoSrc = (foto_url: string | null) =>
-    foto_url ? `${API_BASE}${foto_url}` : null
+  // El parámetro ts evita que el navegador use la imagen cacheada tras un cambio
+  const fotoSrc = (foto_url: string | null, ts?: number) =>
+    foto_url ? `${API_BASE}${foto_url}${ts ? `?t=${ts}` : ''}` : null
 
   // ────────────────────────────────────────────────────────────────────────────
   // Agregar
@@ -128,6 +133,7 @@ export default function TabPersonal() {
       password: '',
     })
     setFotoMod(null)
+    setFotoModPreview(null)
   }
 
   const handleModificar = async (e: React.FormEvent) => {
@@ -140,6 +146,10 @@ export default function TabPersonal() {
       Object.entries(formMod).forEach(([k, v]) => fd.append(k, v))
       if (fotoMod) fd.append('foto', fotoMod)
       await modificarPersonal(selectedPersonal.id_personal, fd)
+      // Si se cambió la foto, guardar nuevo timestamp para romper caché del browser
+      if (fotoMod) {
+        setFotoTimestamps(prev => ({ ...prev, [selectedPersonal.id_personal]: Date.now() }))
+      }
       mostrarExito('Empleado actualizado correctamente')
       setSelectedPersonal(null)
       await cargarPersonal()
@@ -294,12 +304,35 @@ export default function TabPersonal() {
                   <label className="block text-sm font-bold italic mb-1">
                     Nueva Fotografía: <span className="font-normal text-gray-500">(opcional)</span>
                   </label>
-                  {selectedPersonal.foto_url && (
-                    <img src={fotoSrc(selectedPersonal.foto_url)!}
-                      alt="foto actual" className="w-10 h-10 rounded-full object-cover mb-1" />
-                  )}
+                  {/* Preview: muestra la nueva foto si se seleccionó, o la actual del servidor */}
+                  <div className="flex items-center gap-3 mb-2">
+                    {(fotoModPreview || fotoSrc(selectedPersonal.foto_url)) ? (
+                      <img
+                        src={fotoModPreview ?? fotoSrc(selectedPersonal.foto_url)!}
+                        alt="foto"
+                        className="w-14 h-14 rounded-full object-cover border-2 border-[#ea580c]"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-full bg-[#ea580c] flex items-center justify-center text-white font-bold text-lg border-2 border-[#ea580c]">
+                        {selectedPersonal.nombres.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    {fotoModPreview && (
+                      <span className="text-xs text-green-600 font-bold">✓ Nueva foto seleccionada</span>
+                    )}
+                  </div>
                   <input type="file" accept="image/*"
-                    onChange={e => setFotoMod(e.target.files?.[0] || null)}
+                    onChange={e => {
+                      const file = e.target.files?.[0] || null
+                      setFotoMod(file)
+                      if (file) {
+                        const reader = new FileReader()
+                        reader.onload = ev => setFotoModPreview(ev.target?.result as string)
+                        reader.readAsDataURL(file)
+                      } else {
+                        setFotoModPreview(null)
+                      }
+                    }}
                     className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black text-sm" />
                 </div>
               </div>
@@ -442,7 +475,7 @@ export default function TabPersonal() {
                     <td className="border border-gray-400 px-3 py-2 text-black">{p.id_personal}</td>
                     <td className="border border-gray-400 px-3 py-2">
                       {fotoSrc(p.foto_url) ? (
-                        <img src={fotoSrc(p.foto_url)!} alt={p.nombres}
+                        <img src={fotoSrc(p.foto_url, fotoTimestamps[p.id_personal])!} alt={p.nombres}
                           className="w-9 h-9 rounded-full object-cover" />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-[#ea580c] flex items-center justify-center text-white font-bold text-sm">

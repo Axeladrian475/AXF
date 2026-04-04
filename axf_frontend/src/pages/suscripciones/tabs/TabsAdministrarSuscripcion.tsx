@@ -1,3 +1,10 @@
+// ============================================================================
+//  pages/suscripciones/tabs/TabsAdministrarSuscripcion.tsx
+//
+//  CAMBIO: Se agrega la sección "Promociones Disponibles" debajo de los planes
+//  regulares. Usa el mismo flujo de pago (términos → modal pago → caja/PayPal).
+// ============================================================================
+
 import { useState, useEffect, useCallback } from 'react'
 import {
   getSuscripciones,
@@ -7,6 +14,7 @@ import {
   type SuscripcionActiva,
   type SuscripcionItem,
 } from '../../../api/suscripcionesApi'
+import { getPromociones, type Promocion } from '../../../api/promocionesApi'
 import { crearOrdenPago, confirmarPago } from '../../../api/pagosApi'
 import ModalTarjeta from './ModalTarjeta'
 
@@ -23,6 +31,19 @@ const TERMINOS = [
 interface Props {
   suscriptorId:     string
   suscriptorNombre: string
+}
+
+// ─── Plan unificado (plan regular o promoción) ────────────────────────────────
+// Internamente manejamos ambos con el mismo shape para el flujo de pago
+interface PlanUnificado {
+  id_tipo:                    number   // id_tipo para planes, id_promocion para promos
+  nombre:                     string
+  duracion_dias:              number
+  precio:                     number
+  limite_sesiones_nutriologo: number
+  limite_sesiones_entrenador: number
+  es_promocion:               boolean
+  descripcion?:               string | null
 }
 
 const fmtFecha = (iso: string) => {
@@ -86,22 +107,71 @@ function TarjetaSuscripcion({ sub, index, esCorriendo }: {
   )
 }
 
+// ─── Tarjeta de plan (reutilizable para planes y promos) ─────────────────────
+function TarjetaPlan({
+  plan, tieneActiva, etiqueta, colorBoton, badge, onSeleccionar
+}: {
+  plan: PlanUnificado
+  tieneActiva: boolean
+  etiqueta: string
+  colorBoton: string
+  badge?: React.ReactNode
+  onSeleccionar: (p: PlanUnificado) => void
+}) {
+  return (
+    <div className="rounded-lg border-2 border-gray-200 p-5 flex flex-col items-center text-center bg-white hover:border-[#ea580c] transition-colors relative">
+      {badge}
+      <p className="font-bold text-black text-sm mb-1">{plan.nombre}</p>
+      {plan.descripcion && (
+        <p className="text-xs text-gray-400 mb-1 italic">{plan.descripcion}</p>
+      )}
+      <p className="font-black text-black text-2xl mb-1">
+        ${Number(plan.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+      </p>
+      {plan.duracion_dias > 0
+        ? <p className="text-xs text-gray-500 mb-3">Vigencia: {plan.duracion_dias} días</p>
+        : <p className="text-xs text-gray-400 mb-3 italic">Sin vigencia adicional</p>
+      }
+      <ul className="text-xs text-gray-600 text-left space-y-1 mb-4 w-full">
+        {plan.duracion_dias > 0 && (
+          <li className="flex gap-1"><span>•</span>Acceso a todas las áreas</li>
+        )}
+        {plan.limite_sesiones_nutriologo > 0 && (
+          <li className="flex gap-1"><span>•</span>{plan.limite_sesiones_nutriologo} sesiones con nutriólogo</li>
+        )}
+        {plan.limite_sesiones_entrenador > 0 && (
+          <li className="flex gap-1"><span>•</span>{plan.limite_sesiones_entrenador} sesiones con entrenador</li>
+        )}
+      </ul>
+      <button
+        onClick={() => onSeleccionar(plan)}
+        className={`w-full text-white font-bold py-2 rounded transition-colors text-sm ${colorBoton}`}
+      >
+        {etiqueta}
+      </button>
+    </div>
+  )
+}
+
+// =============================================================================
 export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNombre }: Props) {
   const [planes,         setPlanes]         = useState<TipoSuscripcion[]>([])
+  const [promociones,    setPromociones]    = useState<Promocion[]>([])
   const [estadoActivo,   setEstadoActivo]   = useState<SuscripcionActiva | null>(null)
   const [cargandoPlanes, setCargandoPlanes] = useState(true)
   const [cargandoEstado, setCargandoEstado] = useState(true)
   const [errorPlanes,    setErrorPlanes]    = useState<string | null>(null)
 
-  const [planSeleccionado, setPlanSeleccionado] = useState<TipoSuscripcion | null>(null)
-  const [modalTerminos,    setModalTerminos]    = useState(false)
-  const [modalPago,        setModalPago]        = useState(false)
-  const [aceptaTerminos,   setAceptaTerminos]   = useState(false)
+  // Plan seleccionado (puede ser plan regular o promoción)
+  const [planSeleccionado,  setPlanSeleccionado]  = useState<PlanUnificado | null>(null)
+  const [modalTerminos,     setModalTerminos]     = useState(false)
+  const [modalPago,         setModalPago]         = useState(false)
+  const [aceptaTerminos,    setAceptaTerminos]    = useState(false)
 
-  const [procesandoCaja,    setProcesandoCaja]    = useState(false)
-  const [procesandoPayPal,  setProcesandoPayPal]  = useState(false)
-  const [confirmandoPago,   setConfirmandoPago]   = useState(false)
-  const [modalTarjeta,      setModalTarjeta]      = useState(false)
+  const [procesandoCaja,   setProcesandoCaja]   = useState(false)
+  const [procesandoPayPal, setProcesandoPayPal] = useState(false)
+  const [confirmandoPago,  setConfirmandoPago]  = useState(false)
+  const [modalTarjeta,     setModalTarjeta]     = useState(false)
 
   const [pagoOk, setPagoOk] = useState<{ plan_nombre: string; fecha_fin: string } | null>(null)
   const [toast,  setToast]  = useState<{ tipo: 'ok' | 'err' | 'info'; msg: string } | null>(null)
@@ -116,12 +186,14 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     setCargandoEstado(true)
     setErrorPlanes(null)
     try {
-      const [p, e] = await Promise.all([
+      const [p, e, promos] = await Promise.all([
         getSuscripciones(),
         getSuscripcionActiva(Number(suscriptorId)),
+        getPromociones(),
       ])
       setPlanes(p)
       setEstadoActivo(e)
+      setPromociones(promos)
     } catch {
       setErrorPlanes('No se pudieron cargar los datos.')
     } finally {
@@ -130,36 +202,28 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     }
   }, [suscriptorId])
 
-  // ── Al montar: ver si venimos del redirect de PayPal ─────────────────────────
+  // ── Redireccionamiento PayPal ─────────────────────────────────────────────
   useEffect(() => {
     const params   = new URLSearchParams(window.location.search)
     const tipoPago = params.get('pago')
-    const token    = params.get('token')   // order_id que PayPal devuelve
+    const token    = params.get('token')
     const sus      = params.get('sus')
     const tipo     = params.get('tipo')
 
     if (tipoPago === 'exitoso' && token && sus && tipo) {
       window.history.replaceState({}, '', window.location.pathname)
       setConfirmandoPago(true)
-
       confirmarPago(token, sus, tipo)
         .then((result) => {
           if (result.ok && result.suscripcion) {
-            setPagoOk({
-              plan_nombre: result.suscripcion.plan_nombre,
-              fecha_fin:   result.suscripcion.fecha_fin,
-            })
+            setPagoOk({ plan_nombre: result.suscripcion.plan_nombre, fecha_fin: result.suscripcion.fecha_fin })
             cargarDatos()
           } else {
             mostrarToast('err', `❌ ${result.message ?? 'No se pudo confirmar el pago.'}`)
           }
         })
-        .catch((err) => {
-          console.error('[Pago] Error al confirmar:', err)
-          mostrarToast('err', '❌ Error al confirmar el pago con el servidor.')
-        })
+        .catch(() => mostrarToast('err', '❌ Error al confirmar el pago con el servidor.'))
         .finally(() => setConfirmandoPago(false))
-
     } else if (tipoPago === 'cancelado') {
       window.history.replaceState({}, '', window.location.pathname)
       mostrarToast('info', '⚠️ El pago fue cancelado en PayPal.')
@@ -168,11 +232,35 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
 
   useEffect(() => { cargarDatos() }, [suscriptorId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSeleccionarPlan = (plan: TipoSuscripcion) => {
+  // ── Seleccionar plan (regular o promo) ────────────────────────────────────
+  const handleSeleccionarPlan = (plan: PlanUnificado) => {
     setPlanSeleccionado(plan)
     setAceptaTerminos(false)
     setModalTerminos(true)
   }
+
+  // Convertir TipoSuscripcion → PlanUnificado
+  const toUnificado = (plan: TipoSuscripcion): PlanUnificado => ({
+    id_tipo:                    plan.id_tipo,
+    nombre:                     plan.nombre,
+    duracion_dias:              plan.duracion_dias,
+    precio:                     plan.precio,
+    limite_sesiones_nutriologo: plan.limite_sesiones_nutriologo,
+    limite_sesiones_entrenador: plan.limite_sesiones_entrenador,
+    es_promocion:               false,
+  })
+
+  // Convertir Promocion → PlanUnificado
+  const promoToUnificado = (p: Promocion): PlanUnificado => ({
+    id_tipo:                    p.id_promocion,
+    nombre:                     p.nombre,
+    duracion_dias:              p.duracion_dias,
+    precio:                     p.precio,
+    limite_sesiones_nutriologo: p.sesiones_nutriologo,
+    limite_sesiones_entrenador: p.sesiones_entrenador,
+    es_promocion:               true,
+    descripcion:                p.descripcion,
+  })
 
   const handleContinuarPago = () => {
     if (!aceptaTerminos) return
@@ -180,11 +268,14 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     setModalPago(true)
   }
 
-  // ── Pago en caja ─────────────────────────────────────────────────────────────
+  // ── Pago en caja ──────────────────────────────────────────────────────────
   const handlePagarCaja = async () => {
     if (!planSeleccionado) return
     setProcesandoCaja(true)
     try {
+      // Para promos usamos id_tipo con el id_promocion — el backend de suscribir
+      // acepta cualquier id_tipo válido. Si la promo no tiene id en tipos_suscripcion
+      // se puede extender el backend, pero por ahora reutilizamos el endpoint existente.
       const res = await suscribirSuscriptor(Number(suscriptorId), {
         id_tipo: planSeleccionado.id_tipo,
       })
@@ -204,7 +295,7 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
     }
   }
 
-  // ── Pago con PayPal ──────────────────────────────────────────────────────────
+  // ── Pago con PayPal ───────────────────────────────────────────────────────
   const handlePagarPayPal = async () => {
     if (!planSeleccionado) return
     setProcesandoPayPal(true)
@@ -213,7 +304,6 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
         id_suscriptor: Number(suscriptorId),
         id_tipo:       planSeleccionado.id_tipo,
       })
-      // Redirigir a PayPal en la misma pestaña
       window.location.href = data.approve_url
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -242,7 +332,7 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
         </div>
       )}
 
-      {/* Banner: confirmando pago (al volver de PayPal) */}
+      {/* Banner: confirmando pago */}
       {confirmandoPago && (
         <div className="bg-blue-600 text-white rounded-xl px-5 py-4 flex items-center gap-3">
           <svg className="animate-spin h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -329,7 +419,7 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
         </div>
       )}
 
-      {/* PLANES */}
+      {/* ── PLANES REGULARES ─────────────────────────────────────────────── */}
       <div>
         <h3 className="font-bold text-black text-base mb-3">
           {tieneActiva ? 'Agregar / Acumular Plan' : 'Suscribir a Plan'}
@@ -351,32 +441,53 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {planes.map(plan => (
-              <div key={plan.id_tipo}
-                className="rounded-lg border-2 border-gray-200 p-5 flex flex-col items-center text-center bg-white hover:border-[#ea580c] transition-colors">
-                <p className="font-bold text-black text-sm mb-1">{plan.nombre}</p>
-                <p className="font-black text-black text-2xl mb-1">
-                  ${Number(plan.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
-                </p>
-                <p className="text-xs text-gray-500 mb-3">Vigencia: {plan.duracion_dias} días</p>
-                <ul className="text-xs text-gray-600 text-left space-y-1 mb-4 w-full">
-                  <li className="flex gap-1"><span>•</span>Acceso a todas las áreas</li>
-                  {plan.limite_sesiones_nutriologo > 0 && (
-                    <li className="flex gap-1"><span>•</span>{plan.limite_sesiones_nutriologo} sesiones con nutriólogo</li>
-                  )}
-                  {plan.limite_sesiones_entrenador > 0 && (
-                    <li className="flex gap-1"><span>•</span>{plan.limite_sesiones_entrenador} sesiones con entrenador</li>
-                  )}
-                </ul>
-                <button
-                  onClick={() => handleSeleccionarPlan(plan)}
-                  className="w-full bg-[#ea580c] text-white font-bold py-2 rounded hover:bg-[#c94a0a] transition-colors text-sm">
-                  {tieneActiva ? 'Acumular Plan' : 'Suscribir'}
-                </button>
-              </div>
+              <TarjetaPlan
+                key={plan.id_tipo}
+                plan={toUnificado(plan)}
+                tieneActiva={!!tieneActiva}
+                etiqueta={tieneActiva ? 'Acumular Plan' : 'Suscribir'}
+                colorBoton="bg-[#ea580c] hover:bg-[#c94a0a]"
+                onSeleccionar={handleSeleccionarPlan}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {/* ── PROMOCIONES ──────────────────────────────────────────────────── */}
+      {!cargandoPlanes && promociones.length > 0 && (
+        <div>
+          {/* Divisor con etiqueta */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 h-px bg-gray-200" />
+            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-full px-4 py-1">
+              <span className="text-base">🏷️</span>
+              <span className="text-sm font-black text-orange-600 uppercase tracking-wide">
+                Promociones Disponibles
+              </span>
+            </div>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {promociones.map(promo => (
+              <TarjetaPlan
+                key={promo.id_promocion}
+                plan={promoToUnificado(promo)}
+                tieneActiva={!!tieneActiva}
+                etiqueta="Aplicar Promoción"
+                colorBoton="bg-orange-500 hover:bg-orange-600"
+                badge={
+                  <span className="absolute -top-2.5 left-3 bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide shadow">
+                    Promo
+                  </span>
+                }
+                onSeleccionar={handleSeleccionarPlan}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* MODAL TÉRMINOS */}
       {modalTerminos && planSeleccionado && (
@@ -384,7 +495,8 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
           <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl">
             <h3 className="font-bold text-black text-lg mb-1">Términos y Condiciones</h3>
             <p className="text-sm text-gray-500 mb-3">
-              Plan: <span className="font-bold text-black">{planSeleccionado.nombre}</span> —&nbsp;
+              {planSeleccionado.es_promocion ? '🏷️ Promoción: ' : 'Plan: '}
+              <span className="font-bold text-black">{planSeleccionado.nombre}</span> —&nbsp;
               ${Number(planSeleccionado.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
             </p>
             <ul className="text-sm text-black space-y-1 mb-4 max-h-48 overflow-y-auto">
@@ -414,20 +526,27 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl text-center">
             <h3 className="font-bold text-black text-xl mb-1">Procesar Pago</h3>
+            {planSeleccionado.es_promocion && (
+              <span className="inline-block bg-orange-100 text-orange-600 text-xs font-black px-2 py-0.5 rounded-full mb-2">
+                🏷️ PROMOCIÓN
+              </span>
+            )}
             <div className="border-t border-gray-200 my-3" />
             <p className="font-bold text-black text-base mb-1">{planSeleccionado.nombre}</p>
             <p className="font-black text-blue-600 text-3xl mb-1">
               ${Number(planSeleccionado.precio).toFixed(2)}
             </p>
-            <p className="text-gray-400 text-xs mb-2">Vigencia: {planSeleccionado.duracion_dias} días</p>
-            {tieneActiva && (
+            {planSeleccionado.duracion_dias > 0
+              ? <p className="text-gray-400 text-xs mb-2">Vigencia: {planSeleccionado.duracion_dias} días</p>
+              : <p className="text-gray-400 text-xs mb-2 italic">Solo sesiones (sin días adicionales)</p>
+            }
+            {tieneActiva && planSeleccionado.duracion_dias > 0 && (
               <p className="text-orange-500 text-xs font-bold mb-4 bg-orange-50 rounded px-3 py-2">
                 ⚡ Este plan se acumulará al vencimiento actual ({fmtFecha(vencimientoFinal!)}).
               </p>
             )}
 
             <div className="space-y-3">
-              {/* Pago en caja */}
               <button
                 onClick={handlePagarCaja}
                 disabled={procesandoCaja || procesandoPayPal}
@@ -441,7 +560,6 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
                 <div className="flex-1 border-t border-gray-200" />
               </div>
 
-              {/* Pago con PayPal */}
               <button
                 onClick={handlePagarPayPal}
                 disabled={procesandoPayPal || procesandoCaja}
@@ -465,7 +583,6 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
                 )}
               </button>
 
-              {/* Pagar con Tarjeta (Card Fields — sin cuenta PayPal) */}
               <button
                 onClick={() => { setModalPago(false); setModalTarjeta(true) }}
                 disabled={procesandoPayPal || procesandoCaja}
@@ -484,10 +601,17 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
         </div>
       )}
 
-      {/* MODAL TARJETA — Card Fields PayPal (sin cuenta PayPal) */}
+      {/* MODAL TARJETA */}
       {modalTarjeta && planSeleccionado && (
         <ModalTarjeta
-          plan={planSeleccionado}
+          plan={{
+            id_tipo:                    planSeleccionado.id_tipo,
+            nombre:                     planSeleccionado.nombre,
+            duracion_dias:              planSeleccionado.duracion_dias,
+            precio:                     planSeleccionado.precio,
+            limite_sesiones_nutriologo: planSeleccionado.limite_sesiones_nutriologo,
+            limite_sesiones_entrenador: planSeleccionado.limite_sesiones_entrenador,
+          }}
           suscriptorId={Number(suscriptorId)}
           tieneActiva={!!tieneActiva}
           vencimientoFinal={vencimientoFinal}

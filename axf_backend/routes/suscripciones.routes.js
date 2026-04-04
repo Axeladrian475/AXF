@@ -158,26 +158,48 @@ router.put('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
 
 // ────────────────────────────────────────────────────────────────────────────
 // DELETE /api/suscripciones/:id
-// Elimina un tipo de suscripción (hard delete)
+// Elimina un tipo de suscripción aunque haya usuarios inscritos.
+// Las suscripciones activas con ese tipo quedan con id_tipo = NULL
+// (el campo lo permite y los datos de sesiones/fechas se conservan).
 // ────────────────────────────────────────────────────────────────────────────
 router.delete('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
+  const conn = await db.getConnection();
   try {
     const { id } = req.params;
     const id_sucursal = req.usuario.id;
 
-    const [result] = await db.query(
-      'DELETE FROM tipos_suscripcion WHERE id_tipo = ? AND id_sucursal = ?',
+    // Verificar que el tipo pertenece a esta sucursal
+    const [[tipo]] = await conn.query(
+      'SELECT id_tipo FROM tipos_suscripcion WHERE id_tipo = ? AND id_sucursal = ?',
       [id, id_sucursal]
     );
-
-    if (result.affectedRows === 0) {
+    if (!tipo) {
+      conn.release();
       return res.status(404).json({ message: 'Tipo de suscripción no encontrado' });
     }
 
+    await conn.beginTransaction();
+
+    // Desenlazar suscripciones que referencian este tipo (FK sin CASCADE)
+    await conn.query(
+      'UPDATE suscripciones SET id_tipo = NULL WHERE id_tipo = ?',
+      [id]
+    );
+
+    // Ahora sí borrar el tipo
+    await conn.query(
+      'DELETE FROM tipos_suscripcion WHERE id_tipo = ?',
+      [id]
+    );
+
+    await conn.commit();
     res.json({ message: 'Tipo de suscripción eliminado correctamente' });
   } catch (error) {
+    await conn.rollback();
     console.error('[DELETE /suscripciones/:id]', error);
     res.status(500).json({ message: 'Error al eliminar tipo de suscripción' });
+  } finally {
+    conn.release();
   }
 });
 
