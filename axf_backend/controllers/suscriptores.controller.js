@@ -745,6 +745,41 @@ export async function aplicarPromocion(req, res) {
   }
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// DELETE /api/suscriptores/:id/suscripcion/:id_sub
+// Cancela (marca Inactiva) una suscripción activa específica del suscriptor.
+// ════════════════════════════════════════════════════════════════════════════
+export async function cancelarSuscripcion(req, res) {
+  try {
+    const { id, id_sub } = req.params;
+
+    const [[sub]] = await db.query(
+      `SELECT id_suscripcion, estado
+       FROM suscripciones
+       WHERE id_suscripcion = ? AND id_suscriptor = ?`,
+      [id_sub, id]
+    );
+
+    if (!sub) {
+      return res.status(404).json({ message: 'Suscripción no encontrada.' });
+    }
+    if (sub.estado !== 'Activa') {
+      return res.status(409).json({ message: 'Solo se pueden cancelar suscripciones activas.' });
+    }
+
+    await db.query(
+      `UPDATE suscripciones SET estado = 'Inactiva' WHERE id_suscripcion = ?`,
+      [id_sub]
+    );
+
+    res.json({ message: 'Suscripción cancelada correctamente.', id_suscripcion: Number(id_sub) });
+  } catch (error) {
+    console.error('[DELETE /suscriptores/:id/suscripcion/:id_sub]', error);
+    res.status(500).json({ message: 'Error al cancelar la suscripción.' });
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // DELETE /api/suscriptores/:id
 // Hard delete: elimina el suscriptor y todos sus datos relacionados.

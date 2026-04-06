@@ -11,6 +11,7 @@ import {
   getSuscripcionActiva,
   suscribirSuscriptor,
   aplicarPromocion,
+  cancelarSuscripcion,
   type TipoSuscripcion,
   type SuscripcionActiva,
   type SuscripcionItem,
@@ -72,9 +73,10 @@ function BarraPeriodo({ inicio, fin }: { inicio: string; fin: string }) {
   )
 }
 
-function TarjetaSuscripcion({ sub, index, esCorriendo }: {
-  sub: SuscripcionItem; index: number; esCorriendo: boolean
+function TarjetaSuscripcion({ sub, index, esCorriendo, onEliminar }: {
+  sub: SuscripcionItem; index: number; esCorriendo: boolean; onEliminar: (id: number) => void
 }) {
+  const [confirmando, setConfirmando] = useState(false)
   return (
     <div className={`rounded-lg border-2 px-4 py-3 flex gap-3 items-start
       ${esCorriendo ? 'border-green-400 bg-[#162032]' : 'border-gray-600 bg-[#1e293b]'}`}>
@@ -99,6 +101,24 @@ function TarjetaSuscripcion({ sub, index, esCorriendo }: {
             {sub.sesiones_nutriologo_restantes > 0 && `🥗 ${sub.sesiones_nutriologo_restantes} nutriólogo  `}
             {sub.sesiones_entrenador_restantes > 0 && `🏋️ ${sub.sesiones_entrenador_restantes} entrenador`}
           </p>
+        )}
+        {!confirmando ? (
+          <button onClick={() => setConfirmando(true)}
+            className="mt-2 text-xs text-red-400 hover:text-red-300 font-bold transition-colors">
+            🗑 Cancelar suscripción
+          </button>
+        ) : (
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-red-400 font-bold">¿Confirmar cancelación?</span>
+            <button onClick={() => { onEliminar(sub.id_suscripcion); setConfirmando(false) }}
+              className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-0.5 rounded transition-colors">
+              Sí, cancelar
+            </button>
+            <button onClick={() => setConfirmando(false)}
+              className="text-xs text-gray-400 hover:text-white font-bold transition-colors">
+              No
+            </button>
+          </div>
         )}
       </div>
       <p className="text-gray-300 text-sm font-bold shrink-0">
@@ -180,6 +200,18 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
   const mostrarToast = (tipo: 'ok' | 'err' | 'info', msg: string) => {
     setToast({ tipo, msg })
     setTimeout(() => setToast(null), 6000)
+  }
+
+  const handleEliminarSuscripcion = async (idSuscripcion: number) => {
+    try {
+      await cancelarSuscripcion(Number(suscriptorId), idSuscripcion)
+      mostrarToast('ok', '✅ Suscripción cancelada correctamente.')
+      cargarDatos()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? 'Error al cancelar la suscripción.'
+      mostrarToast('err', `❌ ${msg}`)
+    }
   }
 
   const cargarDatos = useCallback(async () => {
@@ -406,7 +438,7 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
             </p>
             <div className="space-y-2">
               {subs.map((s, i) => (
-                <TarjetaSuscripcion key={s.id_suscripcion} sub={s} index={i} esCorriendo={i === 0} />
+                <TarjetaSuscripcion key={s.id_suscripcion} sub={s} index={i} esCorriendo={i === 0} onEliminar={handleEliminarSuscripcion} />
               ))}
             </div>
           </div>

@@ -121,3 +121,12 @@ export const aplicarPromocion = async (
   const response = await axiosClient.post(`/suscriptores/${id}/aplicar-promo`, data);
   return response.data;
 };
+
+// Cancelar una suscripción específica de un suscriptor
+export const cancelarSuscripcion = async (
+  idSuscriptor: number,
+  idSuscripcion: number
+): Promise<{ message: string; id_suscripcion: number }> => {
+  const response = await axiosClient.delete(`/suscriptores/${idSuscriptor}/suscripcion/${idSuscripcion}`);
+  return response.data;
+};
