@@ -191,4 +191,84 @@ router.get('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
   }
 });
 
+
+// ────────────────────────────────────────────────────────────────────────────
+// GET /api/avisos/mis-avisos
+// El personal logueado obtiene sus avisos (leídos y no leídos).
+// Devuelve los últimos 30 ordenados por más reciente.
+// ────────────────────────────────────────────────────────────────────────────
+router.get('/mis-avisos', verificarToken, async (req, res) => {
+  try {
+    if (req.usuario.rol !== 'personal') {
+      return res.status(403).json({ message: 'Solo el personal puede ver sus avisos.' });
+    }
+    const id_personal = req.usuario.id;
+
+    const [avisos] = await db.query(
+      `SELECT
+         a.id_aviso,
+         a.mensaje,
+         a.creado_en,
+         ad.leido
+       FROM aviso_destinatarios ad
+       INNER JOIN avisos a ON a.id_aviso = ad.id_aviso
+       WHERE ad.id_personal = ?
+       ORDER BY a.creado_en DESC
+       LIMIT 30`,
+      [id_personal]
+    );
+
+    const no_leidos = avisos.filter(a => !a.leido).length;
+    res.json({ avisos, no_leidos });
+  } catch (error) {
+    console.error('[GET /avisos/mis-avisos]', error);
+    res.status(500).json({ message: 'Error al obtener los avisos.' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// PUT /api/avisos/:id/leer
+// El personal marca un aviso como leído.
+// ────────────────────────────────────────────────────────────────────────────
+router.put('/:id/leer', verificarToken, async (req, res) => {
+  try {
+    if (req.usuario.rol !== 'personal') {
+      return res.status(403).json({ message: 'Solo el personal puede marcar avisos como leídos.' });
+    }
+    const id_personal = req.usuario.id;
+    const { id }      = req.params;
+
+    await db.query(
+      `UPDATE aviso_destinatarios SET leido = 1
+       WHERE id_aviso = ? AND id_personal = ?`,
+      [id, id_personal]
+    );
+
+    res.json({ message: 'Aviso marcado como leído.' });
+  } catch (error) {
+    console.error('[PUT /avisos/:id/leer]', error);
+    res.status(500).json({ message: 'Error al marcar el aviso.' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// PUT /api/avisos/leer-todos
+// El personal marca TODOS sus avisos como leídos de una vez.
+// ────────────────────────────────────────────────────────────────────────────
+router.put('/leer-todos', verificarToken, async (req, res) => {
+  try {
+    if (req.usuario.rol !== 'personal') {
+      return res.status(403).json({ message: 'Acceso no autorizado.' });
+    }
+    await db.query(
+      `UPDATE aviso_destinatarios SET leido = 1 WHERE id_personal = ?`,
+      [req.usuario.id]
+    );
+    res.json({ message: 'Todos los avisos marcados como leídos.' });
+  } catch (error) {
+    console.error('[PUT /avisos/leer-todos]', error);
+    res.status(500).json({ message: 'Error al marcar los avisos.' });
+  }
+});
+
 export default router;
