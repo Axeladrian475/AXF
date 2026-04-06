@@ -11,9 +11,26 @@ interface Aviso {
   leido:     number;
 }
 
-function fmtFecha(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+// ─── Formateador corregido ────────────────────────────────────────────────────
+// El backend guarda en UTC. toLocaleDateString con 'hour'/'minute' no funciona
+// de forma consistente — se debe usar toLocaleString con options explícitas.
+// Se fuerza la zona horaria de México (America/Mexico_City = UTC-6 / UTC-5 DST).
+function fmtFecha(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+
+    return d.toLocaleString('es-MX', {
+      timeZone:  'America/Mexico_City',
+      day:       '2-digit',
+      month:     'short',
+      hour:      '2-digit',
+      minute:    '2-digit',
+      hour12:    true,          // "05:34 a.m." en lugar de "17:34"
+    });
+  } catch {
+    return iso;
+  }
 }
 
 export default function Header() {
@@ -21,11 +38,11 @@ export default function Header() {
   const [imgError, setImgError] = useState(false);
 
   // ── Avisos (solo para personal) ──────────────────────────────────────────
-  const [avisos,     setAvisos]     = useState<Aviso[]>([]);
-  const [noLeidos,   setNoLeidos]   = useState(0);
-  const [abierto,    setAbierto]    = useState(false);
-  const [marcando,   setMarcando]   = useState(false);
-  const panelRef                    = useRef<HTMLDivElement>(null);
+  const [avisos,   setAvisos]   = useState<Aviso[]>([]);
+  const [noLeidos, setNoLeidos] = useState(0);
+  const [abierto,  setAbierto]  = useState(false);
+  const [marcando, setMarcando] = useState(false);
+  const panelRef                = useRef<HTMLDivElement>(null);
 
   const esPersonal = user?.rol === 'personal';
 
@@ -59,10 +76,6 @@ export default function Header() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [abierto]);
-
-  const handleAbrirPanel = () => {
-    setAbierto(prev => !prev);
-  };
 
   const marcarTodosLeidos = async () => {
     setMarcando(true);
@@ -103,7 +116,7 @@ export default function Header() {
         {esPersonal && (
           <div className="relative" ref={panelRef}>
             <button
-              onClick={handleAbrirPanel}
+              onClick={() => setAbierto(prev => !prev)}
               className="relative p-1.5 rounded-full hover:bg-white/10 transition-colors"
               title="Mis avisos"
             >
@@ -153,13 +166,14 @@ export default function Header() {
                         className={`px-4 py-3 border-b border-gray-800 cursor-pointer transition-colors
                           ${a.leido ? 'opacity-60 hover:bg-white/5' : 'bg-white/5 hover:bg-white/10'}`}
                       >
-                        {/* Indicador no leído */}
                         <div className="flex items-start gap-2">
+                          {/* Punto naranja = no leído */}
                           {!a.leido && (
                             <span className="mt-1.5 w-2 h-2 rounded-full bg-[#F26A21] shrink-0" />
                           )}
                           <div className={!a.leido ? '' : 'ml-4'}>
                             <p className="text-white text-xs leading-snug">{a.mensaje}</p>
+                            {/* ← Fecha y hora correctamente formateada */}
                             <p className="text-gray-500 text-[10px] mt-1">{fmtFecha(a.creado_en)}</p>
                           </div>
                         </div>

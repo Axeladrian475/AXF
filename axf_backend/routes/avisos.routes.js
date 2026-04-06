@@ -1,3 +1,10 @@
+// ============================================================================
+//  routes/avisos.routes.js
+//
+//  NUEVO endpoint añadido:
+//    GET /api/avisos/:id/destinatarios → lista quién leyó y quién no un aviso
+// ============================================================================
+
 import express from 'express';
 import jwt     from 'jsonwebtoken';
 import db      from '../config/database.js';
@@ -26,19 +33,7 @@ function soloSucursalOMaestro(req, res, next) {
 }
 
 // ─── Helper: construir condición WHERE según destinatarios ───────────────────
-//
-// La tabla personal tiene estos puestos posibles:
-//   'staff' | 'entrenador' | 'nutriologo' | 'entrenador_nutriologo'
-//
-// Reglas de inclusión:
-//   checkbox "staff"        → puesto = 'staff'
-//   checkbox "entrenadores" → puesto = 'entrenador' O 'entrenador_nutriologo'
-//   checkbox "nutriologos"  → puesto = 'nutriologo' O 'entrenador_nutriologo'
-//   checkbox "todos"        → sin filtro de puesto (todos los activos)
-//
-// Se construye como condiciones OR para que mysql pueda usar índices correctamente.
 function construirFiltroDestinatarios(destinatarios) {
-  // Si viene "todos", no hay filtro de puesto
   if (destinatarios.includes('todos')) return null;
 
   const condiciones = [];
@@ -47,34 +42,22 @@ function construirFiltroDestinatarios(destinatarios) {
     condiciones.push(`puesto = 'staff'`);
   }
   if (destinatarios.includes('entrenadores')) {
-    // Incluye entrenadores puros Y los que son entrenador+nutriólogo
     condiciones.push(`puesto = 'entrenador'`);
     condiciones.push(`puesto = 'entrenador_nutriologo'`);
   }
   if (destinatarios.includes('nutriologos')) {
-    // Incluye nutriólogos puros Y los que son entrenador+nutriólogo
     condiciones.push(`puesto = 'nutriologo'`);
-    // Solo agregar si no fue agregado ya por 'entrenadores'
     if (!destinatarios.includes('entrenadores')) {
       condiciones.push(`puesto = 'entrenador_nutriologo'`);
     }
   }
 
   if (condiciones.length === 0) return null;
-
-  // Eliminar duplicados y unir con OR
   return [...new Set(condiciones)].join(' OR ');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // POST /api/avisos
-// 1. Valida el body
-// 2. Busca el personal activo de la sucursal según destinatarios
-// 3. Inserta en `avisos` (1 fila)
-// 4. Inserta en `aviso_destinatarios` (1 fila por persona encontrada)
-//
-// Body: { mensaje: string, destinatarios: string[] }
-// Ej:  { mensaje: "Reunión mañana", destinatarios: ["staff","entrenadores"] }
 // ────────────────────────────────────────────────────────────────────────────
 router.post('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
   const conn = await db.getConnection();
@@ -82,7 +65,6 @@ router.post('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
     const id_sucursal = req.usuario.id;
     const { mensaje, destinatarios } = req.body;
 
-    // ── Validaciones ─────────────────────────────────────────────────────────
     if (!mensaje || !mensaje.trim()) {
       return res.status(400).json({ message: 'El mensaje no puede estar vacío.' });
     }
@@ -95,24 +77,17 @@ router.post('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
       return res.status(400).json({ message: `Destinatarios inválidos: ${invalidas.join(', ')}` });
     }
 
-    // ── Construir y ejecutar query de personal ────────────────────────────────
     const filtroPuesto = construirFiltroDestinatarios(destinatarios);
     let personal;
 
     if (!filtroPuesto) {
-      // "Todos" — sin filtro de puesto
       [personal] = await db.query(
-        `SELECT id_personal, nombres, puesto
-         FROM personal
-         WHERE id_sucursal = ? AND activo = 1`,
+        `SELECT id_personal, nombres, puesto FROM personal WHERE id_sucursal = ? AND activo = 1`,
         [id_sucursal]
       );
     } else {
-      // Filtro específico por puestos
       [personal] = await db.query(
-        `SELECT id_personal, nombres, puesto
-         FROM personal
-         WHERE id_sucursal = ? AND activo = 1 AND (${filtroPuesto})`,
+        `SELECT id_personal, nombres, puesto FROM personal WHERE id_sucursal = ? AND activo = 1 AND (${filtroPuesto})`,
         [id_sucursal]
       );
     }
@@ -123,18 +98,14 @@ router.post('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
       });
     }
 
-    // ── Transacción: insertar en avisos + aviso_destinatarios ─────────────────
     await conn.beginTransaction();
 
-    // 1. Crear el aviso en `avisos`
     const [avisoResult] = await conn.query(
       `INSERT INTO avisos (id_sucursal, mensaje) VALUES (?, ?)`,
       [id_sucursal, mensaje.trim()]
     );
     const id_aviso = avisoResult.insertId;
 
-    // 2. Insertar en `aviso_destinatarios` — un registro por persona
-    //    Placeholders explícitos: compatible con mysql2/promise en ES modules
     const placeholders = personal.map(() => '(?, ?)').join(', ');
     const valores      = personal.flatMap(p => [id_aviso, p.id_personal]);
     await conn.query(
@@ -191,11 +162,58 @@ router.get('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
   }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// GET /api/avisos/:id/destinatarios   ← NUEVO
+// Detalle de quién leyó y quién NO leyó un aviso específico.
+// Solo sucursal/maestro puede verlo.
+//
+// Response:
+// {
+//   leidos:    [{ id_personal, nombre, puesto }],
+//   pendientes:[{ id_personal, nombre, puesto }]
+// }
+// ────────────────────────────────────────────────────────────────────────────
+router.get('/:id/destinatarios', verificarToken, soloSucursalOMaestro, async (req, res) => {
+  try {
+    const id_sucursal = req.usuario.id;
+    const { id }      = req.params;
+
+    // Verificar que el aviso pertenece a esta sucursal
+    const [[aviso]] = await db.query(
+      `SELECT id_aviso FROM avisos WHERE id_aviso = ? AND id_sucursal = ?`,
+      [id, id_sucursal]
+    );
+    if (!aviso) {
+      return res.status(404).json({ message: 'Aviso no encontrado.' });
+    }
+
+    // Obtener destinatarios con su estado de lectura y datos del personal
+    const [destinatarios] = await db.query(
+      `SELECT
+         p.id_personal,
+         CONCAT(p.nombres, ' ', p.apellido_paterno) AS nombre,
+         p.puesto,
+         ad.leido
+       FROM aviso_destinatarios ad
+       INNER JOIN personal p ON p.id_personal = ad.id_personal
+       WHERE ad.id_aviso = ?
+       ORDER BY ad.leido ASC, p.nombres ASC`,
+      [id]
+    );
+
+    const leidos    = destinatarios.filter(d => d.leido);
+    const pendientes = destinatarios.filter(d => !d.leido);
+
+    res.json({ leidos, pendientes });
+  } catch (error) {
+    console.error('[GET /avisos/:id/destinatarios]', error);
+    res.status(500).json({ message: 'Error al obtener los destinatarios.' });
+  }
+});
 
 // ────────────────────────────────────────────────────────────────────────────
 // GET /api/avisos/mis-avisos
-// El personal logueado obtiene sus avisos (leídos y no leídos).
-// Devuelve los últimos 30 ordenados por más reciente.
+// El personal logueado obtiene sus avisos.
 // ────────────────────────────────────────────────────────────────────────────
 router.get('/mis-avisos', verificarToken, async (req, res) => {
   try {
@@ -239,8 +257,7 @@ router.put('/:id/leer', verificarToken, async (req, res) => {
     const { id }      = req.params;
 
     await db.query(
-      `UPDATE aviso_destinatarios SET leido = 1
-       WHERE id_aviso = ? AND id_personal = ?`,
+      `UPDATE aviso_destinatarios SET leido = 1 WHERE id_aviso = ? AND id_personal = ?`,
       [id, id_personal]
     );
 
@@ -253,7 +270,7 @@ router.put('/:id/leer', verificarToken, async (req, res) => {
 
 // ────────────────────────────────────────────────────────────────────────────
 // PUT /api/avisos/leer-todos
-// El personal marca TODOS sus avisos como leídos de una vez.
+// El personal marca TODOS sus avisos como leídos.
 // ────────────────────────────────────────────────────────────────────────────
 router.put('/leer-todos', verificarToken, async (req, res) => {
   try {
