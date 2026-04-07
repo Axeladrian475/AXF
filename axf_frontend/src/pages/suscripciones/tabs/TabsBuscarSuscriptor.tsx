@@ -7,13 +7,15 @@ import {
 } from '../../../api/suscripcionesApi'
 
 interface Props {
-  onGestionar: (id: string, nombre: string) => void
+  onGestionar:   (id: string, nombre: string) => void
+  filtroInicial?: string
 }
 
 type Vista = 'local' | 'otras'
 
-export default function TabsBuscarSuscriptor({ onGestionar }: Props) {
-  const [vista, setVista] = useState<Vista>('local')
+export default function TabsBuscarSuscriptor({ onGestionar, filtroInicial = '' }: Props) {
+  const [vista,   setVista]   = useState<Vista>('local')
+  const [filtro,  setFiltro]  = useState<string>(filtroInicial)
   const [busqueda, setBusqueda] = useState('')
   const [suscriptores, setSuscriptores] = useState<SuscriptorResumen[]>([])
   const [cargando, setCargando] = useState(false)
@@ -31,7 +33,7 @@ export default function TabsBuscarSuscriptor({ onGestionar }: Props) {
     setError(null)
     try {
       const data = v === 'local'
-        ? await getSuscriptoresLocales(q)
+        ? await getSuscriptoresLocales(q, filtro)
         : await getSuscriptoresOtrasSucursales(q)
       setSuscriptores(data)
     } catch {
@@ -42,11 +44,11 @@ export default function TabsBuscarSuscriptor({ onGestionar }: Props) {
     }
   }, [])
 
-  // Cargar al montar y cuando cambia la vista
+  // Cargar al montar y cuando cambia la vista o el filtro
   useEffect(() => {
     cargar(busqueda, vista)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vista])
+  }, [vista, filtro])
 
   const handleBuscar = () => cargar(busqueda, vista)
 
@@ -104,6 +106,21 @@ export default function TabsBuscarSuscriptor({ onGestionar }: Props) {
         <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-2 mb-4 text-sm text-orange-800">
           <span className="font-bold">ℹ️ Suscriptores foráneos:</span> Puedes migrar a cualquier suscriptor a esta sucursal.
           Una vez migrado aparecerá en la lista local y podrás administrar su suscripción.
+        </div>
+      )}
+
+      {/* Badge filtro activo */}
+      {filtroLabel && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="inline-flex items-center gap-1.5 bg-[#ea580c]/10 border border-[#ea580c]/30 text-[#ea580c] text-xs font-bold px-3 py-1 rounded-full">
+            {filtro === 'activo' ? '🟢' : '🔴'} Filtrando: {filtroLabel}
+          </span>
+          <button
+            onClick={() => setFiltro('')}
+            className="text-xs text-gray-400 hover:text-gray-700 font-bold transition-colors"
+          >
+            ✕ Quitar filtro
+          </button>
         </div>
       )}
 

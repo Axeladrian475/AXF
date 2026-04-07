@@ -209,7 +209,7 @@ export async function registrarSuscriptor(req, res) {
 // ════════════════════════════════════════════════════════════════════════════
 export async function listarSuscriptores(req, res) {
   try {
-    const { q = '', limite = 50, offset = 0 } = req.query;
+    const { q = '', limite = 50, offset = 0, filtro = '' } = req.query;
 
     // Obtener sucursal del token
     let id_sucursal;
@@ -231,6 +231,29 @@ export async function listarSuscriptores(req, res) {
     const lim      = Math.min(parseInt(limite) || 50, 200);
     const off      = parseInt(offset) || 0;
 
+    // ── Filtro por estado de suscripción ──────────────────────────────────────
+    // 'activo'   → tiene suscripción con fecha_fin >= hoy y estado = 'Activa'
+    // 'inactivo' → NO tiene ninguna suscripción vigente
+    // ''         → todos (comportamiento original)
+    let joinSuscripcion = '';
+    let condicionFiltro = '';
+
+    if (filtro === 'activo') {
+      joinSuscripcion = `LEFT JOIN (
+        SELECT DISTINCT id_suscriptor
+        FROM suscripciones
+        WHERE fecha_fin >= CURDATE() AND estado = 'Activa'
+      ) sub_activa ON sub_activa.id_suscriptor = s.id_suscriptor`;
+      condicionFiltro = 'AND sub_activa.id_suscriptor IS NOT NULL';
+    } else if (filtro === 'inactivo') {
+      joinSuscripcion = `LEFT JOIN (
+        SELECT DISTINCT id_suscriptor
+        FROM suscripciones
+        WHERE fecha_fin >= CURDATE() AND estado = 'Activa'
+      ) sub_activa ON sub_activa.id_suscriptor = s.id_suscriptor`;
+      condicionFiltro = 'AND sub_activa.id_suscriptor IS NULL';
+    }
+
     const [suscriptores] = await db.query(
       `SELECT
          s.id_suscriptor,
@@ -248,8 +271,10 @@ export async function listarSuscriptores(req, res) {
          s.creado_en
        FROM suscriptores s
        INNER JOIN sucursales suc ON suc.id_sucursal = s.id_sucursal_registro
+       ${joinSuscripcion}
        WHERE s.id_sucursal_registro = ?
          AND s.activo = 1
+         ${condicionFiltro}
          AND (
            s.nombres           LIKE ? OR
            s.apellido_paterno  LIKE ? OR

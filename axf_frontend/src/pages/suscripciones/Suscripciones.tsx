@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import TabsBuscarSuscriptor from './tabs/TabsBuscarSuscriptor'
 import TabsAdministrarSuscripcion from './tabs/TabsAdministrarSuscripcion'
 import axiosClient from '../../api/axiosClient'
@@ -9,8 +10,13 @@ const PAGO_PENDIENTE_KEY = 'axf_pago_pendiente'
 const PAGO_MAX_AGE_MS    = 30 * 60 * 1000   // 30 minutos
 
 export default function Suscripciones() {
-  const [tab, setTab] = useState<Tab>('buscar')
-  const [suscriptorActivo, setSuscriptorActivo] = useState<{ id: string; nombre: string } | null>(null)
+  const location = useLocation()
+  const navState = location.state as { id?: string; nombre?: string } | null
+
+  const [tab, setTab] = useState<Tab>(navState?.id ? 'administrar' : 'buscar')
+  const [suscriptorActivo, setSuscriptorActivo] = useState<{ id: string; nombre: string } | null>(
+    navState?.id ? { id: navState.id, nombre: navState.nombre ?? '' } : null
+  )
   const [cargandoRetorno, setCargandoRetorno] = useState(false)
 
   const handleGestionar = (id: string, nombre: string) => {

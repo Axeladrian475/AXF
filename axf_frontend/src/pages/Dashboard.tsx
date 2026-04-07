@@ -148,25 +148,39 @@ export default function Dashboard() {
       {/* MÉTRICAS */}
       <div className="grid grid-cols-2 gap-4">
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 flex flex-col items-center text-center">
+        <button
+          onClick={() => !statsLoad && !statsError && navigate('/suscriptores?filtro=activo')}
+          disabled={statsLoad || statsError}
+          className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 flex flex-col items-center text-center hover:border-green-400 hover:shadow-md transition-all group disabled:cursor-default cursor-pointer w-full"
+        >
           <p className="text-lg font-bold text-gray-700 mb-3">Suscriptores Activos</p>
           {statsLoad
             ? <Spinner />
             : statsError
               ? <p className="text-red-400 text-sm mt-1">Error al cargar</p>
-              : <p className="text-7xl font-black text-green-500">{stats?.activos ?? 0}</p>
+              : <>
+                  <p className="text-7xl font-black text-green-500">{stats?.activos ?? 0}</p>
+                  <p className="text-xs text-gray-400 mt-2 group-hover:text-green-500 transition-colors">Ver listado →</p>
+                </>
           }
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 flex flex-col items-center text-center">
+        <button
+          onClick={() => !statsLoad && !statsError && navigate('/suscriptores?filtro=inactivo')}
+          disabled={statsLoad || statsError}
+          className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 flex flex-col items-center text-center hover:border-red-400 hover:shadow-md transition-all group disabled:cursor-default cursor-pointer w-full"
+        >
           <p className="text-lg font-bold text-gray-700 mb-3">Suscriptores Inactivos</p>
           {statsLoad
             ? <Spinner />
             : statsError
               ? <p className="text-red-400 text-sm mt-1">Error al cargar</p>
-              : <p className="text-7xl font-black text-red-500">{stats?.inactivos ?? 0}</p>
+              : <>
+                  <p className="text-7xl font-black text-red-500">{stats?.inactivos ?? 0}</p>
+                  <p className="text-xs text-gray-400 mt-2 group-hover:text-red-500 transition-colors">Ver listado →</p>
+                </>
           }
-        </div>
+        </button>
 
       </div>
 

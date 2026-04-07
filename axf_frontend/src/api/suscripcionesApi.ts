@@ -81,8 +81,8 @@ export interface SuscripcionActiva {
 }
 
 // Listar suscriptores locales (de la sucursal actual)
-export const getSuscriptoresLocales = async (q = ''): Promise<SuscriptorResumen[]> => {
-  const response = await axiosClient.get('/suscriptores', { params: { q, limite: 200 } });
+export const getSuscriptoresLocales = async (q = '', filtro = ''): Promise<SuscriptorResumen[]> => {
+  const response = await axiosClient.get('/suscriptores', { params: { q, limite: 200, filtro } });
   return response.data;
 };
 

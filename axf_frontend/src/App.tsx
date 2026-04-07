@@ -12,7 +12,8 @@ import Reportes      from './pages/reportes/Reportes';
 import Recompensas   from './pages/recompensas/Recompensas';
 import Chat          from './pages/chat/Chat';
 import Entrenamiento from './pages/entrenamiento/Entrenamiento';
-import Nutricion     from './pages/nutricion/Nutricion';
+import Nutricion          from './pages/nutricion/Nutricion';
+import SuscriptoresLista  from './pages/suscriptores/SuscriptoresLista';
 
 function RootRedirect() {
   const { isAuthenticated, user } = useContext(AuthContext);
@@ -50,8 +51,9 @@ function App() {
           <Route path="/chat"          element={<Chat />} />
 
           {/* Pendientes */}
-          <Route path="/entrenamiento" element={<Entrenamiento />} />
-          <Route path="/nutricion"     element={<Nutricion />} />
+          <Route path="/entrenamiento"  element={<Entrenamiento />} />
+          <Route path="/nutricion"      element={<Nutricion />} />
+          <Route path="/suscriptores"   element={<SuscriptoresLista />} />
         </Route>
 
         <Route path="*" element={<RootRedirect />} />
