@@ -23,6 +23,13 @@ export default function TabsBuscarSuscriptor({ onGestionar, filtroInicial = '' }
   const [migrando, setMigrando] = useState<number | null>(null)
   const [toast, setToast] = useState<{ tipo: 'ok' | 'err'; msg: string } | null>(null)
 
+  // Etiqueta legible del filtro activo
+  const filtroLabel = filtro === 'activo'
+    ? 'Activos'
+    : filtro === 'inactivo'
+      ? 'Inactivos'
+      : ''
+
   const mostrarToast = (tipo: 'ok' | 'err', msg: string) => {
     setToast({ tipo, msg })
     setTimeout(() => setToast(null), 3500)
