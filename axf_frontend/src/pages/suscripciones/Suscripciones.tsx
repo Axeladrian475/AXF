@@ -13,10 +13,22 @@ export default function Suscripciones() {
   const location = useLocation()
   const navState = location.state as { id?: string; nombre?: string } | null
 
-  const [tab, setTab] = useState<Tab>(navState?.id ? 'administrar' : 'buscar')
-  const [suscriptorActivo, setSuscriptorActivo] = useState<{ id: string; nombre: string } | null>(
-    navState?.id ? { id: navState.id, nombre: navState.nombre ?? '' } : null
-  )
+  // ── Leer suscriptor desde query params (?suscriptor=ID&nombre=NOMBRE) ──────
+  // Esto permite que SuscriptoresLista y otros módulos naveguen directamente
+  // al panel de administrar sin pasar por location.state
+  const qParams      = new URLSearchParams(location.search)
+  const qSuscriptor  = qParams.get('suscriptor')
+  const qNombre      = qParams.get('nombre')
+
+  // Resolver el suscriptor inicial: query params tienen prioridad sobre state
+  const suscriptorInicial = qSuscriptor
+    ? { id: qSuscriptor, nombre: decodeURIComponent(qNombre ?? `Suscriptor #${qSuscriptor}`) }
+    : navState?.id
+      ? { id: navState.id, nombre: navState.nombre ?? '' }
+      : null
+
+  const [tab, setTab] = useState<Tab>(suscriptorInicial ? 'administrar' : 'buscar')
+  const [suscriptorActivo, setSuscriptorActivo] = useState<{ id: string; nombre: string } | null>(suscriptorInicial)
   const [cargandoRetorno, setCargandoRetorno] = useState(false)
 
   const handleGestionar = (id: string, nombre: string) => {
