@@ -1,5 +1,8 @@
 // ============================================================================
-//  controllers/chat.controller.js  — v2
+//  controllers/chat.controller.js  — v3
+//  CORRECCIÓN: obtenerMensajes ahora devuelve los mensajes más RECIENTES
+//  usando ORDER BY DESC + inversión, para que la paginación "cargar más
+//  antiguos" funcione correctamente desde la app móvil.
 // ============================================================================
 
 import db from '../config/database.js';
@@ -127,6 +130,16 @@ export async function listarConversaciones(req, res) {
 // ════════════════════════════════════════════════════════════════════════════
 // GET /api/chat/mensajes/:id_suscriptor          (para personal)
 // GET /api/chat/mensajes/personal/:id_personal   (para suscriptor)
+//
+// CORRECCIÓN v3:
+//   Antes: ORDER BY enviado_en ASC LIMIT 50 OFFSET 0
+//          → devolvía los 50 mensajes MÁS ANTIGUOS. Los mensajes nuevos
+//            nunca aparecían al reabrir el chat.
+//
+//   Ahora: Se obtiene el total, se calcula el offset correcto para la
+//          "última página", se traen los mensajes con DESC y se invierten
+//          antes de responder. Así offset=0 siempre devuelve los más
+//          RECIENTES y "cargar más" retrocede hacia los antiguos.
 // ════════════════════════════════════════════════════════════════════════════
 export async function obtenerMensajes(req, res) {
   try {
@@ -159,32 +172,9 @@ export async function obtenerMensajes(req, res) {
       [id_personal, id_suscriptor, enviado_por_otro]
     );
 
-    // Filtro de borrado: no mostrar mensajes borrados para todos,
-    // ni mensajes borrados para mí (emisor = actor.tipo)
     const miRol = actor.tipo;
 
-    const [mensajes] = await db.query(
-      `SELECT
-         id_mensaje,
-         enviado_por,
-         contenido,
-         leido,
-         entregado,
-         editado_en,
-         borrado_para,
-         id_respuesta,
-         respuesta_contenido,
-         respuesta_enviado_por,
-         enviado_en
-       FROM chat_mensajes
-       WHERE id_personal = ? AND id_suscriptor = ?
-         AND NOT (borrado_para = 'todos')
-         AND NOT (borrado_para = 'emisor' AND enviado_por = ?)
-       ORDER BY enviado_en ASC
-       LIMIT ? OFFSET ?`,
-      [id_personal, id_suscriptor, miRol, lim, off]
-    );
-
+    // ── CORRECCIÓN: contar total primero ─────────────────────────────────
     const [[{ total }]] = await db.query(
       `SELECT COUNT(*) AS total
        FROM chat_mensajes
@@ -194,13 +184,51 @@ export async function obtenerMensajes(req, res) {
       [id_personal, id_suscriptor, miRol]
     );
 
+    // ── CORRECCIÓN: offset real desde el final ────────────────────────────
+    // off=0 → últimos N mensajes (los más recientes)
+    // off=50 → los 50 anteriores a esos, etc.
+    // Se traduce a un offset SQL desde el inicio:
+    //   offsetSQL = total - off - lim  (mínimo 0)
+    const offsetSQL = Math.max(0, total - off - lim);
+    // Cuántos mensajes realmente traer (puede ser < lim si estamos al inicio)
+    const limReal   = Math.min(lim, total - off);
+
+    let mensajes = [];
+    if (limReal > 0) {
+      const [rows] = await db.query(
+        `SELECT
+           id_mensaje,
+           enviado_por,
+           contenido,
+           leido,
+           entregado,
+           editado_en,
+           borrado_para,
+           id_respuesta,
+           respuesta_contenido,
+           respuesta_enviado_por,
+           enviado_en
+         FROM chat_mensajes
+         WHERE id_personal = ? AND id_suscriptor = ?
+           AND NOT (borrado_para = 'todos')
+           AND NOT (borrado_para = 'emisor' AND enviado_por = ?)
+         ORDER BY enviado_en ASC
+         LIMIT ? OFFSET ?`,
+        [id_personal, id_suscriptor, miRol, limReal, offsetSQL]
+      );
+      mensajes = rows;
+    }
+
+    // hay_mas = true si aún quedan mensajes más antiguos (offset mayor disponible)
+    const hay_mas = off + limReal < total;
+
     res.json({
       mensajes,
       paginacion: {
         total,
         limite: lim,
         offset: off,
-        hay_mas: off + mensajes.length < total,
+        hay_mas,
       },
     });
 

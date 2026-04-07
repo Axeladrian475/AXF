@@ -211,9 +211,13 @@ export default function Chat() {
       ))
     })
 
-    // Escribiendo
-    socket.on('chat:escribiendo',    () => setEscribiendo(true))
-    socket.on('chat:parar_escribir', () => setEscribiendo(false))
+    // Escribiendo — CORRECCIÓN: solo activar si es la conversación activa
+    socket.on('chat:escribiendo', (data: { id_personal?: number; id_suscriptor?: number }) => {
+      if (data.id_suscriptor === suscActivoRef.current) setEscribiendo(true)
+    })
+    socket.on('chat:parar_escribir', (data: { id_personal?: number; id_suscriptor?: number }) => {
+      if (data.id_suscriptor === suscActivoRef.current) setEscribiendo(false)
+    })
 
     socketRef.current = socket
     return () => { socket.disconnect() }

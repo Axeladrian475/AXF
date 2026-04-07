@@ -244,18 +244,26 @@ export function initSocket(httpServer) {
     });
 
     // ── ESCRIBIENDO ───────────────────────────────────────────────────────
+    // CORRECCIÓN: se incluyen id_personal e id_suscriptor en el evento para
+    // que el receptor pueda ignorarlo si no es la conversación activa.
     socket.on('chat:escribiendo', (data) => {
+      const id_personal   = rol === 'personal'   ? id : parseInt(data.id_personal);
+      const id_suscriptor = rol === 'suscriptor' ? id : parseInt(data.id_suscriptor);
+      if (!id_personal || !id_suscriptor) return;
       const sala_destino = rol === 'personal'
-        ? `suscriptor:${data.id_suscriptor}`
-        : `personal:${data.id_personal}`;
-      io.to(sala_destino).emit('chat:escribiendo', { de: rol, id });
+        ? `suscriptor:${id_suscriptor}`
+        : `personal:${id_personal}`;
+      io.to(sala_destino).emit('chat:escribiendo', { de: rol, id_personal, id_suscriptor });
     });
 
     socket.on('chat:parar_escribir', (data) => {
+      const id_personal   = rol === 'personal'   ? id : parseInt(data.id_personal);
+      const id_suscriptor = rol === 'suscriptor' ? id : parseInt(data.id_suscriptor);
+      if (!id_personal || !id_suscriptor) return;
       const sala_destino = rol === 'personal'
-        ? `suscriptor:${data.id_suscriptor}`
-        : `personal:${data.id_personal}`;
-      io.to(sala_destino).emit('chat:parar_escribir', { de: rol, id });
+        ? `suscriptor:${id_suscriptor}`
+        : `personal:${id_personal}`;
+      io.to(sala_destino).emit('chat:parar_escribir', { de: rol, id_personal, id_suscriptor });
     });
 
     // ── DESCONEXIÓN ───────────────────────────────────────────────────────
