@@ -111,6 +111,10 @@ export default function TabAvisos() {
   const [detalle,          setDetalle]           = useState<Record<number, DetalleAviso>>({})
   const [cargandoDetalle,  setCargandoDetalle]   = useState<number | null>(null)
 
+  // Borrado de avisos
+  const [confirmandoBorrar, setConfirmandoBorrar] = useState<number | null>(null)
+  const [borrando,          setBorrando]          = useState<number | null>(null)
+
   const cargarAvisos = useCallback(async () => {
     setCargandoAvisos(true)
     try {
@@ -156,6 +160,28 @@ export default function TabAvisos() {
       setAlerta({ tipo: 'error', mensaje: err?.response?.data?.message ?? 'Error al enviar el aviso.' })
     } finally {
       setEnviando(false)
+    }
+  }
+
+  // ── Verificar si el aviso tiene más de 30 días ───────────────────────────
+  const tieneUnMes = (creado_en: string): boolean => {
+    const diff = Date.now() - new Date(creado_en).getTime()
+    return diff >= 30 * 24 * 60 * 60 * 1000
+  }
+
+  // ── Eliminar aviso ────────────────────────────────────────────────────────
+  const handleBorrar = async (id: number) => {
+    setBorrando(id)
+    setConfirmandoBorrar(null)
+    try {
+      await axiosClient.delete(`/avisos/${id}`)
+      setAvisos(prev => prev.filter(a => a.id_aviso !== id))
+      if (avisoAbierto === id) setAvisoAbierto(null)
+      setAlerta({ tipo: 'exito', mensaje: 'Aviso eliminado correctamente.' })
+    } catch (err: any) {
+      setAlerta({ tipo: 'error', mensaje: err?.response?.data?.message ?? 'Error al eliminar el aviso.' })
+    } finally {
+      setBorrando(null)
     }
   }
 
@@ -238,41 +264,88 @@ export default function TabAvisos() {
               const cargando     = cargandoDetalle === a.id_aviso
               const det          = detalle[a.id_aviso]
               const todosLeidos  = a.total_pendientes === 0
+              const puedeEliminar = tieneUnMes(a.creado_en)
+              const esBorrando    = borrando === a.id_aviso
+              const pidiendo      = confirmandoBorrar === a.id_aviso
 
               return (
                 <div key={a.id_aviso} className="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-sm">
 
-                  {/* ── Cabecera clickeable ───────────────────────────────── */}
-                  <button
-                    onClick={() => toggleAviso(a.id_aviso)}
-                    className="w-full flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-black truncate">{a.mensaje}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{fmtFecha(a.creado_en)}</p>
-                    </div>
+                  {/* ── Cabecera ─────────────────────────────────────────── */}
+                  <div className="flex items-stretch">
+                    {/* Área clickeable para expandir */}
+                    <button
+                      onClick={() => toggleAviso(a.id_aviso)}
+                      className="flex-1 flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors min-w-0"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-black truncate">{a.mensaje}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{fmtFecha(a.creado_en)}</p>
+                      </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Badges lectura */}
-                      <div className="flex gap-1.5 text-xs font-bold">
-                        <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full whitespace-nowrap">
-                          ✓ {a.total_leidos} leídos
-                        </span>
-                        {a.total_pendientes > 0 && (
-                          <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full whitespace-nowrap">
-                            ⏳ {a.total_pendientes} pendientes
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Badges lectura */}
+                        <div className="flex gap-1.5 text-xs font-bold">
+                          <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            ✓ {a.total_leidos} leídos
                           </span>
+                          {a.total_pendientes > 0 && (
+                            <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                              ⏳ {a.total_pendientes} pendientes
+                            </span>
+                          )}
+                        </div>
+                        {/* Chevron */}
+                        <svg
+                          className={`w-4 h-4 text-gray-400 transition-transform ${estaAbierto ? 'rotate-180' : ''}`}
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    {/* Botón borrar — solo si tiene más de 30 días */}
+                    {puedeEliminar && (
+                      <div className="flex items-center border-l border-gray-200 px-3 shrink-0">
+                        {!pidiendo ? (
+                          <button
+                            onClick={() => setConfirmandoBorrar(a.id_aviso)}
+                            disabled={esBorrando}
+                            title="Eliminar aviso"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                          >
+                            {esBorrando
+                              ? <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                              : (
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              )
+                            }
+                          </button>
+                        ) : (
+                          /* Mini confirmación inline */
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-red-600 font-bold">¿Eliminar?</span>
+                            <button
+                              onClick={() => handleBorrar(a.id_aviso)}
+                              className="text-xs bg-red-500 text-white font-bold px-2 py-1 rounded hover:bg-red-600 transition-colors"
+                            >
+                              Sí
+                            </button>
+                            <button
+                              onClick={() => setConfirmandoBorrar(null)}
+                              className="text-xs bg-gray-200 text-gray-600 font-bold px-2 py-1 rounded hover:bg-gray-300 transition-colors"
+                            >
+                              No
+                            </button>
+                          </div>
                         )}
                       </div>
-                      {/* Chevron */}
-                      <svg
-                        className={`w-4 h-4 text-gray-400 transition-transform ${estaAbierto ? 'rotate-180' : ''}`}
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </button>
+                    )}
+                  </div>
 
                   {/* ── Detalle expandible ────────────────────────────────── */}
                   {estaAbierto && (

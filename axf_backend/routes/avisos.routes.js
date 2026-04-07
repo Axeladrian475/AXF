@@ -288,4 +288,52 @@ router.put('/leer-todos', verificarToken, async (req, res) => {
   }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// DELETE /api/avisos/:id
+// Elimina un aviso y sus destinatarios SOLO si tiene más de 1 mes de antigüedad.
+// Solo el usuario Sucursal puede hacerlo (no maestro, no personal).
+// ────────────────────────────────────────────────────────────────────────────
+router.delete('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
+  const conn = await db.getConnection();
+  try {
+    const id_sucursal = req.usuario.id;
+    const { id }      = req.params;
+
+    // 1. Verificar que el aviso pertenece a esta sucursal
+    const [[aviso]] = await conn.query(
+      `SELECT id_aviso, creado_en FROM avisos WHERE id_aviso = ? AND id_sucursal = ?`,
+      [id, id_sucursal]
+    );
+    if (!aviso) {
+      return res.status(404).json({ message: 'Aviso no encontrado.' });
+    }
+
+    // 2. Verificar que tiene más de 1 mes de antigüedad
+    const [[{ dias }]] = await conn.query(
+      `SELECT DATEDIFF(NOW(), ?) AS dias`,
+      [aviso.creado_en]
+    );
+    if (dias < 30) {
+      return res.status(403).json({
+        message: `Este aviso solo tiene ${dias} día(s) de antigüedad. Solo se pueden eliminar avisos con más de 30 días.`,
+        dias_restantes: 30 - dias,
+      });
+    }
+
+    // 3. Eliminar en transacción (primero destinatarios por FK, luego el aviso)
+    await conn.beginTransaction();
+    await conn.query(`DELETE FROM aviso_destinatarios WHERE id_aviso = ?`, [id]);
+    await conn.query(`DELETE FROM avisos WHERE id_aviso = ?`, [id]);
+    await conn.commit();
+
+    res.json({ message: 'Aviso eliminado correctamente.' });
+  } catch (error) {
+    await conn.rollback();
+    console.error('[DELETE /avisos/:id]', error);
+    res.status(500).json({ message: 'Error al eliminar el aviso.' });
+  } finally {
+    conn.release();
+  }
+});
+
 export default router;
