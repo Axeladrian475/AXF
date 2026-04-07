@@ -66,6 +66,7 @@ const CATEGORIA_LABEL: Record<string, string> = {
 // ─── Helper: formatear fecha ──────────────────────────────────────────────────
 function formatFecha(iso: string) {
   return new Date(iso).toLocaleString('es-MX', {
+    timeZone: 'America/Mexico_City',
     day: '2-digit', month: '2-digit', year: '2-digit',
     hour: '2-digit', minute: '2-digit',
   })
@@ -488,10 +489,10 @@ export default function TabsBuscarReportes() {
                           {notifs.personal && Array.isArray(notifs.personal) && (
                             <p>👥 <strong>{notifs.personal.length}</strong> miembro(s) del personal</p>
                           )}
-                          {notifs.sucursal && (
+                          {Boolean(notifs.sucursal) && (
                             <p>🏢 Sucursal notificada</p>
                           )}
-                          {notifs.suscriptor && (
+                          {Boolean(notifs.suscriptor) && (
                             <p>📱 Suscriptor notificado</p>
                           )}
                         </div>
