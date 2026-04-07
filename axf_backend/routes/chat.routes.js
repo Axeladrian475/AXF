@@ -7,7 +7,9 @@ import { verificarToken, personalOSucursal } from '../middlewares/auth.js';
 import {
   listarConversaciones,
   obtenerMensajes,
-  enviarMensaje,
+  enviarMensaje,  
+  editarMensaje,       // ← nuevo
+  eliminarMensaje,     // ← nuevo
   contarNoLeidos,
   listarSuscriptoresDisponibles,
 } from '../controllers/chat.controller.js';

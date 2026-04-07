@@ -1,44 +1,24 @@
 // ============================================================================
-//  controllers/chat.controller.js
-//
-//  Lógica de negocio para el módulo de Chat entre personal (entrenador/nutriólogo)
-//  y suscriptores.
-//
-//  Tabla usada: chat_mensajes
-//    id_mensaje   → PK autoincrement
-//    id_personal  → FK a personal.id_personal
-//    id_suscriptor→ FK a suscriptores.id_suscriptor
-//    enviado_por  → enum('personal','suscriptor')
-//    contenido    → text
-//    leido        → tinyint (0/1)
-//    enviado_en   → timestamp
+//  controllers/chat.controller.js  — v2
 // ============================================================================
 
 import db from '../config/database.js';
 
-// ─── Helper: obtener id_personal/id_suscriptor desde el JWT ──────────────────
-// El JWT puede ser de rol 'personal' (entrenador/nutriólogo/staff) o de rol
-// 'suscriptor' (login de app de suscriptor — aún no implementado, preparado).
 function getActorId(usuario) {
-  if (usuario.rol === 'personal') return { tipo: 'personal', id: usuario.id };
-  if (usuario.rol === 'suscriptor') return { tipo: 'suscriptor', id: usuario.id };
+  if (usuario.rol === 'personal')    return { tipo: 'personal',    id: usuario.id };
+  if (usuario.rol === 'suscriptor')  return { tipo: 'suscriptor',  id: usuario.id };
   return null;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // GET /api/chat/conversaciones
-//
-// Para personal: lista todos los suscriptores con quienes ha chateado,
-//   con el último mensaje y cantidad de no leídos.
-//
-// Query params opcionales:
-//   q → buscar suscriptor por nombre
 // ════════════════════════════════════════════════════════════════════════════
 export async function listarConversaciones(req, res) {
   try {
     const actor = getActorId(req.usuario);
     if (!actor) return res.status(403).json({ message: 'Rol no autorizado.' });
 
+    // ── PERSONAL ──────────────────────────────────────────────────────────
     if (actor.tipo === 'personal') {
       const { q = '' } = req.query;
       const busqueda = `%${q.trim()}%`;
@@ -51,6 +31,7 @@ export async function listarConversaciones(req, res) {
            (SELECT cm2.contenido
             FROM chat_mensajes cm2
             WHERE cm2.id_personal = ? AND cm2.id_suscriptor = s.id_suscriptor
+              AND cm2.borrado_para != 'todos'
             ORDER BY cm2.enviado_en DESC LIMIT 1) AS ultimo_mensaje,
            (SELECT cm3.enviado_en
             FROM chat_mensajes cm3
@@ -65,9 +46,11 @@ export async function listarConversaciones(req, res) {
             WHERE cm5.id_personal = ?
               AND cm5.id_suscriptor = s.id_suscriptor
               AND cm5.enviado_por = 'suscriptor'
-              AND cm5.leido = 0) AS no_leidos
+              AND cm5.leido = 0
+              AND cm5.borrado_para != 'todos') AS no_leidos
          FROM suscriptores s
-         INNER JOIN chat_mensajes cm ON cm.id_personal = ? AND cm.id_suscriptor = s.id_suscriptor
+         INNER JOIN chat_mensajes cm
+           ON cm.id_personal = ? AND cm.id_suscriptor = s.id_suscriptor
          WHERE s.activo = 1
            AND (s.nombres LIKE ? OR s.apellido_paterno LIKE ? OR s.correo LIKE ?)
          GROUP BY s.id_suscriptor
@@ -78,7 +61,7 @@ export async function listarConversaciones(req, res) {
       return res.json(conversaciones);
     }
 
-    // ── Para suscriptor ──────────────────────────────────────────────────────
+    // ── SUSCRIPTOR ────────────────────────────────────────────────────────
     if (actor.tipo === 'suscriptor') {
       const [conversaciones] = await db.query(
         `SELECT
@@ -89,6 +72,7 @@ export async function listarConversaciones(req, res) {
            (SELECT cm2.contenido
             FROM chat_mensajes cm2
             WHERE cm2.id_personal = p.id_personal AND cm2.id_suscriptor = ?
+              AND cm2.borrado_para != 'todos'
             ORDER BY cm2.enviado_en DESC LIMIT 1) AS ultimo_mensaje,
            (SELECT cm3.enviado_en
             FROM chat_mensajes cm3
@@ -99,7 +83,8 @@ export async function listarConversaciones(req, res) {
             WHERE cm5.id_personal = p.id_personal
               AND cm5.id_suscriptor = ?
               AND cm5.enviado_por = 'personal'
-              AND cm5.leido = 0) AS no_leidos
+              AND cm5.leido = 0
+              AND cm5.borrado_para != 'todos') AS no_leidos
          FROM personal p
          INNER JOIN chat_mensajes cm
            ON cm.id_personal = p.id_personal AND cm.id_suscriptor = ?
@@ -109,7 +94,6 @@ export async function listarConversaciones(req, res) {
         [actor.id, actor.id, actor.id, actor.id]
       );
 
-      // Si no hay conversaciones aún, devolver lista de personal disponible
       if (conversaciones.length === 0) {
         const [personalDisponible] = await db.query(
           `SELECT
@@ -143,12 +127,6 @@ export async function listarConversaciones(req, res) {
 // ════════════════════════════════════════════════════════════════════════════
 // GET /api/chat/mensajes/:id_suscriptor          (para personal)
 // GET /api/chat/mensajes/personal/:id_personal   (para suscriptor)
-//
-// Obtiene el historial de mensajes entre personal ↔ suscriptor.
-//
-// Query params:
-//   limite  → mensajes por página (default 50)
-//   offset  → paginación (default 0)
 // ════════════════════════════════════════════════════════════════════════════
 export async function obtenerMensajes(req, res) {
   try {
@@ -171,15 +149,19 @@ export async function obtenerMensajes(req, res) {
       if (!id_personal) return res.status(400).json({ message: 'id_personal requerido.' });
     }
 
-    // Marcar como leídos los mensajes de la otra parte ANTES de devolverlos
+    // Marcar como leídos y entregados antes de devolver
     const enviado_por_otro = actor.tipo === 'personal' ? 'suscriptor' : 'personal';
     await db.query(
       `UPDATE chat_mensajes
-         SET leido = 1
+         SET leido = 1, entregado = 1
        WHERE id_personal = ? AND id_suscriptor = ?
          AND enviado_por = ? AND leido = 0`,
       [id_personal, id_suscriptor, enviado_por_otro]
     );
+
+    // Filtro de borrado: no mostrar mensajes borrados para todos,
+    // ni mensajes borrados para mí (emisor = actor.tipo)
+    const miRol = actor.tipo;
 
     const [mensajes] = await db.query(
       `SELECT
@@ -187,18 +169,29 @@ export async function obtenerMensajes(req, res) {
          enviado_por,
          contenido,
          leido,
+         entregado,
+         editado_en,
+         borrado_para,
+         id_respuesta,
+         respuesta_contenido,
+         respuesta_enviado_por,
          enviado_en
        FROM chat_mensajes
        WHERE id_personal = ? AND id_suscriptor = ?
+         AND NOT (borrado_para = 'todos')
+         AND NOT (borrado_para = 'emisor' AND enviado_por = ?)
        ORDER BY enviado_en ASC
        LIMIT ? OFFSET ?`,
-      [id_personal, id_suscriptor, lim, off]
+      [id_personal, id_suscriptor, miRol, lim, off]
     );
 
     const [[{ total }]] = await db.query(
-      `SELECT COUNT(*) AS total FROM chat_mensajes
-       WHERE id_personal = ? AND id_suscriptor = ?`,
-      [id_personal, id_suscriptor]
+      `SELECT COUNT(*) AS total
+       FROM chat_mensajes
+       WHERE id_personal = ? AND id_suscriptor = ?
+         AND NOT (borrado_para = 'todos')
+         AND NOT (borrado_para = 'emisor' AND enviado_por = ?)`,
+      [id_personal, id_suscriptor, miRol]
     );
 
     res.json({
@@ -218,23 +211,22 @@ export async function obtenerMensajes(req, res) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// POST /api/chat/mensajes
-//
-// Enviar un mensaje. Usado como fallback REST cuando WebSocket no está
-// disponible, o para integrar con notificaciones push en el futuro.
-//
-// Body:
-//   { id_suscriptor, contenido }  → si enviado por personal
-//   { id_personal,   contenido }  → si enviado por suscriptor
+// POST /api/chat/mensajes  (fallback REST)
 // ════════════════════════════════════════════════════════════════════════════
 export async function enviarMensaje(req, res) {
   try {
     const actor = getActorId(req.usuario);
     if (!actor) return res.status(403).json({ message: 'Rol no autorizado.' });
 
-    const { contenido } = req.body;
+    const {
+      contenido,
+      id_respuesta          = null,
+      respuesta_contenido   = null,
+      respuesta_enviado_por = null,
+    } = req.body;
+
     if (!contenido?.trim()) {
-      return res.status(400).json({ message: 'El contenido del mensaje no puede estar vacío.' });
+      return res.status(400).json({ message: 'El contenido no puede estar vacío.' });
     }
 
     let id_personal, id_suscriptor;
@@ -244,7 +236,6 @@ export async function enviarMensaje(req, res) {
       id_suscriptor = parseInt(req.body.id_suscriptor);
       if (!id_suscriptor) return res.status(400).json({ message: 'id_suscriptor requerido.' });
 
-      // Verificar que el suscriptor existe y está activo
       const [[sus]] = await db.query(
         `SELECT id_suscriptor FROM suscriptores WHERE id_suscriptor = ? AND activo = 1`,
         [id_suscriptor]
@@ -256,7 +247,6 @@ export async function enviarMensaje(req, res) {
       id_personal   = parseInt(req.body.id_personal);
       if (!id_personal) return res.status(400).json({ message: 'id_personal requerido.' });
 
-      // Verificar que el personal existe y está activo
       const [[per]] = await db.query(
         `SELECT id_personal FROM personal WHERE id_personal = ? AND activo = 1`,
         [id_personal]
@@ -264,36 +254,71 @@ export async function enviarMensaje(req, res) {
       if (!per) return res.status(404).json({ message: 'Personal no encontrado.' });
     }
 
+    // Obtener contenido citado desde la BD si hay id_respuesta pero no viene el texto
+    let respCont   = respuesta_contenido;
+    let respEnvPor = respuesta_enviado_por;
+    if (id_respuesta && !respCont) {
+      const [[orig]] = await db.query(
+        `SELECT contenido, enviado_por FROM chat_mensajes
+         WHERE id_mensaje = ? AND borrado_para != 'todos'`,
+        [id_respuesta]
+      );
+      if (orig) {
+        respCont   = orig.contenido.substring(0, 200);
+        respEnvPor = orig.enviado_por;
+      }
+    }
+
     const [result] = await db.query(
-      `INSERT INTO chat_mensajes (id_personal, id_suscriptor, enviado_por, contenido)
-       VALUES (?, ?, ?, ?)`,
-      [id_personal, id_suscriptor, actor.tipo, contenido.trim()]
+      `INSERT INTO chat_mensajes
+         (id_personal, id_suscriptor, enviado_por, contenido,
+          id_respuesta, respuesta_contenido, respuesta_enviado_por)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id_personal, id_suscriptor, actor.tipo, contenido.trim(),
+       id_respuesta || null, respCont || null, respEnvPor || null]
     );
 
     const [[mensaje]] = await db.query(
-      `SELECT id_mensaje, enviado_por, contenido, leido, enviado_en
+      `SELECT
+         id_mensaje, enviado_por, contenido, leido, entregado,
+         editado_en, borrado_para,
+         id_respuesta, respuesta_contenido, respuesta_enviado_por,
+         enviado_en
        FROM chat_mensajes WHERE id_mensaje = ?`,
       [result.insertId]
     );
 
     // Emitir por WebSocket si está disponible
-    const { getIO } = await import('../config/socket.js');
     try {
+      const { getIO } = await import('../config/socket.js');
       const io = getIO();
-      // Notificar al destinatario en su sala personal
-      if (actor.tipo === 'personal') {
-        io.to(`suscriptor:${id_suscriptor}`).emit('chat:mensaje_nuevo', {
-          id_personal,
-          mensaje,
-        });
-      } else {
-        io.to(`personal:${id_personal}`).emit('chat:mensaje_nuevo', {
-          id_suscriptor,
-          mensaje,
-        });
+
+      const sala_destino = actor.tipo === 'personal'
+        ? `suscriptor:${id_suscriptor}`
+        : `personal:${id_personal}`;
+
+      io.to(sala_destino).emit('chat:mensaje_nuevo', {
+        id_personal,
+        id_suscriptor,
+        mensaje,
+      });
+
+      // Marcar entregado si el destinatario está online
+      const socketsDestino = await io.in(sala_destino).fetchSockets();
+      if (socketsDestino.length > 0) {
+        await db.query(
+          `UPDATE chat_mensajes SET entregado = 1 WHERE id_mensaje = ?`,
+          [mensaje.id_mensaje]
+        );
+        mensaje.entregado = 1;
+
+        const salaEmisor = actor.tipo === 'personal'
+          ? `personal:${id_personal}`
+          : `suscriptor:${id_suscriptor}`;
+        io.to(salaEmisor).emit('chat:entregado', { id_mensaje: mensaje.id_mensaje });
       }
     } catch {
-      // Socket.io no inicializado — solo REST, continuar sin error
+      // Socket.io no disponible — continuar solo con REST
     }
 
     res.status(201).json({ ok: true, mensaje });
@@ -305,10 +330,106 @@ export async function enviarMensaje(req, res) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// PUT /api/chat/mensajes/:id_mensaje  (editar, fallback REST)
+// ════════════════════════════════════════════════════════════════════════════
+export async function editarMensaje(req, res) {
+  try {
+    const actor = getActorId(req.usuario);
+    if (!actor) return res.status(403).json({ message: 'Rol no autorizado.' });
+
+    const id_mensaje      = parseInt(req.params.id_mensaje);
+    const { nuevo_contenido } = req.body;
+
+    if (!nuevo_contenido?.trim()) {
+      return res.status(400).json({ message: 'El contenido no puede estar vacío.' });
+    }
+
+    const [[msg]] = await db.query(
+      `SELECT * FROM chat_mensajes
+       WHERE id_mensaje = ? AND enviado_por = ? AND borrado_para != 'todos'`,
+      [id_mensaje, actor.tipo]
+    );
+    if (!msg) return res.status(404).json({ message: 'Mensaje no encontrado o no autorizado.' });
+
+    await db.query(
+      `UPDATE chat_mensajes SET contenido = ?, editado_en = NOW() WHERE id_mensaje = ?`,
+      [nuevo_contenido.trim(), id_mensaje]
+    );
+
+    const [[actualizado]] = await db.query(
+      `SELECT id_mensaje, contenido, editado_en FROM chat_mensajes WHERE id_mensaje = ?`,
+      [id_mensaje]
+    );
+
+    // Notificar por WebSocket si disponible
+    try {
+      const { getIO } = await import('../config/socket.js');
+      const io = getIO();
+      const sala_destino = actor.tipo === 'personal'
+        ? `suscriptor:${msg.id_suscriptor}`
+        : `personal:${msg.id_personal}`;
+      const evento = {
+        id_mensaje,
+        nuevo_contenido: actualizado.contenido,
+        editado_en:      actualizado.editado_en,
+      };
+      io.to(sala_destino).emit('chat:mensaje_editado', evento);
+    } catch { /* sin socket */ }
+
+    res.json({ ok: true, mensaje: actualizado });
+
+  } catch (error) {
+    console.error('[PUT /chat/mensajes/:id]', error);
+    res.status(500).json({ message: 'Error al editar el mensaje.' });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DELETE /api/chat/mensajes/:id_mensaje  (eliminar, fallback REST)
+// Body: { para_todos: boolean }
+// ════════════════════════════════════════════════════════════════════════════
+export async function eliminarMensaje(req, res) {
+  try {
+    const actor = getActorId(req.usuario);
+    if (!actor) return res.status(403).json({ message: 'Rol no autorizado.' });
+
+    const id_mensaje  = parseInt(req.params.id_mensaje);
+    const { para_todos = false } = req.body;
+
+    const [[msg]] = await db.query(
+      `SELECT * FROM chat_mensajes WHERE id_mensaje = ? AND enviado_por = ?`,
+      [id_mensaje, actor.tipo]
+    );
+    if (!msg) return res.status(404).json({ message: 'Mensaje no encontrado o no autorizado.' });
+
+    const borrado_para = para_todos ? 'todos' : 'emisor';
+    await db.query(
+      `UPDATE chat_mensajes SET borrado_para = ? WHERE id_mensaje = ?`,
+      [borrado_para, id_mensaje]
+    );
+
+    // Notificar si es para todos
+    if (para_todos) {
+      try {
+        const { getIO } = await import('../config/socket.js');
+        const io = getIO();
+        const sala_destino = actor.tipo === 'personal'
+          ? `suscriptor:${msg.id_suscriptor}`
+          : `personal:${msg.id_personal}`;
+        io.to(sala_destino).emit('chat:mensaje_eliminado', { id_mensaje });
+      } catch { /* sin socket */ }
+    }
+
+    res.json({ ok: true });
+
+  } catch (error) {
+    console.error('[DELETE /chat/mensajes/:id]', error);
+    res.status(500).json({ message: 'Error al eliminar el mensaje.' });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // GET /api/chat/no-leidos
-//
-// Total de mensajes no leídos para el usuario actual.
-// Útil para mostrar el badge rojo en el ícono de chat.
 // ════════════════════════════════════════════════════════════════════════════
 export async function contarNoLeidos(req, res) {
   try {
@@ -321,7 +442,10 @@ export async function contarNoLeidos(req, res) {
     const [[{ total }]] = await db.query(
       `SELECT COUNT(*) AS total
        FROM chat_mensajes
-       WHERE ${campo_id} = ? AND enviado_por = ? AND leido = 0`,
+       WHERE ${campo_id} = ?
+         AND enviado_por = ?
+         AND leido = 0
+         AND borrado_para != 'todos'`,
       [actor.id, enviado_por_otro]
     );
 
@@ -329,15 +453,12 @@ export async function contarNoLeidos(req, res) {
 
   } catch (error) {
     console.error('[GET /chat/no-leidos]', error);
-    res.status(500).json({ message: 'Error al contar mensajes no leídos.' });
+    res.status(500).json({ message: 'Error al contar no leídos.' });
   }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GET /api/chat/suscriptores-disponibles
-//
-// Solo para personal: lista los suscriptores de su sucursal con quienes
-// puede iniciar una conversación (incluyendo los que aún no tienen chat).
+// GET /api/chat/suscriptores-disponibles  (solo personal)
 // ════════════════════════════════════════════════════════════════════════════
 export async function listarSuscriptoresDisponibles(req, res) {
   try {
@@ -348,7 +469,6 @@ export async function listarSuscriptoresDisponibles(req, res) {
     const { q = '' } = req.query;
     const busqueda = `%${q.trim()}%`;
 
-    // Obtener sucursal del personal
     const [[emp]] = await db.query(
       `SELECT id_sucursal FROM personal WHERE id_personal = ? AND activo = 1`,
       [req.usuario.id]
@@ -361,7 +481,6 @@ export async function listarSuscriptoresDisponibles(req, res) {
          CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre,
          s.correo,
          s.telefono,
-         -- Si ya existe conversación con este entrenador
          EXISTS(
            SELECT 1 FROM chat_mensajes cm
            WHERE cm.id_personal = ? AND cm.id_suscriptor = s.id_suscriptor
