@@ -9,6 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://lo
 export default function CargarEjercicio({ onBack }: Props) {
   const [nombre, setNombre]         = useState('')
   const [imagen, setImagen]         = useState<File | null>(null)
+  const [preview, setPreview]       = useState<string | null>(null)
   const [ejercicios, setEjercicios] = useState<EjercicioAPI[]>([])
   const [cargando, setCargando]     = useState(true)
   const [guardando, setGuardando]   = useState(false)
@@ -46,7 +47,7 @@ export default function CargarEjercicio({ onBack }: Props) {
       await crearEjercicio(fd)
       setExito(`Ejercicio "${nombre.trim()}" guardado.`)
       setTimeout(() => setExito(''), 4000)
-      setNombre(''); setImagen(null)
+      setNombre(''); setImagen(null); setPreview(null)
       cargar()
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al guardar')
@@ -150,8 +151,38 @@ export default function CargarEjercicio({ onBack }: Props) {
             <div>
               <label className="block text-xs font-bold text-black mb-1">Cargar Imagen de Referencia</label>
               <input type="file" accept="image/*"
-                onChange={e => setImagen(e.target.files?.[0] ?? null)}
+                onChange={e => {
+                  const file = e.target.files?.[0] ?? null
+                  setImagen(file)
+                  if (file) {
+                    const reader = new FileReader()
+                    reader.onload = ev => setPreview(ev.target?.result as string)
+                    reader.readAsDataURL(file)
+                  } else {
+                    setPreview(null)
+                  }
+                }}
                 className="w-full text-sm text-black file:mr-2 file:py-1 file:px-3 file:border file:border-gray-300 file:rounded file:bg-gray-50 file:text-sm file:font-bold" />
+              {preview && (
+                <div className="mt-2 flex items-center gap-3">
+                  <img
+                    src={preview}
+                    alt="preview"
+                    className="w-16 h-16 object-cover rounded-lg border border-gray-300 shadow-sm"
+                  />
+                  <div>
+                    <p className="text-xs font-bold text-green-700">✓ Imagen seleccionada</p>
+                    <p className="text-[10px] text-gray-400 truncate max-w-[180px]">{imagen?.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => { setImagen(null); setPreview(null) }}
+                      className="text-[10px] text-red-400 hover:text-red-600 font-bold mt-0.5"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           {error && <p className="text-red-500 text-xs mb-3 font-bold">{error}</p>}

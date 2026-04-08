@@ -53,6 +53,7 @@ export default function TabPersonal() {
   const [fotoModPreview, setFotoModPreview] = useState<string | null>(null)
   const [showPasswordMod, setShowPasswordMod] = useState(false)
   const [loadingMod, setLoadingMod] = useState(false)
+  const [fotoModError, setFotoModError] = useState(false)  // true si la foto del servidor falla
 
   // ── Confirmar eliminación ──────────────────────────────────────────────────
   const [confirmEliminar, setConfirmEliminar] = useState<Personal | null>(null)
@@ -134,6 +135,7 @@ export default function TabPersonal() {
     })
     setFotoMod(null)
     setFotoModPreview(null)
+    setFotoModError(false)  // resetear error de foto al abrir modal
   }
 
   const handleModificar = async (e: React.FormEvent) => {
@@ -304,21 +306,40 @@ export default function TabPersonal() {
                   <label className="block text-sm font-bold italic mb-1">
                     Nueva Fotografía: <span className="font-normal text-gray-500">(opcional)</span>
                   </label>
-                  {/* Preview: muestra la nueva foto si se seleccionó, o la actual del servidor */}
+                  {/* Preview: nueva foto seleccionada > foto actual del servidor > avatar inicial */}
                   <div className="flex items-center gap-3 mb-2">
-                    {(fotoModPreview || fotoSrc(selectedPersonal.foto_url)) ? (
+                    {fotoModPreview ? (
+                      // 1) Nueva foto seleccionada por el usuario
                       <img
-                        src={fotoModPreview ?? fotoSrc(selectedPersonal.foto_url)!}
+                        src={fotoModPreview}
                         alt="foto"
                         className="w-14 h-14 rounded-full object-cover border-2 border-[#ea580c]"
                       />
+                    ) : (fotoSrc(selectedPersonal.foto_url) && !fotoModError) ? (
+                      // 2) Foto actual del servidor (si existe y no dio error)
+                      <img
+                        src={fotoSrc(selectedPersonal.foto_url)!}
+                        alt="foto"
+                        className="w-14 h-14 rounded-full object-cover border-2 border-[#ea580c]"
+                        onError={() => setFotoModError(true)}
+                      />
                     ) : (
+                      // 3) Avatar con inicial (sin foto o error al cargar)
                       <div className="w-14 h-14 rounded-full bg-[#ea580c] flex items-center justify-center text-white font-bold text-lg border-2 border-[#ea580c]">
                         {selectedPersonal.nombres.charAt(0).toUpperCase()}
                       </div>
                     )}
                     {fotoModPreview && (
-                      <span className="text-xs text-green-600 font-bold">✓ Nueva foto seleccionada</span>
+                      <div>
+                        <span className="text-xs text-green-600 font-bold">&#10003; Nueva foto seleccionada</span>
+                        <button
+                          type="button"
+                          onClick={() => { setFotoMod(null); setFotoModPreview(null) }}
+                          className="block text-[10px] text-red-400 hover:text-red-600 font-bold mt-0.5"
+                        >
+                          Quitar
+                        </button>
+                      </div>
                     )}
                   </div>
                   <input type="file" accept="image/*"
