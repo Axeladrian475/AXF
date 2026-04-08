@@ -42,32 +42,49 @@ interface SuscriptorDisponible {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+const TZ = 'America/Mexico_City'
+
+/** Devuelve la fecha ISO en zona horaria México como partes separables */
+function partesMX(d: Date) {
+  // Usamos Intl para obtener año/mes/día/hora en México
+  const fmt = new Intl.DateTimeFormat('es-MX', {
+    timeZone: TZ,
+    year:    'numeric',
+    month:   '2-digit',
+    day:     '2-digit',
+  })
+  const parts = fmt.formatToParts(d)
+  const get = (t: string) => Number(parts.find(p => p.type === t)?.value ?? 0)
+  return { year: get('year'), month: get('month'), day: get('day') }
+}
+
+function mismaFechaMX(a: Date, b: Date) {
+  const pa = partesMX(a), pb = partesMX(b)
+  return pa.year === pb.year && pa.month === pb.month && pa.day === pb.day
+}
+
 function formatHora(iso: string | null): string {
   if (!iso) return ''
   const d   = new Date(iso)
   const hoy = new Date()
   const ayer = new Date(); ayer.setDate(hoy.getDate() - 1)
-  const mismaFecha = (a: Date, b: Date) =>
-    a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
-  if (mismaFecha(d, hoy))  return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-  if (mismaFecha(d, ayer)) return 'Ayer'
-  return d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  if (mismaFechaMX(d, hoy))  return d.toLocaleTimeString('es-MX', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })
+  if (mismaFechaMX(d, ayer)) return 'Ayer'
+  return d.toLocaleDateString('es-MX', { timeZone: TZ, day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 function formatFechaSeparador(iso: string): string {
   const d   = new Date(iso)
   const hoy = new Date()
   const ayer = new Date(); ayer.setDate(hoy.getDate() - 1)
-  const mismaFecha = (a: Date, b: Date) =>
-    a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
-  if (mismaFecha(d, hoy))  return 'Hoy'
-  if (mismaFecha(d, ayer)) return 'Ayer'
-  return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  if (mismaFechaMX(d, hoy))  return 'Hoy'
+  if (mismaFechaMX(d, ayer)) return 'Ayer'
+  return d.toLocaleDateString('es-MX', { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 function fechaDia(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+  const { year, month, day } = partesMX(new Date(iso))
+  return `${year}-${month}-${day}`
 }
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3001'
@@ -187,7 +204,7 @@ export default function Chat() {
     })
 
     // Entregado bulk (al reconectar)
-    socket.on('chat:entregado_bulk', ({ id_personal, id_suscriptor }: { id_personal: number; id_suscriptor: number }) => {
+    socket.on('chat:entregado_bulk', ({ id_suscriptor }: { id_personal: number; id_suscriptor: number }) => {
       if (suscActivoRef.current === id_suscriptor) {
         setMensajes(prev => prev.map(m =>
           m.enviado_por === 'personal' ? { ...m, entregado: 1 } : m

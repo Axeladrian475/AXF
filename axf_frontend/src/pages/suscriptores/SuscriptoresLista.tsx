@@ -30,7 +30,7 @@ type Filtro = 'activo' | 'inactivo'
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtFecha(iso: string) {
   const d = new Date(iso)
-  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function Spinner({ small = false }: { small?: boolean }) {
