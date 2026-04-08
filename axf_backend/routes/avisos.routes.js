@@ -11,6 +11,7 @@ import db      from '../config/database.js';
 
 const router = express.Router();
 
+
 // ─── Middleware: verificar token JWT ─────────────────────────────────────────
 function verificarToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -142,7 +143,8 @@ router.get('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
       `SELECT
          a.id_aviso,
          a.mensaje,
-         a.creado_en,
+         DATE_FORMAT(CONVERT_TZ(a.creado_en, @@session.time_zone, '+00:00'),
+                     '%Y-%m-%dT%H:%i:%sZ')   AS creado_en,
          COUNT(ad.id)                     AS total_destinatarios,
          SUM(ad.leido)                    AS total_leidos,
          COUNT(ad.id) - SUM(ad.leido)     AS total_pendientes
@@ -226,7 +228,8 @@ router.get('/mis-avisos', verificarToken, async (req, res) => {
       `SELECT
          a.id_aviso,
          a.mensaje,
-         a.creado_en,
+         DATE_FORMAT(CONVERT_TZ(a.creado_en, @@session.time_zone, '+00:00'),
+                     '%Y-%m-%dT%H:%i:%sZ')   AS creado_en,
          ad.leido
        FROM aviso_destinatarios ad
        INNER JOIN avisos a ON a.id_aviso = ad.id_aviso

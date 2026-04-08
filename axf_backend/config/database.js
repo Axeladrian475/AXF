@@ -26,7 +26,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit:    10,
   queueLimit:         0,
-  timezone:           '-06:00',    // UTC-6 CST — mysql2 no acepta 'America/Mexico_City'
+  timezone:           '-06:00',    // UTC-6 CST — Los DATETIME en MySQL están en hora local
   connectTimeout:     10_000,      // 10 s antes de fallar
 });
 
