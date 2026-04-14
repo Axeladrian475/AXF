@@ -36,13 +36,14 @@ export default function Suscripciones() {
     setTab('administrar')
   }
 
-  // ── Al montar: detectar pago pendiente/retorno de Mercado Pago ──────────────
+  // ── Al montar: detectar pago pendiente/retorno de PayPal o Mercado Pago ─────
   useEffect(() => {
     const params       = new URLSearchParams(window.location.search)
     const tipoPago     = params.get('pago')
-    const suscriptorId = params.get('suscriptor')
+    // PayPal usa 'sus', Mercado Pago usa 'suscriptor'
+    const suscriptorId = params.get('sus') || params.get('suscriptor')
 
-    // ── Caso A: MP redirigió automáticamente con query params ────────────────
+    // ── Caso A: PayPal/MP redirigió automáticamente con query params ──────────
     if ((tipoPago === 'exitoso' || tipoPago === 'pendiente') && suscriptorId) {
       setCargandoRetorno(true)
       axiosClient.get(`/suscriptores/${suscriptorId}`)
