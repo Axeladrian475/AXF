@@ -1,9 +1,71 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import db from './database.js';
+import { readFileSync } from 'fs';
+import { createSign } from 'crypto';
 
-let io = null;
+// ── FCM v1 con Service Account (compatible con Hostinger) ─────────────────────
+let io; // instancia compartida de Socket.io
+let _fcmAccessToken = null;
+let _fcmTokenExpiry = 0;
 
+async function getFCMAccessToken() {
+  if (_fcmAccessToken && Date.now() < _fcmTokenExpiry) return _fcmAccessToken;
+
+  const sa = JSON.parse(readFileSync(process.env.FIREBASE_SERVICE_ACCOUNT, 'utf8'));
+  const now = Math.floor(Date.now() / 1000);
+  const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    iss: sa.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: sa.token_uri,
+    iat: now,
+    exp: now + 3600,
+  })).toString('base64url');
+
+  const sign = createSign('RSA-SHA256');
+  sign.update(`${header}.${payload}`);
+  const signature = sign.sign(sa.private_key, 'base64url');
+  const jwt_token = `${header}.${payload}.${signature}`;
+
+  const resp = await fetch(sa.token_uri, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt_token}`,
+  });
+  const json = await resp.json();
+  _fcmAccessToken = json.access_token;
+  _fcmTokenExpiry = Date.now() + 55 * 60 * 1000; // 55 min
+  return _fcmAccessToken;
+}
+
+async function enviarPushFCM({ fcm_token, titulo, cuerpo, data = {} }) {
+  if (!fcm_token) return;
+  try {
+    const accessToken = await getFCMAccessToken();
+    const projectId   = 'axf-gymnet';
+    await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        message: {
+          token: fcm_token,
+          notification: { title: titulo, body: cuerpo },
+          android: {
+            priority: 'high',
+            notification: { sound: 'default', click_action: 'OPEN_CHAT' },
+          },
+          data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
+        },
+      }),
+    });
+  } catch (err) {
+    console.error('[FCM] Error:', err.message);
+  }
+}
 export function initSocket(httpServer) {
   io = new Server(httpServer, {
     cors: { origin: '*', credentials: false },
@@ -29,8 +91,6 @@ export function initSocket(httpServer) {
     socket.join(sala);
     console.log(`[WS] ✅ Conectado → ${sala}`);
 
-    // ── Presencia online ──────────────────────────────────────────────────
-    // Notificar a todos los que tengan chat con este usuario que está online
     io.emit(`chat:online`, { rol, id, online: true });
 
     // ── ENVIAR MENSAJE ────────────────────────────────────────────────────
@@ -49,7 +109,6 @@ export function initSocket(httpServer) {
         }
         if (!id_personal || !id_suscriptor) return callback?.({ ok: false, error: 'IDs inválidos' });
 
-        // Obtener contenido citado si hay reply
         let respuesta_contenido = null, respuesta_enviado_por = null;
         if (id_respuesta) {
           const [[orig]] = await db.query(
@@ -57,7 +116,7 @@ export function initSocket(httpServer) {
             [id_respuesta]
           );
           if (orig) {
-            respuesta_contenido = orig.contenido.substring(0, 200);
+            respuesta_contenido   = orig.contenido.substring(0, 200);
             respuesta_enviado_por = orig.enviado_por;
           }
         }
@@ -84,15 +143,52 @@ export function initSocket(httpServer) {
 
         io.to(sala_destino).emit('chat:mensaje_nuevo', { id_personal, id_suscriptor, mensaje: msg });
 
-        // Si el destinatario está online, marcar entregado inmediatamente
+        // ── ¿El destinatario está online? ─────────────────────────────────
         const socketsDestino = await io.in(sala_destino).fetchSockets();
         if (socketsDestino.length > 0) {
+          // Online → marcar entregado
           await db.query(
             `UPDATE chat_mensajes SET entregado = 1 WHERE id_mensaje = ?`,
             [msg.id_mensaje]
           );
           msg.entregado = 1;
           socket.emit('chat:entregado', { id_mensaje: msg.id_mensaje });
+        } else {
+          // Offline → enviar push FCM
+          try {
+            const tabla  = rol === 'personal' ? 'suscriptores' : 'personal';
+            const campo  = rol === 'personal' ? 'id_suscriptor' : 'id_personal';
+            const destId = rol === 'personal' ? id_suscriptor : id_personal;
+
+            const [[destUser]] = await db.query(
+              `SELECT fcm_token FROM ${tabla} WHERE ${campo} = ?`,
+              [destId]
+            );
+
+            // Obtener nombre del emisor
+            const tablaEmisor  = rol === 'personal' ? 'personal' : 'suscriptores';
+            const campoEmisor  = rol === 'personal' ? 'id_personal' : 'id_suscriptor';
+            const [[emisor]]   = await db.query(
+              `SELECT nombre FROM ${tablaEmisor} WHERE ${campoEmisor} = ?`,
+              [id]
+            );
+
+            if (destUser?.fcm_token) {
+              await enviarPushFCM({
+                fcm_token: destUser.fcm_token,
+                titulo:    emisor?.nombre ?? 'Nuevo mensaje',
+                cuerpo:    contenido.trim().substring(0, 100),
+                data: {
+                  tipo:          'chat',
+                  id_personal:   String(id_personal),
+                  id_suscriptor: String(id_suscriptor),
+                  nombre_personal: emisor?.nombre ?? '',
+                },
+              });
+            }
+          } catch (errPush) {
+            console.error('[FCM push]', errPush.message);
+          }
         }
 
         callback?.({ ok: true, mensaje: msg });
@@ -103,7 +199,7 @@ export function initSocket(httpServer) {
       }
     });
 
-    // ── MARCAR ENTREGADO (cuando el cliente se conecta y recibe mensajes pendientes) ──
+    // ── MARCAR ENTREGADO ──────────────────────────────────────────────────
     socket.on('chat:marcar_entregado', async (data) => {
       try {
         let campo_id, campo_otro, id_otro;
@@ -116,14 +212,12 @@ export function initSocket(httpServer) {
         }
         const enviado_por_otro = rol === 'personal' ? 'suscriptor' : 'personal';
 
-        // Obtener IDs de mensajes no entregados
         const [rows] = await db.query(
           `SELECT id_mensaje, ${campo_otro} AS id_otro
            FROM chat_mensajes
            WHERE ${campo_id} = ? AND enviado_por = ? AND entregado = 0`,
           [id_otro, enviado_por_otro]
         );
-
         if (rows.length === 0) return;
 
         await db.query(
@@ -132,7 +226,6 @@ export function initSocket(httpServer) {
           [id_otro, enviado_por_otro]
         );
 
-        // Notificar al emisor original por cada conversación
         const idOtros = [...new Set(rows.map(r => r.id_otro))];
         for (const otroId of idOtros) {
           const salaEmisor = enviado_por_otro === 'personal' ? `personal:${otroId}` : `suscriptor:${otroId}`;
@@ -183,7 +276,6 @@ export function initSocket(httpServer) {
         const { id_mensaje, nuevo_contenido } = data;
         if (!id_mensaje || !nuevo_contenido?.trim()) return callback?.({ ok: false });
 
-        // Solo puede editar el que lo envió
         const [[msg]] = await db.query(
           `SELECT * FROM chat_mensajes WHERE id_mensaje = ? AND enviado_por = ? AND borrado_para != 'todos'`,
           [id_mensaje, rol]
@@ -233,8 +325,6 @@ export function initSocket(httpServer) {
             : `personal:${msg.id_personal}`;
           io.to(sala_destino).emit('chat:mensaje_eliminado', { id_mensaje });
           socket.emit('chat:mensaje_eliminado', { id_mensaje });
-        } else {
-          callback?.({ ok: true });
         }
         callback?.({ ok: true });
       } catch (err) {
@@ -244,8 +334,6 @@ export function initSocket(httpServer) {
     });
 
     // ── ESCRIBIENDO ───────────────────────────────────────────────────────
-    // CORRECCIÓN: se incluyen id_personal e id_suscriptor en el evento para
-    // que el receptor pueda ignorarlo si no es la conversación activa.
     socket.on('chat:escribiendo', (data) => {
       const id_personal   = rol === 'personal'   ? id : parseInt(data.id_personal);
       const id_suscriptor = rol === 'suscriptor' ? id : parseInt(data.id_suscriptor);

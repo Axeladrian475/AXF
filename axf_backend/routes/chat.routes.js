@@ -7,11 +7,13 @@ import { verificarToken, personalOSucursal } from '../middlewares/auth.js';
 import {
   listarConversaciones,
   obtenerMensajes,
-  enviarMensaje,  
-  editarMensaje,       // ← nuevo
-  eliminarMensaje,     // ← nuevo
+  enviarMensaje,
+  editarMensaje,
+  eliminarMensaje,
   contarNoLeidos,
   listarSuscriptoresDisponibles,
+  marcarLeidos,
+  registrarFcmToken,
 } from '../controllers/chat.controller.js';
 import jwt from 'jsonwebtoken';
 
@@ -30,14 +32,20 @@ function verificarTokenAny(req, res, next) {
 }
 
 // ─── Endpoints para AMBOS roles (personal y suscriptor) ──────────────────────
-router.get('/conversaciones',                 verificarTokenAny, listarConversaciones);
+router.get('/conversaciones', verificarTokenAny, listarConversaciones);
 router.get('/mensajes/personal/:id_personal', verificarTokenAny, obtenerMensajes);
-router.post('/mensajes',                      verificarTokenAny, enviarMensaje);
-router.get('/no-leidos',                      verificarTokenAny, contarNoLeidos);
+router.post('/mensajes', verificarTokenAny, enviarMensaje);
+router.get('/no-leidos', verificarTokenAny, contarNoLeidos);
+router.post('/leer/personal/:id_personal', verificarTokenAny, marcarLeidos);   // ← NUEVO
+router.post('/fcm-token', verificarTokenAny, registrarFcmToken); // ← NUEVO
+
+// ─── Editar / Eliminar (el que envió puede ser suscriptor o personal) ─────────
+router.put('/mensajes/:id_mensaje', verificarTokenAny, editarMensaje);   // ← NUEVO
+router.delete('/mensajes/:id_mensaje', verificarTokenAny, eliminarMensaje); // ← NUEVO
 
 // ─── Endpoints SOLO para personal ────────────────────────────────────────────
 router.use(verificarToken);
-router.get('/mensajes/:id_suscriptor',        personalOSucursal, obtenerMensajes);
-router.get('/suscriptores-disponibles',       personalOSucursal, listarSuscriptoresDisponibles);
+router.get('/mensajes/:id_suscriptor', personalOSucursal, obtenerMensajes);
+router.get('/suscriptores-disponibles', personalOSucursal, listarSuscriptoresDisponibles);
 
 export default router;

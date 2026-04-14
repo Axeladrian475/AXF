@@ -528,3 +528,67 @@ export async function listarSuscriptoresDisponibles(req, res) {
     res.status(500).json({ message: 'Error al obtener suscriptores.' });
   }
 }
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/chat/leer/personal/:id_personal  (usado por la app móvil)
+// ════════════════════════════════════════════════════════════════════════════
+export async function marcarLeidos(req, res) {
+  try {
+    const actor = getActorId(req.usuario);
+    if (!actor) return res.status(403).json({ message: 'Rol no autorizado.' });
+
+    const id_personal   = parseInt(req.params.id_personal);
+    const id_suscriptor = actor.id; // quien llama es el suscriptor
+
+    await db.query(
+      `UPDATE chat_mensajes
+         SET leido = 1, entregado = 1
+       WHERE id_personal = ? AND id_suscriptor = ?
+         AND enviado_por = 'personal' AND leido = 0`,
+      [id_personal, id_suscriptor]
+    );
+
+    // Notificar al personal por Socket si está online
+    try {
+      const { getIO } = await import('../config/socket.js');
+      const io = getIO();
+      io.to(`personal:${id_personal}`).emit('chat:mensajes_leidos', {
+        id_personal,
+        id_suscriptor,
+      });
+    } catch { /* sin socket */ }
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[POST /chat/leer/personal/:id]', error);
+    res.status(500).json({ message: 'Error al marcar como leídos.' });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/chat/fcm-token
+// Body: { fcm_token: string }
+// ════════════════════════════════════════════════════════════════════════════
+export async function registrarFcmToken(req, res) {
+  try {
+    const actor = getActorId(req.usuario);
+    if (!actor) return res.status(403).json({ message: 'Rol no autorizado.' });
+
+    const { fcm_token } = req.body;
+    if (!fcm_token?.trim()) {
+      return res.status(400).json({ message: 'fcm_token requerido.' });
+    }
+
+    const tabla = actor.tipo === 'personal' ? 'personal' : 'suscriptores';
+    const campo = actor.tipo === 'personal' ? 'id_personal' : 'id_suscriptor';
+
+    await db.query(
+      `UPDATE ${tabla} SET fcm_token = ? WHERE ${campo} = ?`,
+      [fcm_token.trim(), actor.id]
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[POST /chat/fcm-token]', error);
+    res.status(500).json({ message: 'Error al guardar el token.' });
+  }
+}
