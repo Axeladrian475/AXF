@@ -44,7 +44,13 @@ async function enviarPushFCM({ fcm_token, titulo, cuerpo, data = {} }) {
   try {
     const accessToken = await getFCMAccessToken();
     const projectId   = 'axf-gymnet';
-    await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+
+    const dataStr = Object.fromEntries(
+      Object.entries({ ...data, titulo, cuerpo })
+        .map(([k, v]) => [k, String(v)])
+    );
+
+    const resp = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -53,19 +59,47 @@ async function enviarPushFCM({ fcm_token, titulo, cuerpo, data = {} }) {
       body: JSON.stringify({
         message: {
           token: fcm_token,
+          // Payload de notificación visible (Android background y web SW background)
           notification: { title: titulo, body: cuerpo },
+          // Android config
           android: {
             priority: 'high',
             notification: { sound: 'default', click_action: 'OPEN_CHAT' },
           },
-          data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
+          // Web Push config — necesario para que el navegador lo reciba
+          webpush: {
+            headers: {
+              Urgency: 'high',
+              TTL:     '86400',
+            },
+            notification: {
+              title: titulo,
+              body:  cuerpo,
+              icon:  '/axf-icon-192.png',
+              badge: '/axf-badge.png',
+              tag:   `chat-${data.id_suscriptor || 'msg'}`,
+              renotify: 'true',
+              requireInteraction: 'false',
+            },
+            fcm_options: { link: '/chat' },
+          },
+          // Data payload — llega tanto a Android como al Service Worker web
+          data: dataStr,
         },
       }),
     });
+
+    const respJson = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+      console.log('[FCM] ✅ Push enviado correctamente. Name:', respJson.name);
+    } else {
+      console.error('[FCM] ❌ Error al enviar push:', JSON.stringify(respJson));
+    }
   } catch (err) {
     console.error('[FCM] Error:', err.message);
   }
 }
+
 export function initSocket(httpServer) {
   io = new Server(httpServer, {
     cors: { origin: '*', credentials: false },
@@ -143,6 +177,55 @@ export function initSocket(httpServer) {
 
         io.to(sala_destino).emit('chat:mensaje_nuevo', { id_personal, id_suscriptor, mensaje: msg });
 
+        // ── Crear aviso en la campanita si el que escribe es el suscriptor ──
+        if (rol === 'suscriptor') {
+          try {
+            // Obtener nombre del suscriptor y sucursal del personal
+            const [[suscriptor]] = await db.query(
+              `SELECT CONCAT(nombres, ' ', apellido_paterno) AS nombre FROM suscriptores WHERE id_suscriptor = ?`,
+              [id_suscriptor]
+            );
+            const [[personalInfo]] = await db.query(
+              `SELECT id_sucursal FROM personal WHERE id_personal = ?`,
+              [id_personal]
+            );
+
+            if (personalInfo) {
+              const mensajeAviso = `💬 ${suscriptor?.nombre ?? 'Un suscriptor'}: ${contenido.trim().substring(0, 80)}${contenido.trim().length > 80 ? '…' : ''}`;
+
+              // Insertar aviso y su destinatario en una transacción
+              const conn = await db.getConnection();
+              try {
+                await conn.beginTransaction();
+                const [avisoRes] = await conn.query(
+                  `INSERT INTO avisos (id_sucursal, mensaje) VALUES (?, ?)`,
+                  [personalInfo.id_sucursal, mensajeAviso]
+                );
+                await conn.query(
+                  `INSERT INTO aviso_destinatarios (id_aviso, id_personal) VALUES (?, ?)`,
+                  [avisoRes.insertId, id_personal]
+                );
+                await conn.commit();
+
+                // Notificar en tiempo real a la campanita del personal
+                io.to(`personal:${id_personal}`).emit('aviso:nuevo', {
+                  id_aviso:  avisoRes.insertId,
+                  mensaje:   mensajeAviso,
+                  creado_en: new Date().toISOString(),
+                  leido:     0,
+                });
+              } catch (eAviso) {
+                await conn.rollback();
+                console.error('[aviso:chat]', eAviso.message);
+              } finally {
+                conn.release();
+              }
+            }
+          } catch (eAviso) {
+            console.error('[aviso:chat outer]', eAviso.message);
+          }
+        }
+
         // ── ¿El destinatario está online? ─────────────────────────────────
         const socketsDestino = await io.in(sala_destino).fetchSockets();
         if (socketsDestino.length > 0) {
@@ -165,11 +248,12 @@ export function initSocket(httpServer) {
               [destId]
             );
 
-            // Obtener nombre del emisor
+            // Obtener nombre del emisor (las tablas usan nombres + apellido_paterno)
             const tablaEmisor  = rol === 'personal' ? 'personal' : 'suscriptores';
             const campoEmisor  = rol === 'personal' ? 'id_personal' : 'id_suscriptor';
             const [[emisor]]   = await db.query(
-              `SELECT nombre FROM ${tablaEmisor} WHERE ${campoEmisor} = ?`,
+              `SELECT CONCAT(nombres, ' ', apellido_paterno) AS nombre
+               FROM ${tablaEmisor} WHERE ${campoEmisor} = ?`,
               [id]
             );
 
@@ -198,6 +282,7 @@ export function initSocket(httpServer) {
         callback?.({ ok: false, error: 'Error interno' });
       }
     });
+
 
     // ── MARCAR ENTREGADO ──────────────────────────────────────────────────
     socket.on('chat:marcar_entregado', async (data) => {

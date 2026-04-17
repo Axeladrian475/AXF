@@ -1,8 +1,11 @@
 import { useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import axiosClient from '../../api/axiosClient';
+import { io, Socket } from 'socket.io-client';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'http://localhost:3001';
+const WS_URL      = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
 interface Aviso {
   id_aviso:  number;
@@ -12,21 +15,17 @@ interface Aviso {
 }
 
 // ─── Formateador corregido ────────────────────────────────────────────────────
-// El backend guarda en UTC. toLocaleDateString con 'hour'/'minute' no funciona
-// de forma consistente — se debe usar toLocaleString con options explícitas.
-// Se fuerza la zona horaria de México (America/Mexico_City = UTC-6 / UTC-5 DST).
 function fmtFecha(iso: string): string {
   try {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
-
     return d.toLocaleString('es-MX', {
       timeZone:  'America/Mexico_City',
       day:       '2-digit',
       month:     'short',
       hour:      '2-digit',
       minute:    '2-digit',
-      hour12:    true,          // "05:34 a.m." en lugar de "17:34"
+      hour12:    true,
     });
   } catch {
     return iso;
@@ -34,7 +33,8 @@ function fmtFecha(iso: string): string {
 }
 
 export default function Header() {
-  const { user, logout } = useContext(AuthContext);
+  const { user, token, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [imgError, setImgError] = useState(false);
 
   // ── Avisos (solo para personal) ──────────────────────────────────────────
@@ -43,6 +43,7 @@ export default function Header() {
   const [abierto,  setAbierto]  = useState(false);
   const [marcando, setMarcando] = useState(false);
   const panelRef                = useRef<HTMLDivElement>(null);
+  const socketRef               = useRef<Socket | null>(null);
 
   const esPersonal = user?.rol === 'personal';
 
@@ -64,6 +65,31 @@ export default function Header() {
     const interval = setInterval(cargarAvisos, 60_000);
     return () => clearInterval(interval);
   }, [cargarAvisos, esPersonal]);
+
+  // ── Socket para avisos en tiempo real ────────────────────────────────────
+  useEffect(() => {
+    if (!esPersonal || !token) return;
+
+    const socket = io(WS_URL, {
+      auth:       { token },
+      transports: ['websocket'],
+      reconnectionAttempts: 10,
+    });
+    socketRef.current = socket;
+
+    socket.on('aviso:nuevo', (aviso: Aviso) => {
+      // Añadir al inicio de la lista y sumar al badge
+      setAvisos(prev => [aviso, ...prev]);
+      setNoLeidos(prev => prev + 1);
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [esPersonal, token]);
+
+
 
   // Cerrar panel al hacer clic fuera
   useEffect(() => {
@@ -159,26 +185,37 @@ export default function Header() {
                   {avisos.length === 0 ? (
                     <p className="text-gray-400 text-sm text-center py-8">Sin avisos</p>
                   ) : (
-                    avisos.map(a => (
-                      <div
-                        key={a.id_aviso}
-                        onClick={() => { if (!a.leido) marcarUnoLeido(a.id_aviso); }}
-                        className={`px-4 py-3 border-b border-gray-800 cursor-pointer transition-colors
-                          ${a.leido ? 'opacity-60 hover:bg-white/5' : 'bg-white/5 hover:bg-white/10'}`}
-                      >
-                        <div className="flex items-start gap-2">
-                          {/* Punto naranja = no leído */}
-                          {!a.leido && (
-                            <span className="mt-1.5 w-2 h-2 rounded-full bg-[#F26A21] shrink-0" />
-                          )}
-                          <div className={!a.leido ? '' : 'ml-4'}>
-                            <p className="text-white text-xs leading-snug">{a.mensaje}</p>
-                            {/* ← Fecha y hora correctamente formateada */}
-                            <p className="text-gray-500 text-[10px] mt-1">{fmtFecha(a.creado_en)}</p>
+                    avisos.map(a => {
+                      const esMensajeChat = a.mensaje.startsWith('💬');
+                      return (
+                        <div
+                          key={a.id_aviso}
+                          onClick={() => {
+                            if (!a.leido) marcarUnoLeido(a.id_aviso);
+                            if (esMensajeChat) {
+                              setAbierto(false);
+                              navigate('/chat');
+                            }
+                          }}
+                          className={`px-4 py-3 border-b border-gray-800 cursor-pointer transition-colors
+                            ${a.leido ? 'opacity-60 hover:bg-white/5' : 'bg-white/5 hover:bg-white/10'}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {/* Punto naranja = no leído */}
+                            {!a.leido && (
+                              <span className="mt-1.5 w-2 h-2 rounded-full bg-[#F26A21] shrink-0" />
+                            )}
+                            <div className={!a.leido ? '' : 'ml-4'}>
+                              <p className="text-white text-xs leading-snug">{a.mensaje}</p>
+                              {esMensajeChat && (
+                                <p className="text-[#F26A21] text-[10px] mt-0.5 font-semibold">Ir al chat →</p>
+                              )}
+                              <p className="text-gray-500 text-[10px] mt-1">{fmtFecha(a.creado_en)}</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
