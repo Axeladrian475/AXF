@@ -148,12 +148,9 @@ export default function TabsBuscarReportes() {
     setMsgResolver(null)
     try {
       const { data } = await axiosClient.post(`/reportes/${modalResolver.id_reporte}/resolver`)
-      setMsgResolver({ tipo: 'ok', texto: data.message ?? 'Caso resuelto.' })
-      setReportes(prev => prev.map(r =>
-        r.id_reporte === modalResolver.id_reporte
-          ? { ...r, estado: 'Resuelto' }
-          : r
-      ))
+      setMsgResolver({ tipo: 'ok', texto: data.message ?? 'Caso resuelto y eliminado.' })
+      // Eliminar la fila de la tabla — el reporte ya no existe en la BD
+      setReportes(prev => prev.filter(r => r.id_reporte !== modalResolver.id_reporte))
       setTimeout(() => { setModalResolver(null); setMsgResolver(null) }, 1500)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -249,6 +246,8 @@ export default function TabsBuscarReportes() {
                 <th className="text-left font-bold text-black pb-2 pr-4">Estado</th>
                 <th className="text-left font-bold text-black pb-2 pr-4">Sucursal / Categoría</th>
                 <th className="text-left font-bold text-black pb-2 pr-4">Suscriptor</th>
+                <th className="text-left font-bold text-black pb-2 pr-4">Descripción</th>
+                <th className="text-left font-bold text-black pb-2 pr-4">Fecha</th>
                 <th className="text-left font-bold text-black pb-2 pr-4">Evidencia</th>
                 <th className="text-left font-bold text-black pb-2">Acciones</th>
               </tr>
@@ -290,6 +289,29 @@ export default function TabsBuscarReportes() {
                     <td className="py-3 pr-4">
                       <p className="text-black font-medium">{r.nombre_suscriptor}</p>
                       <p className="text-gray-400 text-xs">{r.correo_suscriptor}</p>
+                    </td>
+
+                    {/* Descripción */}
+                    <td className="py-3 pr-4 max-w-[200px]">
+                      <p className="text-gray-700 text-xs leading-relaxed line-clamp-3 whitespace-pre-wrap break-words">
+                        {r.descripcion || <span className="text-gray-300 italic">Sin descripción</span>}
+                      </p>
+                    </td>
+
+                    {/* Fecha de creación */}
+                    <td className="py-3 pr-4 whitespace-nowrap">
+                      <p className="text-black text-xs font-medium">
+                        {new Date(r.creado_en).toLocaleDateString('es-MX', {
+                          timeZone: 'America/Mexico_City',
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                        })}
+                      </p>
+                      <p className="text-gray-400 text-xs">
+                        {new Date(r.creado_en).toLocaleTimeString('es-MX', {
+                          timeZone: 'America/Mexico_City',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                      </p>
                     </td>
 
                     {/* Evidencia */}
@@ -347,9 +369,14 @@ export default function TabsBuscarReportes() {
           onClick={e => { if (e.target === e.currentTarget && !guardandoEst) setModalEstado(null) }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <h3 className="font-bold text-gray-800 text-base mb-1">Actualizar Estado</h3>
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-gray-500 mb-3">
               Reporte #{modalEstado.id_reporte} — {modalEstado.nombre_suscriptor}
             </p>
+            {modalEstado.descripcion && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 mb-4 leading-relaxed">
+                📝 {modalEstado.descripcion}
+              </div>
+            )}
 
             <label className="block text-sm font-bold text-gray-700 mb-2">Nuevo estado</label>
             <select
@@ -398,12 +425,17 @@ export default function TabsBuscarReportes() {
           onClick={e => { if (e.target === e.currentTarget && !resolviendo) setModalResolver(null) }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <h3 className="font-bold text-gray-800 text-base mb-1">Resolver Caso</h3>
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-gray-500 mb-3">
               Reporte #{modalResolver.id_reporte} — {modalResolver.nombre_suscriptor}
             </p>
+            {modalResolver.descripcion && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 mb-4 leading-relaxed">
+                📝 {modalResolver.descripcion}
+              </div>
+            )}
 
             <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 text-sm text-orange-700 mb-4">
-              ⚠️ Esta acción marcará el reporte como <strong>Resuelto</strong>. No podrá deshacerse.
+              ⚠️ Esta acción <strong>eliminará el reporte permanentemente</strong> de la base de datos. No podrá deshacerse.
             </div>
 
             {msgResolver && (
@@ -447,6 +479,13 @@ export default function TabsBuscarReportes() {
                 <p className="text-xs text-gray-400 mt-0.5">
                   Reporte #{modalHistorial.id_reporte} — {modalHistorial.nombre_suscriptor}
                 </p>
+                <p className="text-xs text-gray-400">
+                  {new Date(modalHistorial.creado_en).toLocaleString('es-MX', {
+                    timeZone: 'America/Mexico_City',
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                </p>
               </div>
               <button
                 onClick={() => setModalHistorial(null)}
@@ -456,6 +495,11 @@ export default function TabsBuscarReportes() {
 
             {/* Contenido */}
             <div className="flex-1 overflow-y-auto p-6">
+              {modalHistorial.descripcion && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 mb-4 leading-relaxed">
+                  📝 {modalHistorial.descripcion}
+                </div>
+              )}
               {cargandoStrikes ? (
                 <div className="flex items-center gap-2 text-gray-500 text-sm py-4">
                   <div className="animate-spin w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full" />

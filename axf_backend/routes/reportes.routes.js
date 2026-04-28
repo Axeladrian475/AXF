@@ -176,7 +176,7 @@ router.get('/publicos/:id_sucursal', verificarSuscriptor, async (req, res) => {
          r.num_strikes,
          r.creado_en,
          COUNT(rs.id)                                        AS sumados,
-         MAX(CASE WHEN rs.id_suscriptor = ? THEN 1 ELSE 0 END) AS ya_sumado
+         COALESCE(MAX(CASE WHEN rs.id_suscriptor = ? THEN 1 ELSE 0 END), 0) AS ya_sumado
        FROM reportes r
        LEFT JOIN reporte_sumados rs ON rs.id_reporte = r.id_reporte
        WHERE r.id_sucursal = ?

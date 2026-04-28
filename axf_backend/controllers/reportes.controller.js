@@ -229,16 +229,10 @@ export async function resolverReporte(req, res) {
       `SELECT id_reporte, estado FROM reportes WHERE id_reporte = ?`, [id]
     );
     if (!reporte) return res.status(404).json({ message: 'Reporte no encontrado.' });
-    if (reporte.estado === 'Resuelto') {
-      return res.status(409).json({ message: 'El reporte ya está resuelto.' });
-    }
+    // Eliminar el reporte — reporte_sumados y strikes_reporte se borran por CASCADE
+    await db.query(`DELETE FROM reportes WHERE id_reporte = ?`, [id]);
 
-    await db.query(
-      `UPDATE reportes SET estado = 'Resuelto', resuelto_en = NOW() WHERE id_reporte = ?`,
-      [id]
-    );
-
-    res.json({ message: 'Reporte marcado como resuelto.', id_reporte: parseInt(id) });
+    res.json({ message: 'Reporte resuelto y eliminado correctamente.', id_reporte: parseInt(id) });
   } catch (error) {
     console.error('[POST /reportes/:id/resolver]', error);
     res.status(500).json({ message: 'Error al resolver el reporte.' });
