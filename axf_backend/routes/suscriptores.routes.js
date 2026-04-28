@@ -17,9 +17,15 @@
 //  GET    /api/suscriptores/movil/rutinas            → Rutinas asignadas
 //  GET    /api/suscriptores/movil/dietas             → Dieta más reciente
 //  GET    /api/suscriptores/movil/registros          → Historial físico
-//  GET    /api/suscriptores/movil/reportes           → Reportes públicos de una sucursal
-//  POST   /api/suscriptores/movil/reportes           → Crear reporte/incidencia
+//  GET    /api/suscriptores/movil/reportes           → (Legacy) Reportes públicos de una sucursal
+//  POST   /api/suscriptores/movil/reportes           → (Legacy) Crear reporte/incidencia
 //  GET    /api/suscriptores/movil/sucursales         → Lista de sucursales activas
+//  GET    /api/suscriptores/movil/personal/:id       → Personal de una sucursal
+//  GET    /api/suscriptores/movil/atencion-previa/:id → ¿Recibió atención de ese personal?
+//  POST   /api/suscriptores/movil/reportes/crear     → Crear reporte (tabla reportes)
+//  GET    /api/suscriptores/movil/reportes/publicos  → Reportes públicos activos por sucursal
+//  POST   /api/suscriptores/movil/reportes/sumar/:id → Sumarse a un reporte
+//  GET    /api/suscriptores/movil/reportes/mis-reportes → Historial propio
 // ============================================================================
 
 import multer          from 'multer';
@@ -157,14 +163,17 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
   try {
     const id = req.usuario.id;
     const [[sub]] = await db.query(
-      `SELECT fecha_fin FROM suscripciones
-       WHERE id_suscriptor = ? AND estado = 'Activa' AND fecha_fin >= CURDATE()
-       ORDER BY fecha_fin DESC LIMIT 1`,
+      `SELECT s.fecha_fin, ts.nombre AS nombre_plan
+       FROM suscripciones s
+       LEFT JOIN tipos_suscripcion ts ON ts.id_tipo = s.id_tipo
+       WHERE s.id_suscriptor = ? AND s.estado = 'Activa' AND s.fecha_fin >= CURDATE()
+       ORDER BY s.fecha_fin DESC LIMIT 1`,
       [id]
     );
     res.json({
       activa:            !!sub,
       vencimiento_final: sub ? sub.fecha_fin : null,
+      nombre_plan:       sub ? (sub.nombre_plan || null) : null,
     });
   } catch (err) {
     console.error('[GET /suscriptores/movil/suscripcion]', err);
@@ -343,6 +352,219 @@ router.get('/movil/sucursales', verificarSuscriptor, async (_req, res) => {
   } catch (err) {
     console.error('[GET /suscriptores/movil/sucursales]', err);
     res.status(500).json({ message: 'Error al obtener sucursales' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// MÓDULO DE REPORTES — app móvil (token de suscriptor)
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/suscriptores/movil/personal/:id_sucursal ────────────────────────
+// Personal activo de una sucursal para el selector de "Reporte de Personal"
+router.get('/movil/personal/:id_sucursal', verificarSuscriptor, async (req, res) => {
+  try {
+    const { id_sucursal } = req.params;
+    const [personal] = await db.query(
+      `SELECT id_personal, nombres, apellido_paterno, puesto, foto_url
+       FROM personal
+       WHERE id_sucursal = ? AND activo = 1
+       ORDER BY nombres ASC`,
+      [id_sucursal]
+    );
+    res.json(personal);
+  } catch (err) {
+    console.error('[GET /suscriptores/movil/personal/:id]', err);
+    res.status(500).json({ message: 'Error al obtener personal' });
+  }
+});
+
+// ── GET /api/suscriptores/movil/atencion-previa/:id_personal ─────────────────
+// Verifica si el suscriptor autenticado recibió atención del personal indicado
+router.get('/movil/atencion-previa/:id_personal', verificarSuscriptor, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+    const { id_personal } = req.params;
+
+    const [[{ cnt }]] = await db.query(
+      `SELECT COUNT(*) AS cnt FROM (
+         SELECT r.id_rutina
+         FROM rutinas r
+         WHERE r.id_suscriptor = ? AND r.id_entrenador = ?
+         UNION ALL
+         SELECT d.id_dieta
+         FROM dietas d
+         WHERE d.id_suscriptor = ? AND d.id_nutriologo = ?
+       ) t`,
+      [id_suscriptor, id_personal, id_suscriptor, id_personal]
+    );
+
+    res.json({ success: true, tuvo_atencion: cnt > 0 });
+  } catch (err) {
+    console.error('[GET /suscriptores/movil/atencion-previa/:id]', err);
+    res.status(500).json({ message: 'Error al verificar atención previa' });
+  }
+});
+
+// ── POST /api/suscriptores/movil/reportes/crear ──────────────────────────────
+// Crear un nuevo reporte (incidencia o de personal)
+router.post('/movil/reportes/crear', verificarSuscriptor, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+    const {
+      id_sucursal,
+      categoria,
+      descripcion,
+      es_privado,
+      id_personal_reportado,
+      sobre_atencion_previa,
+    } = req.body;
+
+    const categoriasValidas = ['Maquina_Dañada', 'Baño_Tapado', 'Problema_Limpieza', 'Reporte_Personal', 'Otro'];
+    if (!id_sucursal || !categoria || !descripcion) {
+      return res.status(400).json({ success: false, message: 'Sucursal, categoría y descripción son requeridos' });
+    }
+    if (!categoriasValidas.includes(categoria)) {
+      return res.status(400).json({ success: false, message: 'Categoría inválida' });
+    }
+
+    const esPersonal  = categoria === 'Reporte_Personal';
+    // Reportes de personal equivalen a tercer strike (alta prioridad)
+    const num_strikes = esPersonal ? 3 : 0;
+
+    const [result] = await db.query(
+      `INSERT INTO reportes
+         (id_suscriptor, id_sucursal, categoria, descripcion, es_privado,
+          id_personal_reportado, sobre_atencion_previa, estado, num_strikes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'Abierto', ?)`,
+      [
+        id_suscriptor,
+        id_sucursal,
+        categoria,
+        descripcion,
+        es_privado ? 1 : 0,
+        id_personal_reportado ?? null,
+        sobre_atencion_previa != null ? (sobre_atencion_previa ? 1 : 0) : null,
+        num_strikes,
+      ]
+    );
+
+    res.status(201).json({
+      success:    true,
+      message:    'Reporte enviado correctamente',
+      id_reporte: result.insertId,
+    });
+  } catch (err) {
+    console.error('[POST /suscriptores/movil/reportes/crear]', err);
+    res.status(500).json({ success: false, message: 'Error al crear reporte' });
+  }
+});
+
+// ── GET /api/suscriptores/movil/reportes/publicos?id_sucursal=X ──────────────
+// Reportes públicos activos de una sucursal (para que otros se sumen)
+router.get('/movil/reportes/publicos', verificarSuscriptor, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+    const { id_sucursal } = req.query;
+    if (!id_sucursal) return res.status(400).json({ message: 'id_sucursal requerido' });
+
+    const [reportes] = await db.query(
+      `SELECT
+         r.id_reporte,
+         r.categoria,
+         r.descripcion,
+         r.foto_url,
+         r.estado,
+         r.num_strikes,
+         r.creado_en,
+         (SELECT COUNT(*) FROM reporte_sumados rs WHERE rs.id_reporte = r.id_reporte) AS sumados,
+         EXISTS(
+           SELECT 1 FROM reporte_sumados rs2
+           WHERE rs2.id_reporte = r.id_reporte AND rs2.id_suscriptor = ?
+         ) AS ya_sumado
+       FROM reportes r
+       WHERE r.id_sucursal = ?
+         AND r.es_privado   = 0
+         AND r.categoria   != 'Reporte_Personal'
+         AND r.estado      != 'Resuelto'
+       ORDER BY r.num_strikes DESC, r.creado_en DESC
+       LIMIT 30`,
+      [id_suscriptor, id_sucursal]
+    );
+
+    res.json({
+      success: true,
+      reportes: reportes.map(r => ({ ...r, ya_sumado: !!r.ya_sumado })),
+    });
+  } catch (err) {
+    console.error('[GET /suscriptores/movil/reportes/publicos]', err);
+    res.status(500).json({ message: 'Error al obtener reportes' });
+  }
+});
+
+// ── POST /api/suscriptores/movil/reportes/sumar/:id_reporte ─────────────────
+// Sumarse a un reporte existente
+router.post('/movil/reportes/sumar/:id_reporte', verificarSuscriptor, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+    const { id_reporte } = req.params;
+
+    // Verificar que no sea el autor del reporte
+    const [[reporte]] = await db.query(
+      `SELECT id_suscriptor FROM reportes WHERE id_reporte = ?`, [id_reporte]
+    );
+    if (!reporte) return res.status(404).json({ success: false, message: 'Reporte no encontrado' });
+    if (reporte.id_suscriptor === id_suscriptor) {
+      return res.status(409).json({ success: false, message: 'No puedes sumarte a tu propio reporte' });
+    }
+
+    // Insertar ignorando duplicados
+    const [result] = await db.query(
+      `INSERT IGNORE INTO reporte_sumados (id_reporte, id_suscriptor) VALUES (?, ?)`,
+      [id_reporte, id_suscriptor]
+    );
+
+    const msg = result.affectedRows > 0
+      ? 'Te has sumado al reporte correctamente'
+      : 'Ya estabas sumado a este reporte';
+
+    res.json({ success: true, message: msg });
+  } catch (err) {
+    console.error('[POST /suscriptores/movil/reportes/sumar/:id]', err);
+    res.status(500).json({ success: false, message: 'Error al sumarse al reporte' });
+  }
+});
+
+// ── GET /api/suscriptores/movil/reportes/mis-reportes ────────────────────────
+// Historial de reportes del suscriptor autenticado
+router.get('/movil/reportes/mis-reportes', verificarSuscriptor, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+
+    const [reportes] = await db.query(
+      `SELECT
+         r.id_reporte,
+         r.id_sucursal,
+         s.nombre  AS nombre_sucursal,
+         r.categoria,
+         r.descripcion,
+         r.foto_url,
+         r.es_privado,
+         r.estado,
+         r.num_strikes,
+         r.creado_en,
+         CONCAT(p.nombres, ' ', p.apellido_paterno) AS nombre_personal_reportado
+       FROM reportes r
+       JOIN sucursales s ON s.id_sucursal = r.id_sucursal
+       LEFT JOIN personal p ON p.id_personal = r.id_personal_reportado
+       WHERE r.id_suscriptor = ?
+       ORDER BY r.creado_en DESC`,
+      [id_suscriptor]
+    );
+
+    res.json({ success: true, reportes });
+  } catch (err) {
+    console.error('[GET /suscriptores/movil/reportes/mis-reportes]', err);
+    res.status(500).json({ message: 'Error al obtener tus reportes' });
   }
 });
 
