@@ -58,6 +58,7 @@ interface Props {
   plan:              TipoSuscripcion
   suscriptorId:      number
   tieneActiva:       boolean
+  es_promocion?:     boolean
   vencimientoFinal?: string
   fmtFecha:          (iso: string) => string
   onSuccess:         (planNombre: string, fechaFin: string) => void
@@ -77,7 +78,7 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
 
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function ModalTarjeta({
-  plan, suscriptorId, tieneActiva, vencimientoFinal,
+  plan, suscriptorId, tieneActiva, es_promocion, vencimientoFinal,
   fmtFecha, onSuccess, onError, onClose,
 }: Props) {
 
@@ -129,7 +130,8 @@ export default function ModalTarjeta({
       createOrder: async () => {
         const data = await crearOrdenPago({
           id_suscriptor: suscriptorId,
-          id_tipo:       plan.id_tipo,
+          id_tipo:       es_promocion ? undefined : plan.id_tipo,
+          id_promocion:  es_promocion ? plan.id_tipo : undefined,
         })
         return data.order_id
       },
@@ -141,7 +143,8 @@ export default function ModalTarjeta({
           const result = await capturarOrden({
             order_id:      orderID,
             id_suscriptor: suscriptorId,
-            id_tipo:       plan.id_tipo,
+            id_tipo:       es_promocion ? undefined : plan.id_tipo,
+            id_promocion:  es_promocion ? plan.id_tipo : undefined,
           })
           if (result.ok && result.suscripcion) {
             onSuccess(result.suscripcion.plan_nombre, result.suscripcion.fecha_fin)

@@ -546,12 +546,13 @@ export async function obtenerSuscripcionActiva(req, res) {
          sub.sesiones_nutriologo_restantes,
          sub.sesiones_entrenador_restantes,
          sub.paypal_order_id,
-         ts.nombre          AS plan_nombre,
-         ts.duracion_dias   AS plan_duracion_dias,
-         ts.precio          AS plan_precio,
+         COALESCE(ts.nombre, p.nombre)          AS plan_nombre,
+         COALESCE(ts.duracion_dias, p.duracion_dias)   AS plan_duracion_dias,
+         COALESCE(ts.precio, p.precio)          AS plan_precio,
          sub.creado_en
        FROM suscripciones sub
        LEFT JOIN tipos_suscripcion ts ON ts.id_tipo = sub.id_tipo
+       LEFT JOIN promociones p ON p.id_promocion = sub.id_promocion
        WHERE sub.id_suscriptor = ?
          AND sub.estado = 'Activa'
          AND sub.fecha_fin >= CURDATE()

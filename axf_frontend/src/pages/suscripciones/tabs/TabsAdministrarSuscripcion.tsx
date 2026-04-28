@@ -650,6 +650,7 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
           }}
           suscriptorId={Number(suscriptorId)}
           tieneActiva={!!tieneActiva}
+          es_promocion={planSeleccionado.es_promocion}
           vencimientoFinal={vencimientoFinal}
           fmtFecha={fmtFecha}
           onSuccess={(planNombre, fechaFin) => {

@@ -21,7 +21,8 @@ export interface ConfirmarPagoResponse {
 /** Crea una orden en PayPal (usada por el flujo redirect Y por Card Fields) */
 export const crearOrdenPago = async (data: {
   id_suscriptor: number;
-  id_tipo:        number;
+  id_tipo?:      number;
+  id_promocion?: number;
 }): Promise<OrdenResponse> => {
   const response = await axiosClient.post('/pagos/crear-orden', data);
   return response.data;
@@ -31,11 +32,13 @@ export const crearOrdenPago = async (data: {
 export const confirmarPago = async (
   token: string,
   sus:   string,
-  tipo:  string,
+  tipo?: string,
+  promo?: string,
 ): Promise<ConfirmarPagoResponse> => {
-  const response = await axiosClient.get(
-    `/pagos/confirmar/${encodeURIComponent(token)}?sus=${sus}&tipo=${tipo}`
-  );
+  let url = `/pagos/confirmar/${encodeURIComponent(token)}?sus=${sus}`;
+  if (tipo) url += `&tipo=${tipo}`;
+  if (promo) url += `&promo=${promo}`;
+  const response = await axiosClient.get(url);
   return response.data;
 };
 
@@ -43,7 +46,8 @@ export const confirmarPago = async (
 export const capturarOrden = async (data: {
   order_id:      string;
   id_suscriptor: number;
-  id_tipo:       number;
+  id_tipo?:      number;
+  id_promocion?: number;
 }): Promise<ConfirmarPagoResponse> => {
   const response = await axiosClient.post('/pagos/capturar-orden', data);
   return response.data;

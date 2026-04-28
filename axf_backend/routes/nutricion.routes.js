@@ -220,8 +220,11 @@ router.get('/suscriptores', verificarToken, soloPersonal, soloNutriologo, async 
        FROM suscriptores s
        LEFT JOIN suscripciones sub ON sub.id_suscriptor = s.id_suscriptor
          AND sub.estado = 'Activa'
-         AND CURDATE() BETWEEN sub.fecha_inicio AND sub.fecha_fin
        WHERE s.id_sucursal_registro = ? AND s.activo = 1
+         AND EXISTS (
+           SELECT 1 FROM suscripciones
+           WHERE id_suscriptor = s.id_suscriptor AND estado = 'Activa' AND CURDATE() <= fecha_fin
+         )
        GROUP BY s.id_suscriptor
        ORDER BY s.nombres ASC`,
       [id_sucursal]
@@ -358,14 +361,25 @@ router.post('/dietas', verificarToken, soloPersonal, soloNutriologo, async (req,
       return res.status(400).json({ message: 'Suscriptor y comidas son obligatorios' });
     }
 
-    // Verificar sesiones disponibles
+    // 1. Verificar suscripcion activa vigente
+    const [[activa]] = await conn.query(
+      `SELECT id_suscripcion FROM suscripciones
+       WHERE id_suscriptor = ? AND estado = 'Activa' AND CURDATE() <= fecha_fin
+       LIMIT 1`,
+      [id_suscriptor]
+    );
+
+    if (!activa) {
+      return res.status(403).json({ message: 'El suscriptor no tiene una membresía activa vigente' });
+    }
+
+    // 2. Buscar sesiones disponibles de cualquier registro
     const [[sesion]] = await conn.query(
       `SELECT id_suscripcion, sesiones_nutriologo_restantes
        FROM suscripciones
        WHERE id_suscriptor = ? AND estado = 'Activa'
-         AND CURDATE() BETWEEN fecha_inicio AND fecha_fin
          AND sesiones_nutriologo_restantes > 0
-       ORDER BY fecha_fin ASC LIMIT 1`,
+       ORDER BY id_suscripcion ASC LIMIT 1`,
       [id_suscriptor]
     );
 

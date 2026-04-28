@@ -45,14 +45,17 @@ async function getPayPalToken() {
 }
 
 // ── Registrar suscripción en BD (idempotente) ─────────────────────────────────
-async function registrarSuscripcion(orderId, id_suscriptor, id_tipo) {
+async function registrarSuscripcion(orderId, id_suscriptor, id_tipo, id_promocion) {
   const fmt = (d) => d.toISOString().split('T')[0];
-  console.log(`[PayPal] registrarSuscripcion → order_id=${orderId}, suscriptor=${id_suscriptor}, tipo=${id_tipo}`);
+  console.log(`[PayPal] registrarSuscripcion → order_id=${orderId}, suscriptor=${id_suscriptor}, tipo=${id_tipo}, promo=${id_promocion}`);
 
   // Idempotencia
   const [[existe]] = await db.query(
-    `SELECT s.id_suscripcion, s.fecha_inicio, s.fecha_fin, s.estado, t.nombre AS plan_nombre
-     FROM suscripciones s JOIN tipos_suscripcion t ON t.id_tipo = s.id_tipo
+    `SELECT s.id_suscripcion, s.fecha_inicio, s.fecha_fin, s.estado,
+            COALESCE(t.nombre, p.nombre) AS plan_nombre
+     FROM suscripciones s
+     LEFT JOIN tipos_suscripcion t ON t.id_tipo = s.id_tipo
+     LEFT JOIN promociones p ON p.id_promocion = s.id_promocion
      WHERE s.paypal_order_id = ?`,
     [orderId]
   );
@@ -61,13 +64,25 @@ async function registrarSuscripcion(orderId, id_suscriptor, id_tipo) {
     return existe;
   }
 
-  const [[tipo]] = await db.query(
-    `SELECT duracion_dias, limite_sesiones_nutriologo, limite_sesiones_entrenador, nombre
-     FROM tipos_suscripcion WHERE id_tipo = ? AND activo = 1`,
-    [id_tipo]
-  );
-  if (!tipo) {
-    console.error(`[PayPal] Tipo suscripcion id_tipo=${id_tipo} no encontrado`);
+  let planData;
+  if (id_promocion) {
+    const [[promo]] = await db.query(
+      `SELECT duracion_dias, sesiones_nutriologo AS limite_sesiones_nutriologo, sesiones_entrenador AS limite_sesiones_entrenador, nombre
+       FROM promociones WHERE id_promocion = ? AND activo = 1`,
+      [id_promocion]
+    );
+    planData = promo;
+  } else {
+    const [[tipo]] = await db.query(
+      `SELECT duracion_dias, limite_sesiones_nutriologo, limite_sesiones_entrenador, nombre
+       FROM tipos_suscripcion WHERE id_tipo = ? AND activo = 1`,
+      [id_tipo]
+    );
+    planData = tipo;
+  }
+
+  if (!planData) {
+    console.error(`[PayPal] Plan no encontrado (tipo=${id_tipo}, promo=${id_promocion})`);
     return null;
   }
 
@@ -79,40 +94,45 @@ async function registrarSuscripcion(orderId, id_suscriptor, id_tipo) {
     [id_suscriptor]
   );
 
-  let inicio;
-  if (activa) {
-    inicio = new Date(activa.fecha_fin);
-    inicio.setDate(inicio.getDate() + 1);
+  let inicio, fin;
+  if (planData.duracion_dias > 0) {
+    if (activa) {
+      inicio = new Date(activa.fecha_fin);
+      inicio.setDate(inicio.getDate() + 1);
+    } else {
+      inicio = new Date();
+    }
+    fin = new Date(inicio);
+    fin.setDate(fin.getDate() + planData.duracion_dias - 1);
   } else {
+    // Solo sesiones, sin días adicionales
     inicio = new Date();
+    fin = new Date();
   }
-
-  const fin = new Date(inicio);
-  fin.setDate(fin.getDate() + tipo.duracion_dias - 1);
 
   const [result] = await db.query(
     `INSERT INTO suscripciones
-       (id_suscriptor, id_tipo, fecha_inicio, fecha_fin,
+       (id_suscriptor, id_tipo, id_promocion, fecha_inicio, fecha_fin,
         sesiones_nutriologo_restantes, sesiones_entrenador_restantes,
         estado, paypal_order_id)
-     VALUES (?, ?, ?, ?, ?, ?, 'Activa', ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'Activa', ?)`,
     [
-      id_suscriptor, id_tipo,
+      id_suscriptor, id_tipo || null, id_promocion || null,
       fmt(inicio), fmt(fin),
-      tipo.limite_sesiones_nutriologo,
-      tipo.limite_sesiones_entrenador,
+      planData.limite_sesiones_nutriologo,
+      planData.limite_sesiones_entrenador,
       orderId,
     ]
   );
 
-  console.log(`[PayPal] Suscripcion creada → id=${result.insertId}, suscriptor=${id_suscriptor}, plan="${tipo.nombre}", ${fmt(inicio)} → ${fmt(fin)}`);
+  console.log(`[PayPal] Suscripcion creada → id=${result.insertId}, suscriptor=${id_suscriptor}, plan="${planData.nombre}", ${fmt(inicio)} → ${fmt(fin)}`);
 
   return {
     id_suscripcion: result.insertId,
     fecha_inicio:   fmt(inicio),
     fecha_fin:      fmt(fin),
     estado:         'Activa',
-    plan_nombre:    tipo.nombre,
+    plan_nombre:    planData.nombre,
   };
 }
 
@@ -121,10 +141,10 @@ async function registrarSuscripcion(orderId, id_suscriptor, id_tipo) {
 // ============================================================================
 router.post('/crear-orden', verificarToken, personalOSucursal, async (req, res) => {
   try {
-    const { id_suscriptor, id_tipo } = req.body;
+    const { id_suscriptor, id_tipo, id_promocion } = req.body;
 
-    if (!id_suscriptor || !id_tipo) {
-      return res.status(400).json({ message: 'id_suscriptor e id_tipo son requeridos.' });
+    if (!id_suscriptor || (!id_tipo && !id_promocion)) {
+      return res.status(400).json({ message: 'id_suscriptor y (id_tipo o id_promocion) son requeridos.' });
     }
 
     let id_sucursal;
@@ -140,12 +160,21 @@ router.post('/crear-orden', verificarToken, personalOSucursal, async (req, res) 
       id_sucursal = emp.id_sucursal;
     }
 
-    const [[plan]] = await db.query(
-      `SELECT id_tipo, nombre, precio, duracion_dias
-       FROM tipos_suscripcion WHERE id_tipo = ? AND id_sucursal = ? AND activo = 1`,
-      [id_tipo, id_sucursal]
-    );
-    if (!plan) return res.status(404).json({ message: 'Plan no encontrado para esta sucursal.' });
+    let plan;
+    if (id_promocion) {
+      [[plan]] = await db.query(
+        `SELECT id_promocion AS id_tipo, nombre, precio, duracion_dias
+         FROM promociones WHERE id_promocion = ? AND id_sucursal = ? AND activo = 1`,
+        [id_promocion, id_sucursal]
+      );
+    } else {
+      [[plan]] = await db.query(
+        `SELECT id_tipo, nombre, precio, duracion_dias
+         FROM tipos_suscripcion WHERE id_tipo = ? AND id_sucursal = ? AND activo = 1`,
+        [id_tipo, id_sucursal]
+      );
+    }
+    if (!plan) return res.status(404).json({ message: 'Plan o promoción no encontrado para esta sucursal.' });
 
     const [[suscriptor]] = await db.query(
       `SELECT id_suscriptor, nombres, apellido_paterno, correo
@@ -155,7 +184,15 @@ router.post('/crear-orden', verificarToken, personalOSucursal, async (req, res) 
     if (!suscriptor) return res.status(404).json({ message: 'Suscriptor no encontrado.' });
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const customId    = `SUS-${id_suscriptor}-TIPO-${id_tipo}-${Date.now()}`;
+    let customId;
+    let returnUrl = `${frontendUrl}/suscripciones?pago=exitoso&sus=${id_suscriptor}`;
+    if (id_promocion) {
+      customId = `SUS-${id_suscriptor}-PROMO-${id_promocion}-${Date.now()}`;
+      returnUrl += `&promo=${id_promocion}`;
+    } else {
+      customId = `SUS-${id_suscriptor}-TIPO-${id_tipo}-${Date.now()}`;
+      returnUrl += `&tipo=${id_tipo}`;
+    }
 
     const token = await getPayPalToken();
 
@@ -189,7 +226,7 @@ router.post('/crear-orden', verificarToken, personalOSucursal, async (req, res) 
           landing_page:        'BILLING',
           shipping_preference: 'NO_SHIPPING',
           user_action:         'PAY_NOW',
-          return_url: `${frontendUrl}/suscripciones?pago=exitoso&sus=${id_suscriptor}&tipo=${id_tipo}`,
+          return_url: returnUrl,
           cancel_url: `${frontendUrl}/suscripciones?pago=cancelado`,
         },
       }),
@@ -222,11 +259,12 @@ router.post('/crear-orden', verificarToken, personalOSucursal, async (req, res) 
 router.get('/confirmar/:token', verificarToken, personalOSucursal, async (req, res) => {
   try {
     const { token: orderId } = req.params;
-    const sus  = req.query.sus;
-    const tipo = req.query.tipo;
+    const sus   = req.query.sus;
+    const tipo  = req.query.tipo;
+    const promo = req.query.promo;
 
-    if (!orderId || !sus || !tipo) {
-      return res.status(400).json({ ok: false, message: 'Faltan parametros: token, sus o tipo.' });
+    if (!orderId || !sus || (!tipo && !promo)) {
+      return res.status(400).json({ ok: false, message: 'Faltan parametros: token, sus, o tipo/promo.' });
     }
 
     const accessToken = await getPayPalToken();
@@ -251,7 +289,7 @@ router.get('/confirmar/:token', verificarToken, personalOSucursal, async (req, r
       });
     }
 
-    const suscripcion = await registrarSuscripcion(orderId, Number(sus), Number(tipo));
+    const suscripcion = await registrarSuscripcion(orderId, Number(sus), tipo ? Number(tipo) : null, promo ? Number(promo) : null);
     if (!suscripcion) {
       return res.status(500).json({ ok: false, message: 'Pago capturado pero fallo la creacion de suscripcion. Ver logs.' });
     }
@@ -273,10 +311,10 @@ router.get('/confirmar/:token', verificarToken, personalOSucursal, async (req, r
 // ============================================================================
 router.post('/capturar-orden', verificarToken, personalOSucursal, async (req, res) => {
   try {
-    const { order_id, id_suscriptor, id_tipo } = req.body;
+    const { order_id, id_suscriptor, id_tipo, id_promocion } = req.body;
 
-    if (!order_id || !id_suscriptor || !id_tipo) {
-      return res.status(400).json({ ok: false, message: 'Faltan parametros: order_id, id_suscriptor o id_tipo.' });
+    if (!order_id || !id_suscriptor || (!id_tipo && !id_promocion)) {
+      return res.status(400).json({ ok: false, message: 'Faltan parametros: order_id, id_suscriptor o id_tipo/id_promocion.' });
     }
 
     const accessToken = await getPayPalToken();
@@ -298,7 +336,7 @@ router.post('/capturar-orden', verificarToken, personalOSucursal, async (req, re
       return res.json({ ok: false, status: captured.status, message: detalleError });
     }
 
-    const suscripcion = await registrarSuscripcion(order_id, Number(id_suscriptor), Number(id_tipo));
+    const suscripcion = await registrarSuscripcion(order_id, Number(id_suscriptor), id_tipo ? Number(id_tipo) : null, id_promocion ? Number(id_promocion) : null);
     if (!suscripcion) {
       return res.status(500).json({ ok: false, message: 'Pago capturado pero fallo la creacion de suscripcion. Ver logs.' });
     }
@@ -329,11 +367,17 @@ router.post('/webhook', async (req, res) => {
 
   if (!orderId) { console.warn('[PayPal WEBHOOK] Sin order_id en el recurso'); return; }
 
-  const m = customId.match(/^SUS-(\d+)-TIPO-(\d+)-/);
-  if (!m) { console.error('[PayPal WEBHOOK] No se pudo extraer IDs de custom_id:', customId); return; }
+  const mTipo = customId.match(/^SUS-(\d+)-TIPO-(\d+)-/);
+  const mPromo = customId.match(/^SUS-(\d+)-PROMO-(\d+)-/);
+  
+  if (!mTipo && !mPromo) { console.error('[PayPal WEBHOOK] No se pudo extraer IDs de custom_id:', customId); return; }
 
   try {
-    await registrarSuscripcion(orderId, Number(m[1]), Number(m[2]));
+    if (mPromo) {
+      await registrarSuscripcion(orderId, Number(mPromo[1]), null, Number(mPromo[2]));
+    } else if (mTipo) {
+      await registrarSuscripcion(orderId, Number(mTipo[1]), Number(mTipo[2]), null);
+    }
   } catch (err) {
     console.error('[PayPal WEBHOOK] Error:', err?.message);
   }

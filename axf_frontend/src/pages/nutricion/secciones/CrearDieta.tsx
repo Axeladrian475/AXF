@@ -320,9 +320,9 @@ export default function CrearDieta({ onBack }: Props) {
           ))}
         </div>
 
-        <div id="pdf-dieta" className="flex gap-4">
+        <div id="pdf-dieta" className="flex gap-4 items-start relative">
           {/* Panel recetas */}
-          <div className="w-52 shrink-0">
+          <div className="w-52 shrink-0 sticky top-4">
             <p className="font-bold text-sm text-black mb-2">🔍 Buscar Receta</p>
             <input type="text" placeholder="Buscar receta por nombre..." value={busReceta}
               onChange={e => setBusReceta(e.target.value)}

@@ -374,10 +374,10 @@ export default function CrearRutina({ onBack }: Props) {
           </button>
         </div>
 
-        <div id="pdf-rutina" className="flex gap-4">
+        <div id="pdf-rutina" className="flex gap-4 items-start relative">
 
           {/* Panel ejercicios */}
-          <div className="w-48 shrink-0">
+          <div className="w-48 shrink-0 sticky top-4">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Ejercicios</p>
             <input type="text" placeholder="Buscar ejercicio..."
               value={busEj} onChange={e => setBusEj(e.target.value)}
