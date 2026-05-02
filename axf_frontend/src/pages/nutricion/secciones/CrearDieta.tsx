@@ -113,16 +113,19 @@ export default function CrearDieta({ onBack }: Props) {
 
     setComidas(comidas.map(c => {
       if (c.id !== comidaId) return c
+      // Usar parseFloat + Math.round para evitar concatenación de strings
+      const kcalActual = Math.round(parseFloat(c.kcal) || 0)
+      const kcalReceta = Math.round(receta.calorias ?? 0)
       return {
         ...c,
         texto: c.texto ? `${c.texto}\n\n${texto}` : texto,
-        kcal: c.kcal ? String(parseInt(c.kcal) + (receta.calorias ?? 0)) : String(receta.calorias ?? 0),
+        kcal: String(kcalActual + kcalReceta),
         id_receta: receta.id_receta,
       }
     }))
   }
 
-  const totalKcal = comidas.reduce((s, c) => s + (parseInt(c.kcal) || 0), 0)
+  const totalKcal = comidas.reduce((s, c) => s + (Math.round(parseFloat(c.kcal)) || 0), 0)
 
   const recetasFiltradas = useMemo(() =>
     recetas.filter(r => r.nombre.toLowerCase().includes(busReceta.toLowerCase())),

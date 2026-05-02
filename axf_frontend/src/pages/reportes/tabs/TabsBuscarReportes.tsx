@@ -35,6 +35,11 @@ interface Strike {
   horas_al_strike: number
 }
 
+interface Sumado {
+  nombre:    string
+  sumado_en: string
+}
+
 // ─── Estilos de strike ────────────────────────────────────────────────────────
 const STRIKE_STYLE: Record<number, { clase: string; etiqueta: string }> = {
   0: { clase: 'bg-gray-200 text-gray-600',   etiqueta: 'Sin Strike' },
@@ -96,6 +101,9 @@ export default function TabsBuscarReportes() {
   const [cargandoStrikes, setCargandoStrikes] = useState(false)
 
   const [modalFoto, setModalFoto]         = useState<string | null>(null)
+  const [modalSumados, setModalSumados]   = useState<Reporte | null>(null)
+  const [sumados, setSumados]             = useState<Sumado[]>([])
+  const [cargandoSumados, setCargandoSumados] = useState(false)
 
   // ── Cargar reportes ───────────────────────────────────────────────────────
   const cargar = useCallback(async () => {
@@ -172,6 +180,21 @@ export default function TabsBuscarReportes() {
       setStrikes([])
     } finally {
       setCargandoStrikes(false)
+    }
+  }
+
+  // ── Ver sumados ───────────────────────────────────────────────────────────
+  const verSumados = async (reporte: Reporte) => {
+    setModalSumados(reporte)
+    setCargandoSumados(true)
+    setSumados([])
+    try {
+      const { data } = await axiosClient.get(`/reportes/${reporte.id_reporte}`)
+      setSumados(data.sumados ?? [])
+    } catch {
+      setSumados([])
+    } finally {
+      setCargandoSumados(false)
     }
   }
 
@@ -352,6 +375,12 @@ export default function TabsBuscarReportes() {
                           className="bg-gray-500 text-white text-xs font-bold px-2 py-1 rounded hover:bg-gray-600 transition-colors"
                         >
                           Historial Strike
+                        </button>
+                        <button
+                          onClick={() => verSumados(r)}
+                          className="bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded hover:bg-purple-600 transition-colors"
+                        >
+                          👥 Sumados
                         </button>
                       </div>
                     </td>
@@ -544,6 +573,79 @@ export default function TabsBuscarReportes() {
                     )
                   })}
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ MODAL: VER SUMADOS ═══════════ */}
+      {modalSumados && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={e => { if (e.target === e.currentTarget) setModalSumados(null) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[75vh]">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="font-bold text-gray-800 text-base">Suscriptores Sumados</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Reporte #{modalSumados.id_reporte} — {modalSumados.nombre_sucursal}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                  {CATEGORIA_LABEL[modalSumados.categoria] ?? modalSumados.categoria}
+                </p>
+              </div>
+              <button
+                onClick={() => setModalSumados(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 text-sm transition-colors"
+              >✕</button>
+            </div>
+
+            {/* Descripcion del reporte */}
+            {modalSumados.descripcion && (
+              <div className="mx-6 mt-4 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 leading-relaxed">
+                📝 {modalSumados.descripcion}
+              </div>
+            )}
+
+            {/* Lista de sumados */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {cargandoSumados ? (
+                <div className="flex items-center gap-2 text-gray-500 text-sm py-6 justify-center">
+                  <div className="animate-spin w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full" />
+                  Cargando...
+                </div>
+              ) : sumados.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">
+                  <p className="text-3xl mb-2">👥</p>
+                  <p>Ningún suscriptor se ha sumado a este reporte.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">
+                    {sumados.length} {sumados.length === 1 ? 'persona se sumó' : 'personas se sumaron'}
+                  </p>
+                  <div className="space-y-2">
+                    {sumados.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between bg-purple-50 border border-purple-100 rounded-xl px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-bold text-sm flex-shrink-0">
+                            {s.nombre.charAt(0).toUpperCase()}
+                          </div>
+                          <p className="text-sm font-semibold text-gray-800">{s.nombre}</p>
+                        </div>
+                        <p className="text-xs text-gray-400 whitespace-nowrap ml-3">
+                          {new Date(s.sumado_en).toLocaleString('es-MX', {
+                            timeZone: 'America/Mexico_City',
+                            day: '2-digit', month: '2-digit', year: '2-digit',
+                            hour: '2-digit', minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </div>
