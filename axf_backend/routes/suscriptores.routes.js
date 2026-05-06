@@ -187,10 +187,11 @@ router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
     const id = req.usuario.id;
 
     const [rutinas] = await db.query(
-      `SELECT r.id_rutina, r.notas_pdf, r.creado_en,
-              CONCAT(p.nombres, ' ', p.apellido_paterno) AS entrenador
+      `SELECT r.id_rutina, r.notas_pdf,
+              DATE_FORMAT(r.creado_en, '%Y-%m-%dT%H:%i:%s.000Z') AS creado_en,
+              COALESCE(CONCAT(p.nombres, ' ', p.apellido_paterno), 'Entrenador') AS entrenador
        FROM rutinas r
-       JOIN personal p ON p.id_personal = r.id_entrenador
+       LEFT JOIN personal p ON p.id_personal = r.id_entrenador
        WHERE r.id_suscriptor = ?
        ORDER BY r.creado_en DESC`,
       [id]

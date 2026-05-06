@@ -342,12 +342,21 @@ export default function TabsBuscarReportes() {
                       {r.foto_url ? (
                         <button
                           onClick={() => setModalFoto(`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'http://localhost:3001'}${r.foto_url}`)}
-                          className="text-blue-600 text-xs font-bold hover:underline flex items-center gap-1"
+                          className="group relative block w-16 h-16 rounded-lg overflow-hidden border-2 border-orange-300 hover:border-orange-500 transition-colors flex-shrink-0"
+                          title="Ver foto completa"
                         >
-                          🖼 Ver Foto
+                          <img
+                            src={`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'http://localhost:3001'}${r.foto_url}`}
+                            alt="Evidencia"
+                            className="w-full h-full object-cover"
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                            <span className="text-white text-xs opacity-0 group-hover:opacity-100 font-bold">🔍</span>
+                          </div>
                         </button>
                       ) : (
-                        <span className="text-gray-400 text-xs">Sin imagen</span>
+                        <span className="text-gray-300 text-xs italic">Sin imagen</span>
                       )}
                     </td>
 

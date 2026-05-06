@@ -26,6 +26,10 @@
 
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import db from '../config/database.js';
 import { verificarToken, personalOSucursal, soloMaestro } from '../middlewares/auth.js';
 import {
@@ -43,6 +47,25 @@ import {
 } from '../services/strikes.service.js';
 
 const router = express.Router();
+
+// ── Multer: guardar fotos de reportes ──────────────────────────────────────
+const __filename_r = fileURLToPath(import.meta.url);
+const __dirname_r  = path.dirname(__filename_r);
+const UPLOADS_REP  = path.resolve(__dirname_r, '..', 'uploads', 'reportes');
+if (!fs.existsSync(UPLOADS_REP)) fs.mkdirSync(UPLOADS_REP, { recursive: true });
+
+const uploadReporte = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_REP),
+    filename:    (_req, file, cb) =>
+      cb(null, `rep_${Date.now()}${path.extname(file.originalname).toLowerCase()}`),
+  }),
+  limits:     { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Solo imágenes permitidas'));
+  },
+});
 
 // ── Middleware exclusivo para suscriptores (app móvil) ────────────────────────
 function verificarSuscriptor(req, res, next) {
@@ -114,8 +137,8 @@ router.get('/atencion-previa/:id_personal', verificarSuscriptor, async (req, res
   }
 });
 
-// POST /api/reportes/crear
-router.post('/crear', verificarSuscriptor, async (req, res) => {
+// POST /api/reportes/crear — acepta multipart/form-data (con foto opcional)
+router.post('/crear', verificarSuscriptor, uploadReporte.single('foto'), async (req, res) => {
   try {
     const {
       id_sucursal,
@@ -127,25 +150,38 @@ router.post('/crear', verificarSuscriptor, async (req, res) => {
     } = req.body;
 
     if (!id_sucursal || !categoria || !descripcion) {
+      // Si hubo multer error (formato incorrecto), limpiar el archivo
+      if (req.file) fs.unlinkSync(req.file.path);
       return res.status(400).json({
         success: false,
         message: 'Sucursal, categoría y descripción son requeridos',
       });
     }
 
+    // foto_url: ruta pública servida por express.static('/uploads')
+    const foto_url = req.file ? `/uploads/reportes/${req.file.filename}` : null;
+
+    // Normalizar booleanos que llegan como strings desde multipart
+    const esPrivadoVal         = (es_privado === 'true' || es_privado === true) ? 1 : 0;
+    const idPersonalVal        = id_personal_reportado || null;
+    const sobreAtencionVal     = sobre_atencion_previa != null
+      ? (sobre_atencion_previa === 'true' || sobre_atencion_previa === true ? 1 : 0)
+      : null;
+
     const [result] = await db.query(
       `INSERT INTO reportes
-         (id_suscriptor, id_sucursal, categoria, descripcion,
+         (id_suscriptor, id_sucursal, categoria, descripcion, foto_url,
           es_privado, id_personal_reportado, sobre_atencion_previa, estado)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'Abierto')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Abierto')`,
       [
         req.usuario.id,
         id_sucursal,
         categoria,
         descripcion,
-        es_privado ? 1 : 0,
-        id_personal_reportado || null,
-        sobre_atencion_previa != null ? (sobre_atencion_previa ? 1 : 0) : null,
+        foto_url,
+        esPrivadoVal,
+        idPersonalVal,
+        sobreAtencionVal,
       ]
     );
 
@@ -153,9 +189,12 @@ router.post('/crear', verificarSuscriptor, async (req, res) => {
       success: true,
       message: 'Reporte enviado correctamente',
       id_reporte: result.insertId,
+      foto_url,
     });
   } catch (e) {
     console.error('[POST /reportes/crear]', e);
+    // Limpiar archivo si el INSERT falló
+    if (req.file) try { fs.unlinkSync(req.file.path); } catch {}
     res.status(500).json({ success: false, message: 'Error al crear reporte' });
   }
 });
