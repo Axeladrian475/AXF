@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getSuscriptoresNutricion, getRecetas, crearDieta } from '../../../api/nutricionApi'
+import { getSuscriptoresNutricion, getRecetas, crearDieta, getRegistros } from '../../../api/nutricionApi'
 import type { SuscriptorNutricion, RecetaAPI } from '../../../api/nutricionApi'
 import { generarPDFDieta } from '../../../utils/pdfExport'
 import type { DietaPDFData } from '../../../utils/pdfExport'
@@ -74,7 +74,24 @@ export default function CrearDieta({ onBack }: Props) {
   const nombreCompleto = (s: SuscriptorNutricion) =>
     `${s.nombres} ${s.apellido_paterno} ${s.apellido_materno ?? ''}`.trim()
 
-  const metaDiaria = 2600
+  const [metaDiaria, setMetaDiaria]       = useState(2600)
+  const [cargandoMeta, setCargandoMeta]   = useState(false)
+
+  // Cuando se selecciona un suscriptor, traer su último TDEE registrado
+  useEffect(() => {
+    if (!susSelId) return
+    setCargandoMeta(true)
+    getRegistros(susSelId)
+      .then(registros => {
+        if (registros.length > 0 && registros[0].tdee != null) {
+          setMetaDiaria(Math.round(registros[0].tdee))
+        } else {
+          setMetaDiaria(2600)
+        }
+      })
+      .catch(() => setMetaDiaria(2600))
+      .finally(() => setCargandoMeta(false))
+  }, [susSelId])
 
   // ── Verificar sesión ──────────────────────────────────────────────────────
   const verificar = () => {
@@ -289,7 +306,10 @@ export default function CrearDieta({ onBack }: Props) {
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-400 italic">PDF se genera al guardar</span>
             <div className="text-right">
-              <p className="text-xs text-gray-500">Meta Diaria</p>
+              <p className="text-xs text-gray-500">
+                Meta Diaria (TDEE)
+                {cargandoMeta && <span className="ml-1 text-gray-400 animate-pulse">···</span>}
+              </p>
               <p className="font-black text-black">{metaDiaria.toLocaleString()} Kcal</p>
               <p className={`text-xs font-bold ${totalKcal > metaDiaria ? 'text-red-500' : 'text-green-600'}`}>
                 Total hoy: {totalKcal.toLocaleString()} Kcal

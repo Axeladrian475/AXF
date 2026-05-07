@@ -11,6 +11,9 @@ interface IngredienteDB {
   unidad_medicion: string
 }
 
+// Solo letras del alfabeto (con acentos, ñ, diéresis) y espacios simples
+const soloLetras = (val: string) => val.replace(/[^a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s]/g, '')
+
 export default function CargarIngrediente({ onBack }: Props) {
   const [nombre, setNombre]       = useState('')
   const [unidad, setUnidad]       = useState('g')
@@ -134,9 +137,13 @@ export default function CargarIngrediente({ onBack }: Props) {
             <div className="space-y-4 mb-5">
               <div>
                 <label className="block text-xs font-bold text-black mb-1">Nombre del Ingrediente</label>
-                <input value={nombre} onChange={e => setNombre(e.target.value)}
+                <input
+                  value={nombre}
+                  onChange={e => setNombre(soloLetras(e.target.value))}
                   placeholder="Ej. Pechuga de Pollo"
-                  className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-black text-sm focus:outline-none focus:border-[#ea580c]" />
+                  className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-black text-sm focus:outline-none focus:border-[#ea580c]"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Solo letras y espacios. Sin números ni caracteres especiales.</p>
               </div>
               <div>
                 <label className="block text-xs font-bold text-black mb-1">Unidad de Medida</label>
@@ -149,14 +156,14 @@ export default function CargarIngrediente({ onBack }: Props) {
 
             <button onClick={guardar} disabled={guardando}
               className="w-full bg-[#1e293b] text-white font-bold py-2 rounded hover:bg-[#0f172a] transition-colors text-sm disabled:opacity-50">
-              {guardando ? 'Guardando...' : 'Agregar a Base de Datos'}
+              {guardando ? 'Guardando...' : 'Agregar Ingrediente'}
             </button>
           </div>
 
           {/* Lista existentes */}
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="font-bold text-black text-base mb-1">
-              Ingredientes en BD
+              Ingredientes disponibles
               <span className="ml-2 text-[#ea580c] font-black">({lista.length})</span>
             </h3>
             <p className="text-xs text-gray-400 mb-3">Disponibles para uso en recetas.</p>
@@ -207,10 +214,11 @@ export default function CargarIngrediente({ onBack }: Props) {
                 <label className="block text-xs font-bold text-black mb-1">Nombre del Ingrediente</label>
                 <input
                   value={editNombre}
-                  onChange={e => setEditNombre(e.target.value)}
+                  onChange={e => setEditNombre(soloLetras(e.target.value))}
                   placeholder="Nombre del ingrediente"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black text-sm focus:outline-none focus:border-[#ea580c]"
                 />
+                <p className="text-[10px] text-gray-400 mt-1">Solo letras y espacios. Sin números ni caracteres especiales.</p>
               </div>
               <div>
                 <label className="block text-xs font-bold text-black mb-1">Unidad de Medida</label>

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getSuscriptoresNutricion, getRegistros, crearRegistro, eliminarRegistro } from '../../../api/nutricionApi'
 import type { SuscriptorNutricion, RegistroFisico } from '../../../api/nutricionApi'
+import { generarPDFHistorial } from '../../../utils/pdfExport'
+import type { HistorialPDFData } from '../../../utils/pdfExport'
 
 interface Props { onBack: () => void }
 
@@ -166,6 +168,17 @@ export default function RegistroUsuarios({ onBack }: Props) {
     } catch { /* silencio */ }
   }
 
+  const imprimirHistorial = () => {
+    if (!paciente || historial.length === 0) return
+    const pdfData: HistorialPDFData = {
+      suscriptor: { nombre: nombreCompleto(paciente) },
+      nutriologo: historial[0]?.nutriologo ?? '',
+      registros: historial,
+      fecha: new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }),
+    }
+    generarPDFHistorial(pdfData)
+  }
+
   const nombreCompleto = (s: SuscriptorNutricion) =>
     `${s.nombres} ${s.apellido_paterno} ${s.apellido_materno ?? ''}`.trim()
 
@@ -184,17 +197,17 @@ export default function RegistroUsuarios({ onBack }: Props) {
 
         {loadError && (
           <div className="mb-4 bg-red-50 border border-red-300 text-red-800 text-sm font-bold px-4 py-3 rounded-lg">
-            ❌ {loadError}
+            {loadError}
           </div>
         )}
         {exito && (
           <div className="mb-4 bg-green-50 border border-green-300 text-green-800 text-sm font-bold px-4 py-3 rounded-lg">
-            ✅ {exito}
+            {exito}
           </div>
         )}
         {error && (
           <div className="mb-4 bg-red-50 border border-red-300 text-red-800 text-sm font-bold px-4 py-3 rounded-lg">
-            ❌ {error}
+            {error}
           </div>
         )}
 
@@ -296,7 +309,7 @@ export default function RegistroUsuarios({ onBack }: Props) {
               {/* Botón calcular */}
               <button onClick={() => setCalculado(true)}
                 className="w-full bg-[#1e293b] text-white font-bold py-2 rounded hover:bg-[#0f172a] transition-colors text-sm">
-                🔎 Calcular Macronutrientes
+                Calcular Macronutrientes
               </button>
 
               {/* Resultados */}
@@ -324,7 +337,7 @@ export default function RegistroUsuarios({ onBack }: Props) {
                   <div className="flex justify-end items-end col-span-2">
                     <button onClick={guardar} disabled={guardando}
                       className="bg-green-600 text-white font-bold px-6 py-2 rounded hover:bg-green-700 transition-colors text-sm disabled:opacity-50">
-                      {guardando ? 'Guardando...' : '💾 Guardar Registro'}
+                      {guardando ? 'Guardando...' : 'Guardar Registro'}
                     </button>
                   </div>
                 </div>
@@ -332,12 +345,20 @@ export default function RegistroUsuarios({ onBack }: Props) {
 
               {/* Historial */}
               <div>
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">🗂 Historial de Registros</h4>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase">🗂 Historial de Registros</h4>
+                  {historial.length > 0 && (
+                    <button onClick={imprimirHistorial}
+                      className="flex items-center gap-1 bg-[#1e293b] text-white text-xs font-bold px-3 py-1.5 rounded hover:bg-[#0f172a] transition-colors">
+                      Imprimir PDF
+                    </button>
+                  )}
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead>
                       <tr className="bg-gray-100">
-                        {['Fecha','Peso (kg)','TMB / TDEE','Nutriólogo','Acción'].map(h => (
+                        {['Fecha','Peso (kg)','Altura (cm)','% Grasa','% Músculo','Objetivo','TMB / TDEE','Nutriólogo','Notas','Acción'].map(h => (
                           <th key={h} className="text-left font-bold text-black px-3 py-2 border border-gray-200">{h}</th>
                         ))}
                       </tr>
@@ -347,8 +368,17 @@ export default function RegistroUsuarios({ onBack }: Props) {
                         <tr key={r.id_registro} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="px-3 py-2 text-black">{new Date(r.creado_en).toLocaleDateString()}</td>
                           <td className="px-3 py-2 text-black">{r.peso_kg}</td>
+                          <td className="px-3 py-2 text-black">{r.altura_cm ?? '-'}</td>
+                          <td className="px-3 py-2 text-black">{r.pct_grasa != null ? `${r.pct_grasa}%` : '-'}</td>
+                          <td className="px-3 py-2 text-black">{r.pct_musculo != null ? `${r.pct_musculo}%` : '-'}</td>
+                          <td className="px-3 py-2 text-black">{r.objetivo ?? '-'}</td>
                           <td className="px-3 py-2 text-black">{r.tmb ?? '-'} / {r.tdee ?? '-'}</td>
                           <td className="px-3 py-2 text-black">{r.nutriologo}</td>
+                          <td className="px-3 py-2 text-black max-w-[140px]">
+                            {r.notas
+                              ? <span title={r.notas} className="block truncate text-gray-600 italic">{r.notas}</span>
+                              : <span className="text-gray-300">—</span>}
+                          </td>
                           <td className="px-3 py-2">
                             <button onClick={() => borrarRegistro(r.id_registro)}
                               className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded hover:bg-red-600">
@@ -359,7 +389,7 @@ export default function RegistroUsuarios({ onBack }: Props) {
                       ))}
                       {historial.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-3 py-4 text-center text-gray-400">Sin registros previos</td>
+                          <td colSpan={10} className="px-3 py-4 text-center text-gray-400">Sin registros previos</td>
                         </tr>
                       )}
                     </tbody>

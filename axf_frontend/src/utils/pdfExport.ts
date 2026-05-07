@@ -438,6 +438,213 @@ export function generarPDFDieta(data: DietaPDFData) {
   imprimirVentana(html)
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  HISTORIAL FÍSICO
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface RegistroHistorialPDF {
+  id_registro:   number
+  creado_en:     string
+  peso_kg:       number
+  altura_cm:     number | null
+  pct_grasa:     number | null
+  pct_musculo:   number | null
+  objetivo:      string | null
+  actividad:     string | null
+  tmb:           number | null
+  tdee:          number | null
+  proteinas_min: number | null
+  proteinas_max: number | null
+  grasas_min:    number | null
+  grasas_max:    number | null
+  carbs_min:     number | null
+  carbs_max:     number | null
+  notas:         string | null
+  nutriologo:    string
+}
+
+export interface HistorialPDFData {
+  suscriptor: { nombre: string }
+  nutriologo:  string
+  registros:   RegistroHistorialPDF[]
+  fecha:       string
+}
+
+export function generarPDFHistorial(data: HistorialPDFData) {
+  const fmt = (v: number | null) => (v != null ? String(v) : '—')
+  const fmtPct = (v: number | null) => (v != null ? `${v}%` : '—')
+  const fmtRango = (a: number | null, b: number | null) =>
+    a != null && b != null ? `${a}–${b}` : '—'
+
+  const filas = data.registros.map((r, i) => {
+    const fecha = new Date(r.creado_en).toLocaleDateString('es-MX', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    })
+    const bg = i % 2 === 0 ? '#fff' : '#f8fafc'
+
+    const macroRow = (r.proteinas_min != null || r.carbs_min != null || r.grasas_min != null)
+      ? `<tr style="background:${bg};page-break-inside:avoid;">
+           <td colspan="8" style="padding:0 10px 10px 10px;">
+             <div style="display:flex;gap:8px;flex-wrap:wrap;">
+               ${r.proteinas_min != null ? `<span style="background:#e0f2fe;color:#0369a1;border-radius:20px;padding:2px 10px;font-size:10px;font-weight:700;">Prot: ${fmtRango(r.proteinas_min, r.proteinas_max)} g</span>` : ''}
+               ${r.carbs_min != null     ? `<span style="background:#dcfce7;color:#15803d;border-radius:20px;padding:2px 10px;font-size:10px;font-weight:700;">Carbs: ${fmtRango(r.carbs_min, r.carbs_max)} g</span>` : ''}
+               ${r.grasas_min != null    ? `<span style="background:#fef9c3;color:#a16207;border-radius:20px;padding:2px 10px;font-size:10px;font-weight:700;">Grasas: ${fmtRango(r.grasas_min, r.grasas_max)} g</span>` : ''}
+               ${r.notas ? `<span style="background:#fffbeb;color:#92400e;border-radius:4px;padding:2px 10px;font-size:10px;font-style:italic;">${r.notas}</span>` : ''}
+             </div>
+           </td>
+         </tr>`
+      : (r.notas
+          ? `<tr style="background:${bg};page-break-inside:avoid;">
+               <td colspan="8" style="padding:0 10px 10px 10px;">
+                 <span style="background:#fffbeb;color:#92400e;border-radius:4px;padding:2px 10px;font-size:10px;font-style:italic;">${r.notas}</span>
+               </td>
+             </tr>`
+          : '')
+
+    return `
+      <tr style="background:${bg};page-break-inside:avoid;border-top:1px solid #e2e8f0;">
+        <td style="padding:10px 10px 4px;">${fecha}</td>
+        <td style="padding:10px 10px 4px;font-weight:700;color:#1e293b;">${fmt(r.peso_kg)} kg</td>
+        <td style="padding:10px 10px 4px;">${fmt(r.altura_cm)} cm</td>
+        <td style="padding:10px 10px 4px;">${fmtPct(r.pct_grasa)}</td>
+        <td style="padding:10px 10px 4px;">${fmtPct(r.pct_musculo)}</td>
+        <td style="padding:10px 10px 4px;font-size:11px;color:#64748b;">${r.objetivo ?? '—'}</td>
+        <td style="padding:10px 10px 4px;">
+          <span style="background:#1e293b;color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;">
+            ${fmt(r.tmb)} / ${fmt(r.tdee)}
+          </span>
+        </td>
+        <td style="padding:10px 10px 4px;font-size:11px;color:#64748b;">${r.nutriologo}</td>
+      </tr>
+      ${macroRow}`
+  }).join('')
+
+  const totalRegistros = data.registros.length
+
+  // Calcular progreso de peso (primero vs último)
+  const pesoInicial = data.registros.length > 0 ? data.registros[data.registros.length - 1].peso_kg : null
+  const pesoActual  = data.registros.length > 0 ? data.registros[0].peso_kg : null
+  const difPeso     = pesoInicial != null && pesoActual != null
+    ? (pesoActual - pesoInicial).toFixed(1)
+    : null
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Historial Físico — ${data.suscriptor.nombre}</title>
+  <style>
+    ${BASE_CSS}
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      page-break-inside: avoid;
+    }
+    .stat-card .val { font-size: 20px; font-weight: 800; color: #ea580c; }
+    .stat-card .lbl { font-size: 10px; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: .5px; }
+    .hist-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 12px;
+    }
+    .hist-table thead tr { background: #1e293b; }
+    .hist-table thead th {
+      padding: 9px 10px;
+      color: #94a3b8;
+      font-size: 10px;
+      text-align: left;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="${LOGO_URL}" alt="AXF GymNet" onerror="this.style.display='none'" />
+    <div class="header-right">
+      <div class="doc-title">Historial Físico</div>
+      <div class="doc-date">${data.fecha}</div>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="info-card">
+      <div class="info-accent"></div>
+      <div class="info-body">
+        <div class="name">${data.suscriptor.nombre}</div>
+        <div class="meta">
+          <span>Nutriólogo: <strong>${data.nutriologo}</strong></span>
+          <span>Registros totales: <strong>${totalRegistros}</strong></span>
+          ${difPeso != null
+            ? `<span>Cambio de peso: <strong style="color:${parseFloat(difPeso) <= 0 ? '#16a34a' : '#dc2626'};">${parseFloat(difPeso) > 0 ? '+' : ''}${difPeso} kg</strong></span>`
+            : ''}
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="val">${totalRegistros}</div>
+        <div class="lbl">Mediciones</div>
+      </div>
+      <div class="stat-card">
+        <div class="val">${pesoActual != null ? `${pesoActual} kg` : '—'}</div>
+        <div class="lbl">Peso actual</div>
+      </div>
+      <div class="stat-card">
+        <div class="val">${pesoInicial != null ? `${pesoInicial} kg` : '—'}</div>
+        <div class="lbl">Peso inicial</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" style="color:${difPeso != null && parseFloat(difPeso) <= 0 ? '#16a34a' : '#dc2626'};">
+          ${difPeso != null ? `${parseFloat(difPeso) > 0 ? '+' : ''}${difPeso} kg` : '—'}
+        </div>
+        <div class="lbl">Variación total</div>
+      </div>
+    </div>
+
+    <div class="section-title">Historial de Mediciones</div>
+    <table class="hist-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Peso</th>
+          <th>Altura</th>
+          <th>% Grasa</th>
+          <th>% Músculo</th>
+          <th>Objetivo</th>
+          <th>TMB / TDEE</th>
+          <th>Nutriólogo</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filas || `<tr><td colspan="8" style="padding:20px;text-align:center;color:#94a3b8;">Sin registros</td></tr>`}
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <span class="brand">AXF GymNet</span>
+      <span>Documento generado el ${data.fecha}</span>
+      <span>Uso exclusivo del suscriptor</span>
+    </div>
+  </div>
+</body>
+</html>`
+
+  imprimirVentana(html)
+}
+
 // Mantener compatibilidad con el exportarPDF anterior si alguien lo usa
 export async function exportarPDF(
   _elementId: string,

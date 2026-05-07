@@ -219,7 +219,7 @@ export default function CargarReceta({ onBack }: Props) {
           {/* Lista guardadas */}
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h3 className="font-bold text-black text-base mb-1">
-              Recetas en Base de Datos
+              Recetas
               <span className="ml-2 text-[#ea580c] font-black">({recetasGuardadas.length})</span>
             </h3>
             <p className="text-xs text-gray-400 mb-3">
