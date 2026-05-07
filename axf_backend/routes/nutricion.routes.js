@@ -18,8 +18,6 @@ function soloNutriologo(req, res, next) {
   next();
 }
 
-// getSucursalId importado desde middlewares/auth.js
-
 // ════════════════════════════════════════════════════════════════════════════════
 //  INGREDIENTES
 // ════════════════════════════════════════════════════════════════════════════════
@@ -97,7 +95,6 @@ router.delete('/ingredientes/:id', verificarToken, soloPersonal, soloNutriologo,
     if (!ing) { conn.release(); return res.status(404).json({ message: 'Ingrediente no encontrado' }); }
 
     await conn.beginTransaction();
-    // Eliminar referencias en receta_ingredientes (FK sin CASCADE)
     await conn.query('DELETE FROM receta_ingredientes WHERE id_ingrediente = ?', [req.params.id]);
     await conn.query('DELETE FROM ingredientes WHERE id_ingrediente = ?', [req.params.id]);
     await conn.commit();
@@ -124,7 +121,6 @@ router.get('/recetas', verificarToken, soloPersonal, soloNutriologo, async (_req
        ORDER BY creado_en DESC`
     );
 
-    // Cargar ingredientes de cada receta
     for (const r of recetas) {
       const [ings] = await db.query(
         `SELECT ri.cantidad, i.nombre, i.unidad_medicion
@@ -144,7 +140,6 @@ router.get('/recetas', verificarToken, soloPersonal, soloNutriologo, async (_req
 });
 
 // POST /api/nutricion/recetas
-// Body: { nombre, proteinas_g, calorias, grasas_g, ingredientes: [{ id_ingrediente, cantidad }] }
 router.post('/recetas', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   const conn = await db.getConnection();
   try {
@@ -177,12 +172,60 @@ router.post('/recetas', verificarToken, soloPersonal, soloNutriologo, async (req
     }
 
     await conn.commit();
-
     res.status(201).json({ message: 'Receta creada', id_receta });
   } catch (err) {
     await conn.rollback();
     console.error('[POST /nutricion/recetas]', err);
     res.status(500).json({ message: 'Error al crear receta' });
+  } finally {
+    conn.release();
+  }
+});
+
+// PUT /api/nutricion/recetas/:id
+router.put('/recetas/:id', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
+  const conn = await db.getConnection();
+  try {
+    const { nombre, proteinas_g, calorias, grasas_g, ingredientes } = req.body;
+
+    if (!nombre?.trim()) {
+      return res.status(400).json({ message: 'El nombre de la receta es obligatorio' });
+    }
+
+    const parsedIngs = typeof ingredientes === 'string' ? JSON.parse(ingredientes) : ingredientes;
+    if (!Array.isArray(parsedIngs) || parsedIngs.length === 0) {
+      return res.status(400).json({ message: 'Se requiere al menos un ingrediente' });
+    }
+
+    const [[existe]] = await conn.query(
+      'SELECT id_receta FROM recetas WHERE id_receta = ?',
+      [req.params.id]
+    );
+    if (!existe) return res.status(404).json({ message: 'Receta no encontrada' });
+
+    await conn.beginTransaction();
+
+    await conn.query(
+      `UPDATE recetas SET nombre = ?, proteinas_g = ?, calorias = ?, grasas_g = ?
+       WHERE id_receta = ?`,
+      [nombre.trim(), proteinas_g || null, calorias || null, grasas_g || null, req.params.id]
+    );
+
+    await conn.query('DELETE FROM receta_ingredientes WHERE id_receta = ?', [req.params.id]);
+
+    for (const ing of parsedIngs) {
+      await conn.query(
+        'INSERT INTO receta_ingredientes (id_receta, id_ingrediente, cantidad) VALUES (?, ?, ?)',
+        [req.params.id, ing.id_ingrediente, ing.cantidad]
+      );
+    }
+
+    await conn.commit();
+    res.json({ message: 'Receta actualizada' });
+  } catch (err) {
+    await conn.rollback();
+    console.error('[PUT /nutricion/recetas/:id]', err);
+    res.status(500).json({ message: 'Error al actualizar receta' });
   } finally {
     conn.release();
   }
@@ -207,7 +250,6 @@ router.delete('/recetas/:id', verificarToken, soloPersonal, soloNutriologo, asyn
 // ════════════════════════════════════════════════════════════════════════════════
 
 // GET /api/nutricion/suscriptores
-// Devuelve suscriptores activos de la misma sucursal con sesiones_nutriologo_restantes
 router.get('/suscriptores', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   try {
     const id_sucursal = getSucursalId(req.usuario);
@@ -321,7 +363,6 @@ router.delete('/registros/:id', verificarToken, soloPersonal, soloNutriologo, as
 // GET /api/nutricion/dietas/:id_suscriptor
 router.get('/dietas/:id_suscriptor', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   try {
-    // Obtener la última dieta
     const [[dieta]] = await db.query(
       `SELECT d.*, CONCAT(p.nombres, ' ', p.apellido_paterno) AS nutriologo
        FROM dietas d
@@ -351,7 +392,6 @@ router.get('/dietas/:id_suscriptor', verificarToken, soloPersonal, soloNutriolog
 });
 
 // POST /api/nutricion/dietas
-// Body: { id_suscriptor, comidas: [{ dia, orden_comida, descripcion, id_receta?, calorias?, notas? }] }
 router.post('/dietas', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   const conn = await db.getConnection();
   try {
@@ -361,7 +401,6 @@ router.post('/dietas', verificarToken, soloPersonal, soloNutriologo, async (req,
       return res.status(400).json({ message: 'Suscriptor y comidas son obligatorios' });
     }
 
-    // 1. Verificar suscripcion activa vigente
     const [[activa]] = await conn.query(
       `SELECT id_suscripcion FROM suscripciones
        WHERE id_suscriptor = ? AND estado = 'Activa' AND CURDATE() <= fecha_fin
@@ -373,7 +412,6 @@ router.post('/dietas', verificarToken, soloPersonal, soloNutriologo, async (req,
       return res.status(403).json({ message: 'El suscriptor no tiene una membresía activa vigente' });
     }
 
-    // 2. Buscar sesiones disponibles de cualquier registro
     const [[sesion]] = await conn.query(
       `SELECT id_suscripcion, sesiones_nutriologo_restantes
        FROM suscripciones
@@ -389,20 +427,17 @@ router.post('/dietas', verificarToken, soloPersonal, soloNutriologo, async (req,
 
     await conn.beginTransaction();
 
-    // Descontar sesión
     await conn.query(
       'UPDATE suscripciones SET sesiones_nutriologo_restantes = sesiones_nutriologo_restantes - 1 WHERE id_suscripcion = ?',
       [sesion.id_suscripcion]
     );
 
-    // Crear dieta
     const [result] = await conn.query(
       'INSERT INTO dietas (id_suscriptor, id_nutriologo) VALUES (?, ?)',
       [id_suscriptor, req.usuario.id]
     );
     const id_dieta = result.insertId;
 
-    // Insertar comidas
     for (const c of comidas) {
       await conn.query(
         `INSERT INTO dieta_comidas (id_dieta, dia, orden_comida, descripcion, id_receta, calorias, notas)

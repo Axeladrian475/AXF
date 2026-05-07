@@ -43,6 +43,15 @@ export const crearReceta = (data: {
 }) =>
   axiosClient.post('/nutricion/recetas', data).then(r => r.data);
 
+export const actualizarReceta = (id: number, data: {
+  nombre: string;
+  calorias?: string | number;
+  proteinas_g?: string | number;
+  grasas_g?: string | number;
+  ingredientes: { id_ingrediente: number; cantidad: number }[];
+}) =>
+  axiosClient.put(`/nutricion/recetas/${id}`, data).then(r => r.data);
+
 export const eliminarReceta = (id: number) =>
   axiosClient.delete(`/nutricion/recetas/${id}`).then(r => r.data);
 
