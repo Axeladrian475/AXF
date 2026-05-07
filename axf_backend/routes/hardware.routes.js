@@ -265,5 +265,147 @@ router.post('/acceso', verificarApiKey, async (req, res) => {
     res.status(500).json({ message: 'Error interno' });
   }
 });
+// ── POST /api/hardware/acceso/sucursal ──────────────────────────────────────
+// Llamado por el ESP32 de la puerta cuando detecta un NFC.
+// Determina si es Entrada o Salida según el último movimiento del suscriptor hoy.
+// Actualiza sucursal_aforo y registra en accesos con tipo_movimiento.
+// Body:     { api_key, tipo:"nfc", valor:"UID", id_sucursal }
+// Response: { resultado, nombre, movimiento, personas_dentro }
+// ────────────────────────────────────────────────────────────────────────────
+router.post('/acceso/sucursal', verificarApiKey, async (req, res) => {
+  const { tipo, valor, id_sucursal } = req.body;
+
+  if (tipo !== 'nfc' || !valor || !id_sucursal) {
+    return res.status(400).json({ message: 'tipo "nfc", valor e id_sucursal son requeridos' });
+  }
+
+  try {
+    // 1. Buscar suscriptor por NFC
+    const [rows] = await db.query(
+      `SELECT id_suscriptor, nombres, apellido_paterno
+         FROM suscriptores WHERE nfc_uid = ? LIMIT 1`,
+      [valor]
+    );
+    const suscriptor = rows[0];
+
+    if (!suscriptor) {
+      await db.query(
+        `INSERT INTO accesos (id_suscriptor, id_sucursal, metodo, resultado, tipo_movimiento, fecha_hora)
+         VALUES (0, ?, 'NFC', 'Denegado_No_Encontrado', NULL, NOW())`,
+        [id_sucursal]
+      );
+      return res.json({
+        resultado: 'Denegado_No_Encontrado',
+        nombre: null,
+        movimiento: null,
+        personas_dentro: 0
+      });
+    }
+
+    const nombre = `${suscriptor.nombres} ${suscriptor.apellido_paterno}`;
+
+    // 2. Verificar suscripción activa
+    const [[sub]] = await db.query(
+      `SELECT id_suscripcion FROM suscripciones
+        WHERE id_suscriptor = ? AND estado = 'Activa' AND fecha_fin >= CURDATE()
+        LIMIT 1`,
+      [suscriptor.id_suscriptor]
+    );
+
+    if (!sub) {
+      await db.query(
+        `INSERT INTO accesos (id_suscriptor, id_sucursal, metodo, resultado, tipo_movimiento, fecha_hora)
+         VALUES (?, ?, 'NFC', 'Denegado_Sin_Sub', NULL, NOW())`,
+        [suscriptor.id_suscriptor, id_sucursal]
+      );
+      return res.json({
+        resultado: 'Denegado_Sin_Sub',
+        nombre,
+        movimiento: null,
+        personas_dentro: 0
+      });
+    }
+
+    // 3. Determinar si es Entrada o Salida
+    //    Si no hay movimiento hoy o el último fue Salida → Entrada
+    //    Si el último fue Entrada → Salida
+    const [[ultimoMovimiento]] = await db.query(
+      `SELECT tipo_movimiento FROM accesos
+        WHERE id_suscriptor = ? AND id_sucursal = ?
+          AND tipo_movimiento IS NOT NULL
+          AND DATE(fecha_hora) = CURDATE()
+        ORDER BY fecha_hora DESC LIMIT 1`,
+      [suscriptor.id_suscriptor, id_sucursal]
+    );
+
+    const movimiento = (!ultimoMovimiento || ultimoMovimiento.tipo_movimiento === 'Salida')
+      ? 'Entrada'
+      : 'Salida';
+
+    // 4. Registrar en accesos
+    await db.query(
+      `INSERT INTO accesos (id_suscriptor, id_sucursal, metodo, resultado, tipo_movimiento, fecha_hora)
+       VALUES (?, ?, 'NFC', 'Permitido', ?, NOW())`,
+      [suscriptor.id_suscriptor, id_sucursal, movimiento]
+    );
+
+    // 5. Actualizar aforo en tiempo real (nunca baja de 0)
+    if (movimiento === 'Entrada') {
+      await db.query(
+        `INSERT INTO sucursal_aforo (id_sucursal, personas_dentro)
+           VALUES (?, 1)
+         ON DUPLICATE KEY UPDATE
+           personas_dentro = personas_dentro + 1`,
+        [id_sucursal]
+      );
+    } else {
+      await db.query(
+        `INSERT INTO sucursal_aforo (id_sucursal, personas_dentro)
+           VALUES (?, 0)
+         ON DUPLICATE KEY UPDATE
+           personas_dentro = GREATEST(0, personas_dentro - 1)`,
+        [id_sucursal]
+      );
+    }
+
+    // 6. Leer aforo actualizado para devolverlo al ESP32
+    const [[aforo]] = await db.query(
+      `SELECT personas_dentro FROM sucursal_aforo WHERE id_sucursal = ?`,
+      [id_sucursal]
+    );
+    const personasDentro = aforo ? aforo.personas_dentro : 0;
+
+    console.log(`[HW/ACCESO] ${movimiento} — ${nombre} — Sucursal ${id_sucursal} — Aforo: ${personasDentro}`);
+    res.json({ resultado: 'Permitido', nombre, movimiento, personas_dentro: personasDentro });
+
+  } catch (err) {
+    console.error('[HW/ACCESO/SUCURSAL] Error:', err.message);
+    res.status(500).json({ message: 'Error interno' });
+  }
+});
+
+// ── GET /api/hardware/aforo/:id_sucursal ────────────────────────────────────
+// El frontend consulta el aforo actual de una sucursal.
+// No requiere api_key — el panel web ya está autenticado con JWT.
+// Response: { id_sucursal, personas_dentro, actualizado_en }
+// ────────────────────────────────────────────────────────────────────────────
+router.get('/aforo/:id_sucursal', async (req, res) => {
+  const { id_sucursal } = req.params;
+  try {
+    const [[aforo]] = await db.query(
+      `SELECT personas_dentro, actualizado_en
+         FROM sucursal_aforo WHERE id_sucursal = ?`,
+      [id_sucursal]
+    );
+    res.json({
+      id_sucursal:     parseInt(id_sucursal),
+      personas_dentro: aforo ? aforo.personas_dentro : 0,
+      actualizado_en:  aforo ? aforo.actualizado_en  : null
+    });
+  } catch (err) {
+    console.error('[HW/AFORO] Error:', err.message);
+    res.status(500).json({ message: 'Error interno' });
+  }
+});
 
 export default router;
