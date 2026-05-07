@@ -289,11 +289,8 @@ router.post('/acceso/sucursal', verificarApiKey, async (req, res) => {
     const suscriptor = rows[0];
 
     if (!suscriptor) {
-      await db.query(
-        `INSERT INTO accesos (id_suscriptor, id_sucursal, metodo, resultado, tipo_movimiento, fecha_hora)
-         VALUES (0, ?, 'NFC', 'Denegado_No_Encontrado', NULL, NOW())`,
-        [id_sucursal]
-      );
+      // No insertamos en accesos porque no hay suscriptor válido (FK no lo permite)
+      console.log(`[HW/ACCESO/SUCURSAL] Denegado — NFC no registrado: ${valor}`);
       return res.json({
         resultado: 'Denegado_No_Encontrado',
         nombre: null,
