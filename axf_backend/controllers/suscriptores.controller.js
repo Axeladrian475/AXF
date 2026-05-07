@@ -822,22 +822,42 @@ export async function eliminarSuscriptor(req, res) {
 
     await conn.beginTransaction();
 
-    // Borrar tablas relacionadas sin CASCADE (en orden para evitar FK conflicts)
-    await conn.query('DELETE FROM historial_accesos WHERE id_suscriptor = ?', [id]);
-    await conn.query('DELETE FROM canjes WHERE id_suscriptor = ?', [id]);
-    await conn.query('DELETE FROM chat_mensajes WHERE id_suscriptor = ?', [id]);
-    // dieta_comidas se borra en cascada al borrar dietas
-    await conn.query('DELETE FROM dietas WHERE id_suscriptor = ?', [id]);
-    await conn.query('DELETE FROM registros_fisicos WHERE id_suscriptor = ?', [id]);
-    // registro_entrenamiento referencia rutinas → borrar primero
+    // ── Nivel 3: hijos de hijos (deben ir antes que sus padres) ──────────────
+    // strikes_reporte → hijo de reportes
+    await conn.query(
+      'DELETE sr FROM strikes_reporte sr INNER JOIN reportes r ON sr.id_reporte = r.id_reporte WHERE r.id_suscriptor = ?',
+      [id]
+    );
+    // reporte_sumados → hijo de reportes
+    await conn.query(
+      'DELETE rs FROM reporte_sumados rs INNER JOIN reportes r ON rs.id_reporte = r.id_reporte WHERE r.id_suscriptor = ?',
+      [id]
+    );
+    // dieta_comidas → hijo de dietas
+    await conn.query(
+      'DELETE dc FROM dieta_comidas dc INNER JOIN dietas d ON dc.id_dieta = d.id_dieta WHERE d.id_suscriptor = ?',
+      [id]
+    );
+    // rutina_ejercicios → hijo de rutinas
+    await conn.query(
+      'DELETE re FROM rutina_ejercicios re INNER JOIN rutinas r ON re.id_rutina = r.id_rutina WHERE r.id_suscriptor = ?',
+      [id]
+    );
+    // registro_entrenamiento → referencia rutina_ejercicios
     await conn.query('DELETE FROM registro_entrenamiento WHERE id_suscriptor = ?', [id]);
-    await conn.query('DELETE FROM reportes WHERE id_suscriptor = ?', [id]);
-    await conn.query('DELETE FROM reporte_sumados WHERE id_suscriptor = ?', [id]);
-    // rutina_ejercicios se borra en cascada al borrar rutinas
-    await conn.query('DELETE FROM rutinas WHERE id_suscriptor = ?', [id]);
-    // sensor_huella_posiciones tiene ON DELETE CASCADE
-    await conn.query('DELETE FROM suscripciones WHERE id_suscriptor = ?', [id]);
 
+    // ── Nivel 2: hijos directos del suscriptor ────────────────────────────────
+    await conn.query('DELETE FROM accesos                  WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM canjes                   WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM chat_mensajes            WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM dietas                   WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM registros_fisicos        WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM reportes                 WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM rutinas                  WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM sensor_huella_posiciones WHERE id_suscriptor = ?', [id]);
+    await conn.query('DELETE FROM suscripciones            WHERE id_suscriptor = ?', [id]);
+
+    // ── Nivel 1: el suscriptor ────────────────────────────────────────────────
     await conn.query('DELETE FROM suscriptores WHERE id_suscriptor = ?', [id]);
 
     await conn.commit();
