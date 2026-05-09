@@ -28,14 +28,14 @@
 //  GET    /api/suscriptores/movil/reportes/mis-reportes → Historial propio
 // ============================================================================
 
-import multer          from 'multer';
-import path            from 'path';
-import fs              from 'fs';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
-import bcrypt          from 'bcryptjs';
-import jwt             from 'jsonwebtoken';
-import express         from 'express';
-import db              from '../config/database.js';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import express from 'express';
+import db from '../config/database.js';
 import {
   verificarToken,
   personalOSucursal,
@@ -58,17 +58,17 @@ const router = express.Router();
 
 // ── Configuración multer para fotos de incidencias (app móvil) ───────────────
 const __filename2 = fileURLToPath(import.meta.url);
-const __dirname2  = path.dirname(__filename2);
+const __dirname2 = path.dirname(__filename2);
 const UPLOADS_INC = path.resolve(__dirname2, '..', 'uploads', 'incidencias');
 if (!fs.existsSync(UPLOADS_INC)) fs.mkdirSync(UPLOADS_INC, { recursive: true });
 
 const uploadInc = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, UPLOADS_INC),
-    filename:    (_req, file, cb) =>
+    filename: (_req, file, cb) =>
       cb(null, `inc_${Date.now()}${path.extname(file.originalname).toLowerCase()}`),
   }),
-  limits:     { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Solo imágenes'));
@@ -121,11 +121,11 @@ router.post('/login', async (req, res) => {
       message: 'Login exitoso.',
       token,
       suscriptor: {
-        id:               suscriptor.id_suscriptor,
-        nombres:          suscriptor.nombres,
-        apellidoPaterno:  suscriptor.apellido_paterno,
-        correo:           suscriptor.correo,
-        sucursalId:       suscriptor.id_sucursal_registro,
+        id: suscriptor.id_suscriptor,
+        nombres: suscriptor.nombres,
+        apellidoPaterno: suscriptor.apellido_paterno,
+        correo: suscriptor.correo,
+        sucursalId: suscriptor.id_sucursal_registro,
         suscripcionActiva: !!sub,
         fechaVencimiento: sub ? sub.fecha_fin : null,
       },
@@ -171,9 +171,9 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
       [id]
     );
     res.json({
-      activa:            !!sub,
+      activa: !!sub,
       vencimiento_final: sub ? sub.fecha_fin : null,
-      nombre_plan:       sub ? (sub.nombre_plan || null) : null,
+      nombre_plan: sub ? (sub.nombre_plan || null) : null,
     });
   } catch (err) {
     console.error('[GET /suscriptores/movil/suscripcion]', err);
@@ -321,7 +321,7 @@ router.post('/movil/reportes', verificarSuscriptor, uploadInc.single('foto'), as
       return res.status(400).json({ message: 'Sucursal, categoría y descripción son requeridos' });
     }
 
-    const foto_url   = req.file ? `/uploads/incidencias/${req.file.filename}` : null;
+    const foto_url = req.file ? `/uploads/incidencias/${req.file.filename}` : null;
     const es_privado = privado === 'true' || privado === true ? 1 : 0;
 
     const [result] = await db.query(
@@ -332,7 +332,7 @@ router.post('/movil/reportes', verificarSuscriptor, uploadInc.single('foto'), as
     );
 
     res.status(201).json({
-      message:       'Reporte enviado correctamente',
+      message: 'Reporte enviado correctamente',
       id_incidencia: result.insertId,
     });
   } catch (err) {
@@ -428,9 +428,10 @@ router.post('/movil/reportes/crear', verificarSuscriptor, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Categoría inválida' });
     }
 
-    const esPersonal  = categoria === 'Reporte_Personal';
-    // Reportes de personal equivalen a tercer strike (alta prioridad)
+    const esPersonal = categoria === 'Reporte_Personal';
+    // Reportes de personal → alta prioridad, privado forzado, sin esperar strikes
     const num_strikes = esPersonal ? 3 : 0;
+    const esPrivadoFinal = esPersonal ? 1 : (es_privado ? 1 : 0);
 
     const [result] = await db.query(
       `INSERT INTO reportes
@@ -442,17 +443,66 @@ router.post('/movil/reportes/crear', verificarSuscriptor, async (req, res) => {
         id_sucursal,
         categoria,
         descripcion,
-        es_privado ? 1 : 0,
+        esPrivadoFinal,
         id_personal_reportado ?? null,
         sobre_atencion_previa != null ? (sobre_atencion_previa ? 1 : 0) : null,
         num_strikes,
       ]
     );
 
+    const id_reporte = result.insertId;
+
+    // ── Notificar INMEDIATAMENTE al usuario Sucursal si es Reporte_Personal ────
+    // El encargado de la sucursal es el responsable de dar seguimiento,
+    // NO el personal reportado.
+    if (esPersonal) {
+      try {
+        const { getIO } = await import('../config/socket.js');
+        const io = getIO();
+
+        // Obtener nombre del personal reportado (si se especificó)
+        let nombrePersonalReportado = null;
+        if (id_personal_reportado) {
+          const [[personal]] = await db.query(
+            `SELECT CONCAT(nombres, ' ', apellido_paterno) AS nombre, puesto
+             FROM personal WHERE id_personal = ?`,
+            [id_personal_reportado]
+          );
+          nombrePersonalReportado = personal
+            ? `${personal.nombre} (${personal.puesto})`
+            : null;
+        }
+
+        // Obtener nombre del suscriptor que reporta
+        const [[suscriptor]] = await db.query(
+          `SELECT CONCAT(nombres, ' ', apellido_paterno) AS nombre
+           FROM suscriptores WHERE id_suscriptor = ?`,
+          [id_suscriptor]
+        );
+
+        // Emitir SOLO a la sala de la sucursal correspondiente
+        io.to(`sucursal:${id_sucursal}`).emit('reporte:personal_nuevo', {
+          id_reporte,
+          categoria,
+          descripcion,
+          urgente: true,
+          nombre_suscriptor: suscriptor?.nombre ?? 'Suscriptor',
+          nombre_personal_reportado: nombrePersonalReportado,
+          generado_en: new Date().toISOString(),
+          mensaje: `🚨 Nuevo reporte de personal recibido. Requiere tu atención inmediata.`,
+        });
+
+        console.log(`[REPORTE_PERSONAL] Notificado a sucursal:${id_sucursal} → Reporte #${id_reporte}`);
+      } catch (socketErr) {
+        // Socket.io no disponible en dev sin WS, no bloquear la respuesta
+        console.warn('[REPORTE_PERSONAL] Socket.io no disponible:', socketErr.message);
+      }
+    }
+
     res.status(201).json({
-      success:    true,
-      message:    'Reporte enviado correctamente',
-      id_reporte: result.insertId,
+      success: true,
+      message: 'Reporte enviado correctamente',
+      id_reporte,
     });
   } catch (err) {
     console.error('[POST /suscriptores/movil/reportes/crear]', err);
@@ -578,11 +628,11 @@ router.post('/movil/entrenamiento/serie', verificarSuscriptor, async (req, res) 
   try {
     const id_suscriptor = req.usuario.id;
     const { id_rutina_ejercicio, num_serie, peso_levantado, reps_realizadas } = req.body;
- 
+
     if (!id_rutina_ejercicio || !num_serie) {
       return res.status(400).json({ message: 'id_rutina_ejercicio y num_serie son requeridos.' });
     }
- 
+
     // Verificar que el ejercicio pertenece a una rutina asignada a este suscriptor
     const [[ejercicio]] = await db.query(
       `SELECT re.id, r.id_suscriptor
@@ -591,11 +641,11 @@ router.post('/movil/entrenamiento/serie', verificarSuscriptor, async (req, res) 
        WHERE re.id = ? AND r.id_suscriptor = ?`,
       [id_rutina_ejercicio, id_suscriptor]
     );
- 
+
     if (!ejercicio) {
       return res.status(403).json({ message: 'Ejercicio no encontrado o no pertenece a tu rutina.' });
     }
- 
+
     // Insertar o actualizar si ya existe esa serie (por si se re-completa)
     await db.query(
       `INSERT INTO registro_entrenamiento
@@ -607,9 +657,9 @@ router.post('/movil/entrenamiento/serie', verificarSuscriptor, async (req, res) 
          registrado_en   = CURRENT_TIMESTAMP`,
       [id_rutina_ejercicio, id_suscriptor, num_serie, peso_levantado ?? null, reps_realizadas ?? null]
     );
- 
+
     res.status(201).json({ message: 'Serie registrada correctamente.' });
- 
+
   } catch (err) {
     console.error('[POST /suscriptores/movil/entrenamiento/serie]', err);
     res.status(500).json({ message: 'Error al registrar la serie.' });
@@ -619,9 +669,9 @@ router.post('/movil/entrenamiento/serie', verificarSuscriptor, async (req, res) 
 router.use(verificarToken, personalOSucursal);
 
 // ─── Rutas sin parámetro :id ──────────────────────────────────────────────────
-router.get   ('/otras-sucursales', listarSuscriptoresOtrasSucursales);
-router.post  ('/',                 registrarSuscriptor);
-router.get   ('/',                 listarSuscriptores);
+router.get('/otras-sucursales', listarSuscriptoresOtrasSucursales);
+router.post('/', registrarSuscriptor);
+router.get('/', listarSuscriptores);
 
 // ── POST /api/suscriptores/identificar ──────────────────────────────────────
 router.post('/identificar', async (req, res) => {
@@ -654,13 +704,13 @@ router.post('/identificar', async (req, res) => {
 });
 
 // ─── Rutas con parámetro :id ──────────────────────────────────────────────────
-router.get   ('/:id',                    obtenerSuscriptor);
-router.put   ('/:id',                    modificarSuscriptor);
-router.delete('/:id',                    eliminarSuscriptor);
-router.post  ('/:id/migrar',             migrarSuscriptor);
-router.get   ('/:id/suscripcion-activa', obtenerSuscripcionActiva);
-router.post  ('/:id/suscribir',          suscribirSuscriptor);
-router.post  ('/:id/aplicar-promo',      aplicarPromocion);
+router.get('/:id', obtenerSuscriptor);
+router.put('/:id', modificarSuscriptor);
+router.delete('/:id', eliminarSuscriptor);
+router.post('/:id/migrar', migrarSuscriptor);
+router.get('/:id/suscripcion-activa', obtenerSuscripcionActiva);
+router.post('/:id/suscribir', suscribirSuscriptor);
+router.post('/:id/aplicar-promo', aplicarPromocion);
 router.delete('/:id/suscripcion/:id_sub', cancelarSuscripcion);
 
 export default router;

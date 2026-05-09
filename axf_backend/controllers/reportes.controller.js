@@ -21,7 +21,7 @@ import db from '../config/database.js';
 // ════════════════════════════════════════════════════════════════════════════
 export async function listarReportes(req, res) {
   try {
-    const { q = '', estado, strike, limite = 50, offset = 0 } = req.query;
+    const { q = '', estado, strike, categoria, limite = 50, offset = 0 } = req.query;
     const lim = Math.min(parseInt(limite) || 50, 200);
     const off = parseInt(offset) || 0;
 
@@ -55,6 +55,10 @@ export async function listarReportes(req, res) {
       conditions.push('r.num_strikes = ?');
       params.push(parseInt(strike));
     }
+    if (categoria && categoria.trim()) {
+      conditions.push('r.categoria = ?');
+      params.push(categoria.trim());
+    }
     if (q.trim()) {
       conditions.push(`(
         CAST(r.id_reporte AS CHAR) LIKE ? OR
@@ -63,6 +67,11 @@ export async function listarReportes(req, res) {
       )`);
       const like = `%${q.trim()}%`;
       params.push(like, like, like);
+    }
+
+    // El personal NO ve los reportes de personal — son responsabilidad del encargado de sucursal
+    if (req.usuario.rol === 'personal') {
+      conditions.push(`r.categoria != 'Reporte_Personal'`);
     }
 
     const WHERE = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -82,6 +91,9 @@ export async function listarReportes(req, res) {
          s.correo                                   AS correo_suscriptor,
          suc.nombre                                 AS nombre_sucursal,
          suc.id_sucursal,
+         -- Personal reportado (si aplica)
+         CONCAT(p.nombres, ' ', p.apellido_paterno) AS nombre_personal_reportado,
+         p.puesto                                   AS puesto_personal_reportado,
          -- Último strike registrado
          (SELECT sr.generado_en
           FROM strikes_reporte sr
@@ -92,6 +104,7 @@ export async function listarReportes(req, res) {
        FROM reportes r
        INNER JOIN suscriptores s   ON s.id_suscriptor = r.id_suscriptor
        INNER JOIN sucursales suc   ON suc.id_sucursal  = r.id_sucursal
+       LEFT  JOIN personal p       ON p.id_personal   = r.id_personal_reportado
        ${WHERE}
        ORDER BY r.num_strikes DESC, r.creado_en ASC
        LIMIT ? OFFSET ?`,
@@ -283,6 +296,8 @@ export async function resumenReportes(req, res) {
       id_sucursal = emp?.id_sucursal ?? null;
     }
 
+    // El personal NO ve reportes de personal en sus contadores
+    const excluirPersonal = req.usuario.rol === 'personal' ? `AND categoria != 'Reporte_Personal'` : '';
     const filtroSuc = id_sucursal ? 'AND id_sucursal = ?' : '';
     const paramSuc  = id_sucursal ? [id_sucursal] : [];
 
@@ -297,7 +312,7 @@ export async function resumenReportes(req, res) {
          SUM(num_strikes = 3 AND estado != 'Resuelto')                   AS strike3,
          SUM(num_strikes > 0  AND estado != 'Resuelto')                  AS con_alerta
        FROM reportes
-       WHERE 1=1 ${filtroSuc}`,
+       WHERE 1=1 ${filtroSuc} ${excluirPersonal}`,
       paramSuc
     );
 

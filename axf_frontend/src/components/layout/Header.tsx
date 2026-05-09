@@ -14,6 +14,15 @@ interface Aviso {
   leido:     number;
 }
 
+interface AlertaPersonal {
+  id_reporte:                 number;
+  mensaje:                    string;
+  nombre_suscriptor:          string;
+  nombre_personal_reportado?: string;
+  generado_en:                string;
+  leida:                      boolean;
+}
+
 // ─── Formateador corregido ────────────────────────────────────────────────────
 function fmtFecha(iso: string): string {
   try {
@@ -45,7 +54,14 @@ export default function Header() {
   const panelRef                = useRef<HTMLDivElement>(null);
   const socketRef               = useRef<Socket | null>(null);
 
-  const esPersonal = user?.rol === 'personal';
+  const esPersonal  = user?.rol === 'personal';
+  const esSucursal  = user?.rol === 'sucursal';
+
+  // ── Alertas urgentes de reportes de personal (solo sucursal) ───────────
+  const [alertasPersonal, setAlertasPersonal] = useState<AlertaPersonal[]>([]);
+  const [abiertoAlertas,  setAbiertoAlertas]  = useState(false);
+  const panelAlertasRef                       = useRef<HTMLDivElement>(null);
+  const socketSucursalRef                     = useRef<Socket | null>(null);
 
   const cargarAvisos = useCallback(async () => {
     if (!esPersonal) return;
@@ -89,7 +105,38 @@ export default function Header() {
     };
   }, [esPersonal, token]);
 
+  // ── Socket para alertas de reportes de personal (solo sucursal) ──────────
+  useEffect(() => {
+    if (!esSucursal || !token) return;
 
+    const socket = io(WS_URL, {
+      auth:       { token },
+      transports: ['websocket'],
+      reconnectionAttempts: 10,
+    });
+    socketSucursalRef.current = socket;
+
+    socket.on('reporte:personal_nuevo', (data: Omit<AlertaPersonal, 'leida'>) => {
+      setAlertasPersonal(prev => [{ ...data, leida: false }, ...prev]);
+    });
+
+    return () => {
+      socket.disconnect();
+      socketSucursalRef.current = null;
+    };
+  }, [esSucursal, token]);
+
+  // Cerrar panel alertas al clic fuera
+  useEffect(() => {
+    if (!abiertoAlertas) return;
+    const handler = (e: MouseEvent) => {
+      if (panelAlertasRef.current && !panelAlertasRef.current.contains(e.target as Node)) {
+        setAbiertoAlertas(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [abiertoAlertas]);
 
   // Cerrar panel al hacer clic fuera
   useEffect(() => {
@@ -138,7 +185,95 @@ export default function Header() {
 
       <div className="flex items-center gap-4">
 
-        {/* ── Campanita (solo personal) ─────────────────────────────────── */}
+        {/* ── Campanita urgente (solo sucursal) ────────────────────────── */}
+        {esSucursal && (
+          <div className="relative" ref={panelAlertasRef}>
+            <button
+              onClick={() => setAbiertoAlertas(prev => !prev)}
+              className="relative p-1.5 rounded-full hover:bg-white/10 transition-colors"
+              title="Reportes de personal"
+            >
+              <svg
+                className={`w-6 h-6 transition-colors ${
+                  alertasPersonal.some(a => !a.leida) ? 'text-red-500 animate-pulse' : 'text-gray-400'
+                }`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              {alertasPersonal.some(a => !a.leida) && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-pulse">
+                  {alertasPersonal.filter(a => !a.leida).length > 9
+                    ? '9+'
+                    : alertasPersonal.filter(a => !a.leida).length}
+                </span>
+              )}
+            </button>
+
+            {abiertoAlertas && (
+              <div className="absolute right-0 top-11 w-96 bg-[#0f172a] border border-red-800 rounded-xl shadow-2xl z-50 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-red-900 bg-red-950/50">
+                  <span className="text-red-400 font-bold text-sm flex items-center gap-1.5">
+                    🚨 Reportes de Personal
+                  </span>
+                  {alertasPersonal.some(a => !a.leida) && (
+                    <button
+                      onClick={() =>
+                        setAlertasPersonal(prev => prev.map(a => ({ ...a, leida: true })))
+                      }
+                      className="text-xs text-red-400 hover:text-red-200 font-bold transition-colors"
+                    >
+                      Marcar todos leídos
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-80 overflow-y-auto">
+                  {alertasPersonal.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-8">Sin alertas de personal</p>
+                  ) : (
+                    alertasPersonal.map((a, idx) => (
+                      <div
+                        key={`${a.id_reporte}-${idx}`}
+                        onClick={() => {
+                          setAlertasPersonal(prev =>
+                            prev.map((x, i) => i === idx ? { ...x, leida: true } : x)
+                          );
+                          setAbiertoAlertas(false);
+                          navigate('/reportes');
+                        }}
+                        className={`px-4 py-3 border-b border-gray-800 cursor-pointer transition-colors ${
+                          a.leida ? 'opacity-60 hover:bg-white/5' : 'bg-red-950/30 hover:bg-red-950/50'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {!a.leida && (
+                            <span className="mt-1.5 w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse" />
+                          )}
+                          <div className={!a.leida ? '' : 'ml-4'}>
+                            <p className="text-white text-xs leading-snug font-semibold">{a.mensaje}</p>
+                            {a.nombre_personal_reportado && (
+                              <p className="text-red-400 text-[10px] mt-0.5">
+                                Personal: {a.nombre_personal_reportado}
+                              </p>
+                            )}
+                            <p className="text-gray-400 text-[10px] mt-0.5">
+                              Reportado por: {a.nombre_suscriptor}
+                            </p>
+                            <p className="text-[#F26A21] text-[10px] mt-0.5 font-semibold">Ver reporte →</p>
+                            <p className="text-gray-500 text-[10px] mt-1">{fmtFecha(a.generado_en)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Campanita de avisos (solo personal) ────────────────────────── */}
         {esPersonal && (
           <div className="relative" ref={panelRef}>
             <button

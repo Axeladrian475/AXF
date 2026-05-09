@@ -158,11 +158,14 @@ router.post('/crear', verificarSuscriptor, uploadReporte.single('foto'), async (
       });
     }
 
+    const esPersonal = categoria === 'Reporte_Personal';
+
     // foto_url: ruta pública servida por express.static('/uploads')
     const foto_url = req.file ? `/uploads/reportes/${req.file.filename}` : null;
 
     // Normalizar booleanos que llegan como strings desde multipart
-    const esPrivadoVal         = (es_privado === 'true' || es_privado === true) ? 1 : 0;
+    // Reportes de personal se fuerzan a privado=1 para que el personal no los vea
+    const esPrivadoVal         = esPersonal ? 1 : ((es_privado === 'true' || es_privado === true) ? 1 : 0);
     const idPersonalVal        = id_personal_reportado || null;
     const sobreAtencionVal     = sobre_atencion_previa != null
       ? (sobre_atencion_previa === 'true' || sobre_atencion_previa === true ? 1 : 0)
@@ -185,10 +188,56 @@ router.post('/crear', verificarSuscriptor, uploadReporte.single('foto'), async (
       ]
     );
 
+    const id_reporte = result.insertId;
+
+    // ── Notificar INMEDIATAMENTE al encargado de la Sucursal si es Reporte_Personal ─
+    // El personal reportado NO debe recibir esta notificación.
+    if (esPersonal) {
+      try {
+        const { getIO } = await import('../config/socket.js');
+        const io = getIO();
+
+        // Nombre del personal reportado (si se especificó)
+        let nombrePersonalReportado = null;
+        if (idPersonalVal) {
+          const [[personal]] = await db.query(
+            `SELECT CONCAT(nombres, ' ', apellido_paterno) AS nombre, puesto
+             FROM personal WHERE id_personal = ?`,
+            [idPersonalVal]
+          );
+          nombrePersonalReportado = personal ? `${personal.nombre} (${personal.puesto})` : null;
+        }
+
+        // Nombre del suscriptor que reportó
+        const [[suscriptor]] = await db.query(
+          `SELECT CONCAT(nombres, ' ', apellido_paterno) AS nombre
+           FROM suscriptores WHERE id_suscriptor = ?`,
+          [req.usuario.id]
+        );
+
+        // Emitir SOLO al encargado de la sucursal (sala sucursal:{id_sucursal})
+        io.to(`sucursal:${id_sucursal}`).emit('reporte:personal_nuevo', {
+          id_reporte,
+          categoria,
+          descripcion,
+          urgente:                   true,
+          nombre_suscriptor:         suscriptor?.nombre ?? 'Suscriptor',
+          nombre_personal_reportado: nombrePersonalReportado,
+          foto_url,
+          generado_en:               new Date().toISOString(),
+          mensaje: `🚨 Nuevo reporte de personal recibido. Requiere tu atención inmediata.`,
+        });
+
+        console.log(`[REPORTE_PERSONAL] Notificado a sucursal:${id_sucursal} → Reporte #${id_reporte}`);
+      } catch (socketErr) {
+        console.warn('[REPORTE_PERSONAL] Socket.io no disponible:', socketErr.message);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Reporte enviado correctamente',
-      id_reporte: result.insertId,
+      id_reporte,
       foto_url,
     });
   } catch (e) {

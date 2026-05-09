@@ -14,17 +14,20 @@ import axiosClient from '../../../api/axiosClient'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 interface Reporte {
-  id_reporte:          number
-  categoria:           string
-  descripcion:         string
-  foto_url:            string | null
-  estado:              'Abierto' | 'En_Proceso' | 'Resuelto'
-  num_strikes:         number
-  creado_en:           string
-  nombre_suscriptor:   string
-  correo_suscriptor:   string
-  nombre_sucursal:     string
-  horas_desde_creacion: number
+  id_reporte:                  number
+  categoria:                   string
+  descripcion:                 string
+  foto_url:                    string | null
+  es_privado:                  number
+  estado:                      'Abierto' | 'En_Proceso' | 'Resuelto'
+  num_strikes:                 number
+  creado_en:                   string
+  nombre_suscriptor:           string
+  correo_suscriptor:           string
+  nombre_sucursal:             string
+  horas_desde_creacion:        number
+  nombre_personal_reportado:   string | null
+  puesto_personal_reportado:   string | null
 }
 
 interface Strike {
@@ -83,6 +86,7 @@ export default function TabsBuscarReportes() {
   const [busqueda, setBusqueda]           = useState('')
   const [filtroEstado, setFiltroEstado]   = useState('')
   const [filtroStrike, setFiltroStrike]   = useState('')
+  const [filtroCategoria, setFiltroCategoria] = useState('')
   const [cargando, setCargando]           = useState(true)
   const [error, setError]                 = useState<string | null>(null)
 
@@ -111,9 +115,10 @@ export default function TabsBuscarReportes() {
     setError(null)
     try {
       const params: Record<string, string> = {}
-      if (busqueda.trim()) params.q = busqueda.trim()
-      if (filtroEstado)    params.estado = filtroEstado
-      if (filtroStrike)    params.strike = filtroStrike
+      if (busqueda.trim())   params.q        = busqueda.trim()
+      if (filtroEstado)      params.estado    = filtroEstado
+      if (filtroStrike)      params.strike    = filtroStrike
+      if (filtroCategoria)   params.categoria = filtroCategoria
       const { data } = await axiosClient.get('/reportes', { params })
       setReportes(data.reportes ?? [])
     } catch (err: unknown) {
@@ -122,7 +127,7 @@ export default function TabsBuscarReportes() {
     } finally {
       setCargando(false)
     }
-  }, [busqueda, filtroEstado, filtroStrike])
+  }, [busqueda, filtroEstado, filtroStrike, filtroCategoria])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -215,6 +220,18 @@ export default function TabsBuscarReportes() {
           className="flex-1 min-w-[200px] max-w-sm bg-white border border-gray-300 rounded px-3 py-2 text-sm text-black focus:outline-none focus:border-orange-400"
         />
         <select
+          value={filtroCategoria}
+          onChange={e => setFiltroCategoria(e.target.value)}
+          className="bg-white border border-gray-300 rounded px-3 py-2 text-sm text-black focus:outline-none focus:border-orange-400"
+        >
+          <option value="">Todas las categorías</option>
+          <option value="Reporte_Personal">🚨 Reporte de Personal</option>
+          <option value="Maquina_Dañada">Máquina Dañada</option>
+          <option value="Baño_Tapado">Baño Tapado</option>
+          <option value="Problema_Limpieza">Problema de Limpieza</option>
+          <option value="Otro">Otro</option>
+        </select>
+        <select
           value={filtroEstado}
           onChange={e => setFiltroEstado(e.target.value)}
           className="bg-white border border-gray-300 rounded px-3 py-2 text-sm text-black focus:outline-none focus:border-orange-400"
@@ -278,10 +295,25 @@ export default function TabsBuscarReportes() {
             <tbody>
               {reportes.map(r => {
                 const strike = STRIKE_STYLE[r.num_strikes] ?? STRIKE_STYLE[0]
+                const esReportePersonal = r.categoria === 'Reporte_Personal'
                 return (
-                  <tr key={r.id_reporte} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={r.id_reporte}
+                    className={`border-b transition-colors ${
+                      esReportePersonal
+                        ? 'border-red-200 bg-red-50 hover:bg-red-100'
+                        : 'border-gray-100 hover:bg-gray-50'
+                    }`}
+                  >
                     {/* ID */}
-                    <td className="py-3 pr-4 text-black font-bold">#{r.id_reporte}</td>
+                    <td className="py-3 pr-4">
+                      <p className={`font-bold ${esReportePersonal ? 'text-red-700' : 'text-black'}`}>#{r.id_reporte}</p>
+                      {esReportePersonal && (
+                        <span className="inline-block mt-0.5 text-[9px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded uppercase tracking-wide">
+                          🚨 PERSONAL
+                        </span>
+                      )}
+                    </td>
 
                     {/* Nivel alerta */}
                     <td className="py-3 pr-4">
@@ -305,13 +337,24 @@ export default function TabsBuscarReportes() {
                     {/* Sucursal / Categoría */}
                     <td className="py-3 pr-4">
                       <p className="font-bold text-black text-sm">{r.nombre_sucursal}</p>
-                      <p className="text-gray-500 text-xs">{CATEGORIA_LABEL[r.categoria] ?? r.categoria}</p>
+                      <p className={`text-xs font-semibold ${esReportePersonal ? 'text-red-600' : 'text-gray-500'}`}>
+                        {CATEGORIA_LABEL[r.categoria] ?? r.categoria}
+                      </p>
                     </td>
 
-                    {/* Suscriptor */}
+                    {/* Suscriptor / Personal reportado */}
                     <td className="py-3 pr-4">
-                      <p className="text-black font-medium">{r.nombre_suscriptor}</p>
+                      <p className="text-black font-medium text-sm">{r.nombre_suscriptor}</p>
                       <p className="text-gray-400 text-xs">{r.correo_suscriptor}</p>
+                      {esReportePersonal && r.nombre_personal_reportado && (
+                        <div className="mt-1.5 bg-red-100 border border-red-200 rounded-lg px-2 py-1">
+                          <p className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Reportó a:</p>
+                          <p className="text-xs font-semibold text-red-800">{r.nombre_personal_reportado}</p>
+                          {r.puesto_personal_reportado && (
+                            <p className="text-[10px] text-red-500">{r.puesto_personal_reportado}</p>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     {/* Descripción */}
@@ -385,12 +428,14 @@ export default function TabsBuscarReportes() {
                         >
                           Historial Strike
                         </button>
-                        <button
-                          onClick={() => verSumados(r)}
-                          className="bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded hover:bg-purple-600 transition-colors"
-                        >
-                          👥 Sumados
-                        </button>
+                        {!esReportePersonal && (
+                          <button
+                            onClick={() => verSumados(r)}
+                            className="bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded hover:bg-purple-600 transition-colors"
+                          >
+                            👥 Sumados
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

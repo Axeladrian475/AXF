@@ -121,7 +121,11 @@ export function initSocket(httpServer) {
 
   io.on('connection', (socket) => {
     const { id, rol } = socket.usuario;
-    const sala = rol === 'personal' ? `personal:${id}` : `suscriptor:${id}`;
+    let sala;
+    if (rol === 'personal')   sala = `personal:${id}`;
+    else if (rol === 'sucursal') sala = `sucursal:${id}`;
+    else if (rol === 'maestro')  sala = `maestro:${id}`;
+    else                         sala = `suscriptor:${id}`;
     socket.join(sala);
     console.log(`[WS] ✅ Conectado → ${sala}`);
 
