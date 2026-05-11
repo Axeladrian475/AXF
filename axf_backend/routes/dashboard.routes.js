@@ -106,7 +106,8 @@ router.get('/accesos', verificarToken, personalOSucursal, async (req, res) => {
          DATE_FORMAT(a.fecha_hora, '%d/%m/%Y')           AS fecha,
          DATE_FORMAT(a.fecha_hora, '%h:%i %p')           AS hora,
          a.metodo,
-         a.resultado
+         a.resultado,
+         a.tipo_movimiento
        FROM accesos a
        INNER JOIN suscriptores s ON s.id_suscriptor = a.id_suscriptor
        WHERE a.id_sucursal = ?

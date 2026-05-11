@@ -190,14 +190,28 @@ router.post('/acceso', verificarApiKey, async (req, res) => {
 
     const resultado = sub ? 'Permitido' : 'Denegado_Sin_Sub';
 
+    // ── Determinar Entrada / Salida ───────────────────────────────────────────
+    let tipo_movimiento = null;
+    if (resultado === 'Permitido') {
+      const [[ultimo]] = await db.queryWithRetry(
+        `SELECT tipo_movimiento FROM accesos
+          WHERE id_suscriptor = ? AND id_sucursal = ?
+            AND tipo_movimiento IS NOT NULL
+            AND DATE(fecha_hora) = CURDATE()
+          ORDER BY fecha_hora DESC LIMIT 1`,
+        [suscriptor.id_suscriptor, suscriptor.id_sucursal_registro]
+      );
+      tipo_movimiento = (!ultimo || ultimo.tipo_movimiento === 'Salida') ? 'Entrada' : 'Salida';
+    }
+
     await db.queryWithRetry(
-      `INSERT INTO accesos (id_suscriptor, id_sucursal, metodo, resultado, fecha_hora)
-       VALUES (?, ?, 'NFC', ?, NOW())`,
-      [suscriptor.id_suscriptor, suscriptor.id_sucursal_registro, resultado]
+      `INSERT INTO accesos (id_suscriptor, id_sucursal, metodo, resultado, tipo_movimiento, fecha_hora)
+       VALUES (?, ?, 'NFC', ?, ?, NOW())`,
+      [suscriptor.id_suscriptor, suscriptor.id_sucursal_registro, resultado, tipo_movimiento]
     );
 
-    console.log(`[HW/ACCESO] ${resultado} — ${nombre}`);
-    res.json({ resultado, nombre });
+    console.log(`[HW/ACCESO] ${resultado} — ${tipo_movimiento ?? 'N/A'} — ${nombre}`);
+    res.json({ resultado, nombre, movimiento: tipo_movimiento });
 
   } catch (err) {
     console.error('[HW/ACCESO] Error:', err.message);

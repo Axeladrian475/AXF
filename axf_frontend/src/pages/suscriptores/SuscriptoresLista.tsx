@@ -239,15 +239,24 @@ export default function SuscriptoresLista() {
 
                       {/* Acción */}
                       <td className="py-3">
-                        <button
-                          onClick={() => navigate(`/suscripciones?suscriptor=${s.id_suscriptor}&nombre=${encodeURIComponent(s.nombre_completo)}`)}
-                          className={`text-white text-xs font-bold px-3 py-1.5 rounded transition-colors
-                            ${filtro === 'activo'
-                              ? 'bg-[#1e293b] hover:bg-[#0f172a]'
-                              : 'bg-[#ea580c] hover:bg-[#c94a0a]'}`}
-                        >
-                          {filtro === 'activo' ? 'Ver suscripción' : 'Suscribir →'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => navigate(`/suscripciones?suscriptor=${s.id_suscriptor}&nombre=${encodeURIComponent(s.nombre_completo)}`)}
+                            className={`text-white text-xs font-bold px-3 py-1.5 rounded transition-colors
+                              ${filtro === 'activo'
+                                ? 'bg-[#1e293b] hover:bg-[#0f172a]'
+                                : 'bg-[#ea580c] hover:bg-[#c94a0a]'}`}
+                          >
+                            {filtro === 'activo' ? 'Ver suscripción' : 'Suscribir →'}
+                          </button>
+                          <button
+                            onClick={() => navigate(`/suscriptores/${s.id_suscriptor}/accesos`)}
+                            title="Historial de accesos"
+                            className="text-gray-500 hover:text-[#ea580c] text-xs font-bold px-2.5 py-1.5 rounded border border-gray-200 hover:border-[#ea580c] bg-white transition-colors"
+                          >
+                            🔑
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

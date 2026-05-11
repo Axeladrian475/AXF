@@ -807,6 +807,99 @@ export async function cancelarSuscripcion(req, res) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// GET /api/suscriptores/:id/accesos
+// Historial de accesos (entradas/salidas) del suscriptor.
+//
+// Query params:
+//   desde     → fecha inicio (YYYY-MM-DD), opcional
+//   hasta     → fecha fin    (YYYY-MM-DD), opcional
+//   resultado → 'Permitido' | 'Denegado_Sin_Sub' | 'Denegado_No_Encontrado'
+//   limite    → default 100, max 500
+//   offset    → paginación, default 0
+// ════════════════════════════════════════════════════════════════════════════
+export async function obtenerHistorialAccesos(req, res) {
+  try {
+    const { id } = req.params;
+    const { desde, hasta, resultado, limite = 100, offset = 0 } = req.query;
+
+    // Verificar que el suscriptor existe
+    const [[sus]] = await db.query(
+      `SELECT id_suscriptor, nombres, apellido_paterno FROM suscriptores WHERE id_suscriptor = ?`,
+      [id]
+    );
+    if (!sus) return res.status(404).json({ message: 'Suscriptor no encontrado.' });
+
+    const lim = Math.min(parseInt(limite) || 100, 500);
+    const off = parseInt(offset) || 0;
+
+    // Construir filtros dinámicos
+    const condiciones = ['a.id_suscriptor = ?'];
+    const params = [id];
+
+    if (desde) {
+      condiciones.push('DATE(a.fecha_hora) >= ?');
+      params.push(desde);
+    }
+    if (hasta) {
+      condiciones.push('DATE(a.fecha_hora) <= ?');
+      params.push(hasta);
+    }
+    if (resultado) {
+      condiciones.push('a.resultado = ?');
+      params.push(resultado);
+    }
+
+    const where = condiciones.join(' AND ');
+
+    const [accesos] = await db.query(
+      `SELECT
+         a.id_acceso,
+         a.id_sucursal,
+         suc.nombre                                        AS sucursal,
+         a.metodo,
+         a.resultado,
+         a.tipo_movimiento,
+         a.fecha_hora,
+         DATE_FORMAT(a.fecha_hora, '%Y-%m-%d')            AS fecha,
+         DATE_FORMAT(a.fecha_hora, '%H:%i:%s')            AS hora
+       FROM accesos a
+       LEFT JOIN sucursales suc ON suc.id_sucursal = a.id_sucursal
+       WHERE ${where}
+       ORDER BY a.fecha_hora DESC
+       LIMIT ? OFFSET ?`,
+      [...params, lim, off]
+    );
+
+    // Totales para el suscriptor (sin filtro de fecha, para el resumen)
+    const [[totales]] = await db.query(
+      `SELECT
+         COUNT(*)                                                        AS total,
+         SUM(a.resultado = 'Permitido')                                 AS permitidos,
+         SUM(a.resultado LIKE 'Denegado%')                              AS denegados,
+         SUM(a.tipo_movimiento = 'Entrada')                             AS entradas,
+         SUM(a.tipo_movimiento = 'Salida')                              AS salidas,
+         MAX(a.fecha_hora)                                               AS ultimo_acceso
+       FROM accesos a
+       WHERE a.id_suscriptor = ?`,
+      [id]
+    );
+
+    res.json({
+      suscriptor: {
+        id_suscriptor: sus.id_suscriptor,
+        nombre: `${sus.nombres} ${sus.apellido_paterno}`,
+      },
+      totales,
+      accesos,
+      paginacion: { limite: lim, offset: off, count: accesos.length },
+    });
+  } catch (error) {
+    console.error('[GET /suscriptores/:id/accesos]', error);
+    res.status(500).json({ message: 'Error al obtener el historial de accesos.' });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // DELETE /api/suscriptores/:id
 // Hard delete: elimina el suscriptor y todos sus datos relacionados.
 // ════════════════════════════════════════════════════════════════════════════

@@ -18,13 +18,14 @@ interface Stats {
 }
 
 interface Acceso {
-  suscriptor:    string
-  id_suscriptor: number
-  dia:           string
-  fecha:         string
-  hora:          string
-  metodo:        string
-  resultado:     string
+  suscriptor:      string
+  id_suscriptor:   number
+  dia:             string
+  fecha:           string
+  hora:            string
+  metodo:          string
+  resultado:       string
+  tipo_movimiento: 'Entrada' | 'Salida' | null
 }
 
 // ─── Mapeo de labels de rol ───────────────────────────────────────────────────
@@ -227,7 +228,7 @@ export default function Dashboard() {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr>
-              {['Suscriptor','Día','Fecha','Hora','Método de Acceso'].map(h => (
+              {['Suscriptor','Día','Fecha','Hora','Método de Acceso','Movimiento'].map(h => (
                 <th key={h} className="text-left text-[#ea580c] font-bold pb-2 pr-4">{h}</th>
               ))}
             </tr>
@@ -250,14 +251,31 @@ export default function Dashboard() {
                 <td className="py-2 pr-4 text-black">{a.dia}</td>
                 <td className="py-2 pr-4 text-black">{a.fecha}</td>
                 <td className="py-2 pr-4 text-black">{a.hora}</td>
-                <td className="py-2 text-black">{a.metodo}</td>
+                <td className="py-2 pr-4 text-black">{a.metodo}</td>
+                <td className="py-2">
+                  {a.tipo_movimiento === 'Entrada' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-50 text-blue-700 border border-blue-200">
+                      ↓ Entrada
+                    </span>
+                  )}
+                  {a.tipo_movimiento === 'Salida' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-purple-50 text-purple-700 border border-purple-200">
+                      ↑ Salida
+                    </span>
+                  )}
+                  {!a.tipo_movimiento && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-400 border border-gray-200">
+                      Sin dato
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
 
             {/* Sin resultados */}
             {!accesosLoad && buscado && accesos.length === 0 && !accesosError && (
               <tr>
-                <td colSpan={5} className="py-4 text-center text-gray-400 border-t border-gray-100">
+                <td colSpan={6} className="py-4 text-center text-gray-400 border-t border-gray-100">
                   No hubo accesos registrados el {fecha.split('-').reverse().join('/')}
                 </td>
               </tr>
@@ -266,7 +284,7 @@ export default function Dashboard() {
             {/* Estado inicial */}
             {!accesosLoad && !buscado && (
               <tr>
-                <td colSpan={5} className="py-4 text-center text-gray-400 border-t border-gray-100">
+                <td colSpan={6} className="py-4 text-center text-gray-400 border-t border-gray-100">
                   Selecciona una fecha y presiona el botón
                 </td>
               </tr>

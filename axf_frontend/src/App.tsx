@@ -16,6 +16,7 @@ import Chat          from './pages/chat/Chat';
 import Entrenamiento from './pages/entrenamiento/Entrenamiento';
 import Nutricion          from './pages/nutricion/Nutricion';
 import SuscriptoresLista  from './pages/suscriptores/SuscriptoresLista';
+import HistorialAccesos   from './pages/suscriptores/HistorialAccesos';
 
 // ─── Contador global de IDs para los toasts ──────────────────────────────────
 let _notifId = 0
@@ -98,7 +99,8 @@ function AppConNotificaciones() {
           {/* Pendientes */}
           <Route path="/entrenamiento"  element={<Entrenamiento />} />
           <Route path="/nutricion"      element={<Nutricion />} />
-          <Route path="/suscriptores"   element={<SuscriptoresLista />} />
+          <Route path="/suscriptores"           element={<SuscriptoresLista />} />
+          <Route path="/suscriptores/:id/accesos" element={<HistorialAccesos />} />
         </Route>
 
         <Route path="*" element={<RootRedirect />} />
