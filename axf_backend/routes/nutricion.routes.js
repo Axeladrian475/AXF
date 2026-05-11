@@ -1,6 +1,14 @@
 // ============================================================================
 //  routes/nutricion.routes.js
 //  Módulo de Nutrición — Ingredientes, Recetas, Registros Físicos, Dietas
+//
+//  CAMBIOS RESPECTO A LA VERSIÓN ANTERIOR:
+//  - Ingredientes ahora almacenan macros por unidad base
+//    (kcal_base, proteinas_base, grasas_base, carbohidratos_base, cantidad_base)
+//  - Recetas YA NO reciben macros manuales: se calculan automáticamente
+//    sumando la contribución proporcional de cada ingrediente.
+//  - Al editar un ingrediente, se recalculan todas las recetas que lo usan.
+//  - La unidad de medida en la receta es la del ingrediente (no se duplica).
 // ============================================================================
 
 import express from 'express';
@@ -18,17 +26,46 @@ function soloNutriologo(req, res, next) {
   next();
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
+// ─── Helper: calcular macros totales de una receta ───────────────────────────
+// ings: [{ id_ingrediente, cantidad }]
+// Fórmula: macro = (macro_base / cantidad_base) * cantidad_usada
+async function calcularMacrosReceta(conn, ings) {
+  let calorias = 0, proteinas_g = 0, grasas_g = 0, carbohidratos_g = 0;
+
+  for (const ing of ings) {
+    const [[data]] = await conn.query(
+      `SELECT cantidad_base, kcal_base, proteinas_base, grasas_base, carbohidratos_base
+       FROM ingredientes WHERE id_ingrediente = ?`,
+      [ing.id_ingrediente]
+    );
+    if (!data || !Number(data.cantidad_base)) continue;
+
+    const factor = Number(ing.cantidad) / Number(data.cantidad_base);
+    calorias        += Number(data.kcal_base)          * factor;
+    proteinas_g     += Number(data.proteinas_base)     * factor;
+    grasas_g        += Number(data.grasas_base)        * factor;
+    carbohidratos_g += Number(data.carbohidratos_base) * factor;
+  }
+
+  return {
+    calorias:        Math.round(calorias        * 100) / 100,
+    proteinas_g:     Math.round(proteinas_g     * 100) / 100,
+    grasas_g:        Math.round(grasas_g        * 100) / 100,
+    carbohidratos_g: Math.round(carbohidratos_g * 100) / 100,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  INGREDIENTES
-// ════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 
 // GET /api/nutricion/ingredientes
 router.get('/ingredientes', verificarToken, soloPersonal, soloNutriologo, async (_req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT id_ingrediente, nombre, unidad_medicion
-       FROM ingredientes
-       ORDER BY nombre ASC`
+      `SELECT id_ingrediente, nombre, unidad_medicion,
+              cantidad_base, kcal_base, proteinas_base, grasas_base, carbohidratos_base
+       FROM ingredientes ORDER BY nombre ASC`
     );
     res.json(rows);
   } catch (err) {
@@ -38,52 +75,85 @@ router.get('/ingredientes', verificarToken, soloPersonal, soloNutriologo, async 
 });
 
 // POST /api/nutricion/ingredientes
+// Body: { nombre, unidad_medicion, cantidad_base, kcal_base, proteinas_base, grasas_base, carbohidratos_base }
 router.post('/ingredientes', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   try {
-    const { nombre, unidad_medicion } = req.body;
-    if (!nombre || !unidad_medicion) {
+    const {
+      nombre, unidad_medicion,
+      cantidad_base      = 100,
+      kcal_base          = 0,
+      proteinas_base     = 0,
+      grasas_base        = 0,
+      carbohidratos_base = 0,
+    } = req.body;
+
+    if (!nombre?.trim() || !unidad_medicion) {
       return res.status(400).json({ message: 'Nombre y unidad de medición son obligatorios' });
+    }
+    if (Number(cantidad_base) <= 0) {
+      return res.status(400).json({ message: 'La cantidad base debe ser mayor a 0' });
     }
 
     const [result] = await db.query(
-      'INSERT INTO ingredientes (nombre, unidad_medicion, creado_por) VALUES (?, ?, ?)',
-      [nombre.trim(), unidad_medicion, req.usuario.id]
+      `INSERT INTO ingredientes
+         (nombre, unidad_medicion, cantidad_base, kcal_base, proteinas_base, grasas_base, carbohidratos_base, creado_por)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [nombre.trim(), unidad_medicion, cantidad_base, kcal_base, proteinas_base, grasas_base, carbohidratos_base, req.usuario.id]
     );
-
-    res.status(201).json({
-      message: 'Ingrediente creado',
-      id_ingrediente: result.insertId,
-    });
+    res.status(201).json({ message: 'Ingrediente creado', id_ingrediente: result.insertId });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ message: 'Ya existe un ingrediente con ese nombre' });
-    }
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Ya existe un ingrediente con ese nombre' });
     console.error('[POST /nutricion/ingredientes]', err);
     res.status(500).json({ message: 'Error al crear ingrediente' });
   }
 });
 
 // PUT /api/nutricion/ingredientes/:id
+// Actualiza macros y recalcula todas las recetas que usan este ingrediente.
 router.put('/ingredientes/:id', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
+  const conn = await db.getConnection();
   try {
-    const { nombre, unidad_medicion } = req.body;
+    const { nombre, unidad_medicion, cantidad_base, kcal_base, proteinas_base, grasas_base, carbohidratos_base } = req.body;
+
     if (!nombre?.trim() || !unidad_medicion) {
       return res.status(400).json({ message: 'Nombre y unidad de medición son obligatorios' });
     }
-    const [[ing]] = await db.query('SELECT id_ingrediente FROM ingredientes WHERE id_ingrediente = ?', [req.params.id]);
+    if (Number(cantidad_base) <= 0) {
+      return res.status(400).json({ message: 'La cantidad base debe ser mayor a 0' });
+    }
+
+    const [[ing]] = await conn.query('SELECT id_ingrediente FROM ingredientes WHERE id_ingrediente = ?', [req.params.id]);
     if (!ing) return res.status(404).json({ message: 'Ingrediente no encontrado' });
 
-    await db.query(
-      'UPDATE ingredientes SET nombre = ?, unidad_medicion = ? WHERE id_ingrediente = ?',
-      [nombre.trim(), unidad_medicion, req.params.id]
+    await conn.query(
+      `UPDATE ingredientes
+       SET nombre=?, unidad_medicion=?, cantidad_base=?, kcal_base=?, proteinas_base=?, grasas_base=?, carbohidratos_base=?
+       WHERE id_ingrediente=?`,
+      [nombre.trim(), unidad_medicion, cantidad_base, kcal_base, proteinas_base, grasas_base, carbohidratos_base, req.params.id]
     );
-    res.json({ message: 'Ingrediente actualizado' });
-  } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ message: 'Ya existe un ingrediente con ese nombre' });
+
+    // Recalcular macros de todas las recetas que contienen este ingrediente
+    const [afectadas] = await conn.query(
+      'SELECT DISTINCT id_receta FROM receta_ingredientes WHERE id_ingrediente = ?', [req.params.id]
+    );
+    for (const { id_receta } of afectadas) {
+      const [ings] = await conn.query(
+        'SELECT id_ingrediente, cantidad FROM receta_ingredientes WHERE id_receta = ?', [id_receta]
+      );
+      const macros = await calcularMacrosReceta(conn, ings);
+      await conn.query(
+        'UPDATE recetas SET calorias=?, proteinas_g=?, grasas_g=?, carbohidratos_g=? WHERE id_receta=?',
+        [macros.calorias, macros.proteinas_g, macros.grasas_g, macros.carbohidratos_g, id_receta]
+      );
     }
+
+    res.json({ message: 'Ingrediente actualizado', recetas_recalculadas: afectadas.length });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Ya existe un ingrediente con ese nombre' });
     console.error('[PUT /nutricion/ingredientes/:id]', err);
     res.status(500).json({ message: 'Error al actualizar ingrediente' });
+  } finally {
+    conn.release();
   }
 });
 
@@ -108,22 +178,22 @@ router.delete('/ingredientes/:id', verificarToken, soloPersonal, soloNutriologo,
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 //  RECETAS
-// ════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 
 // GET /api/nutricion/recetas
 router.get('/recetas', verificarToken, soloPersonal, soloNutriologo, async (_req, res) => {
   try {
     const [recetas] = await db.query(
-      `SELECT id_receta, nombre, imagen_url, proteinas_g, calorias, grasas_g, creado_en
-       FROM recetas
-       ORDER BY creado_en DESC`
+      `SELECT id_receta, nombre, imagen_url, calorias, proteinas_g, grasas_g, carbohidratos_g, creado_en
+       FROM recetas ORDER BY creado_en DESC`
     );
-
     for (const r of recetas) {
       const [ings] = await db.query(
-        `SELECT ri.cantidad, i.nombre, i.unidad_medicion
+        `SELECT ri.id_ingrediente, ri.cantidad,
+                i.nombre, i.unidad_medicion, i.cantidad_base,
+                i.kcal_base, i.proteinas_base, i.grasas_base, i.carbohidratos_base
          FROM receta_ingredientes ri
          JOIN ingredientes i ON i.id_ingrediente = ri.id_ingrediente
          WHERE ri.id_receta = ?`,
@@ -131,7 +201,6 @@ router.get('/recetas', verificarToken, soloPersonal, soloNutriologo, async (_req
       );
       r.ingredientes = ings;
     }
-
     res.json(recetas);
   } catch (err) {
     console.error('[GET /nutricion/recetas]', err);
@@ -140,39 +209,34 @@ router.get('/recetas', verificarToken, soloPersonal, soloNutriologo, async (_req
 });
 
 // POST /api/nutricion/recetas
+// Macros calculados automáticamente — NO se aceptan en el body.
+// Body: { nombre, ingredientes: [{ id_ingrediente, cantidad }] }
 router.post('/recetas', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   const conn = await db.getConnection();
   try {
-    const { nombre, proteinas_g, calorias, grasas_g, ingredientes } = req.body;
-
-    if (!nombre?.trim()) {
-      return res.status(400).json({ message: 'El nombre de la receta es obligatorio' });
-    }
+    const { nombre, ingredientes } = req.body;
+    if (!nombre?.trim()) return res.status(400).json({ message: 'El nombre de la receta es obligatorio' });
 
     const parsedIngs = typeof ingredientes === 'string' ? JSON.parse(ingredientes) : ingredientes;
     if (!Array.isArray(parsedIngs) || parsedIngs.length === 0) {
       return res.status(400).json({ message: 'Se requiere al menos un ingrediente' });
     }
 
+    const macros = await calcularMacrosReceta(conn, parsedIngs);
+
     await conn.beginTransaction();
-
     const [result] = await conn.query(
-      `INSERT INTO recetas (nombre, proteinas_g, calorias, grasas_g, creado_por)
-       VALUES (?, ?, ?, ?, ?)`,
-      [nombre.trim(), proteinas_g || null, calorias || null, grasas_g || null, req.usuario.id]
+      'INSERT INTO recetas (nombre, calorias, proteinas_g, grasas_g, carbohidratos_g, creado_por) VALUES (?, ?, ?, ?, ?, ?)',
+      [nombre.trim(), macros.calorias, macros.proteinas_g, macros.grasas_g, macros.carbohidratos_g, req.usuario.id]
     );
-
-    const id_receta = result.insertId;
-
     for (const ing of parsedIngs) {
       await conn.query(
         'INSERT INTO receta_ingredientes (id_receta, id_ingrediente, cantidad) VALUES (?, ?, ?)',
-        [id_receta, ing.id_ingrediente, ing.cantidad]
+        [result.insertId, ing.id_ingrediente, ing.cantidad]
       );
     }
-
     await conn.commit();
-    res.status(201).json({ message: 'Receta creada', id_receta });
+    res.status(201).json({ message: 'Receta creada', id_receta: result.insertId, macros });
   } catch (err) {
     await conn.rollback();
     console.error('[POST /nutricion/recetas]', err);
@@ -183,45 +247,37 @@ router.post('/recetas', verificarToken, soloPersonal, soloNutriologo, async (req
 });
 
 // PUT /api/nutricion/recetas/:id
+// Body: { nombre, ingredientes: [{ id_ingrediente, cantidad }] }
 router.put('/recetas/:id', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   const conn = await db.getConnection();
   try {
-    const { nombre, proteinas_g, calorias, grasas_g, ingredientes } = req.body;
-
-    if (!nombre?.trim()) {
-      return res.status(400).json({ message: 'El nombre de la receta es obligatorio' });
-    }
+    const { nombre, ingredientes } = req.body;
+    if (!nombre?.trim()) return res.status(400).json({ message: 'El nombre de la receta es obligatorio' });
 
     const parsedIngs = typeof ingredientes === 'string' ? JSON.parse(ingredientes) : ingredientes;
     if (!Array.isArray(parsedIngs) || parsedIngs.length === 0) {
       return res.status(400).json({ message: 'Se requiere al menos un ingrediente' });
     }
 
-    const [[existe]] = await conn.query(
-      'SELECT id_receta FROM recetas WHERE id_receta = ?',
-      [req.params.id]
-    );
+    const [[existe]] = await conn.query('SELECT id_receta FROM recetas WHERE id_receta = ?', [req.params.id]);
     if (!existe) return res.status(404).json({ message: 'Receta no encontrada' });
 
+    const macros = await calcularMacrosReceta(conn, parsedIngs);
+
     await conn.beginTransaction();
-
     await conn.query(
-      `UPDATE recetas SET nombre = ?, proteinas_g = ?, calorias = ?, grasas_g = ?
-       WHERE id_receta = ?`,
-      [nombre.trim(), proteinas_g || null, calorias || null, grasas_g || null, req.params.id]
+      'UPDATE recetas SET nombre=?, calorias=?, proteinas_g=?, grasas_g=?, carbohidratos_g=? WHERE id_receta=?',
+      [nombre.trim(), macros.calorias, macros.proteinas_g, macros.grasas_g, macros.carbohidratos_g, req.params.id]
     );
-
     await conn.query('DELETE FROM receta_ingredientes WHERE id_receta = ?', [req.params.id]);
-
     for (const ing of parsedIngs) {
       await conn.query(
         'INSERT INTO receta_ingredientes (id_receta, id_ingrediente, cantidad) VALUES (?, ?, ?)',
         [req.params.id, ing.id_ingrediente, ing.cantidad]
       );
     }
-
     await conn.commit();
-    res.json({ message: 'Receta actualizada' });
+    res.json({ message: 'Receta actualizada', macros });
   } catch (err) {
     await conn.rollback();
     console.error('[PUT /nutricion/recetas/:id]', err);
@@ -235,9 +291,7 @@ router.put('/recetas/:id', verificarToken, soloPersonal, soloNutriologo, async (
 router.delete('/recetas/:id', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   try {
     const [result] = await db.query('DELETE FROM recetas WHERE id_receta = ?', [req.params.id]);
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Receta no encontrada' });
-    }
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Receta no encontrada' });
     res.json({ message: 'Receta eliminada' });
   } catch (err) {
     console.error('[DELETE /nutricion/recetas/:id]', err);
@@ -245,33 +299,26 @@ router.delete('/recetas/:id', verificarToken, soloPersonal, soloNutriologo, asyn
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  SUSCRIPTORES (para seleccionar paciente)
-// ════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+//  SUSCRIPTORES
+// ════════════════════════════════════════════════════════════════════════════
 
-// GET /api/nutricion/suscriptores
 router.get('/suscriptores', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   try {
     const id_sucursal = getSucursalId(req.usuario);
     if (!id_sucursal) return res.status(400).json({ message: 'Sucursal no encontrada' });
-
     const [rows] = await db.query(
       `SELECT s.id_suscriptor, s.nombres, s.apellido_paterno, s.apellido_materno,
               s.fecha_nacimiento, s.sexo,
               COALESCE(SUM(sub.sesiones_nutriologo_restantes), 0) AS sesiones_nutriologo
        FROM suscriptores s
-       LEFT JOIN suscripciones sub ON sub.id_suscriptor = s.id_suscriptor
-         AND sub.estado = 'Activa'
+       LEFT JOIN suscripciones sub ON sub.id_suscriptor = s.id_suscriptor AND sub.estado = 'Activa'
        WHERE s.id_sucursal_registro = ? AND s.activo = 1
-         AND EXISTS (
-           SELECT 1 FROM suscripciones
-           WHERE id_suscriptor = s.id_suscriptor AND estado = 'Activa' AND CURDATE() <= fecha_fin
-         )
-       GROUP BY s.id_suscriptor
-       ORDER BY s.nombres ASC`,
+         AND EXISTS (SELECT 1 FROM suscripciones
+                     WHERE id_suscriptor = s.id_suscriptor AND estado = 'Activa' AND CURDATE() <= fecha_fin)
+       GROUP BY s.id_suscriptor ORDER BY s.nombres ASC`,
       [id_sucursal]
     );
-
     res.json(rows);
   } catch (err) {
     console.error('[GET /nutricion/suscriptores]', err);
@@ -279,19 +326,17 @@ router.get('/suscriptores', verificarToken, soloPersonal, soloNutriologo, async 
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 //  REGISTROS FÍSICOS
-// ════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 
-// GET /api/nutricion/registros/:id_suscriptor
 router.get('/registros/:id_suscriptor', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   try {
     const [rows] = await db.query(
       `SELECT rf.*, CONCAT(p.nombres, ' ', p.apellido_paterno) AS nutriologo
        FROM registros_fisicos rf
        JOIN personal p ON p.id_personal = rf.id_nutriologo
-       WHERE rf.id_suscriptor = ?
-       ORDER BY rf.creado_en DESC`,
+       WHERE rf.id_suscriptor = ? ORDER BY rf.creado_en DESC`,
       [req.params.id_suscriptor]
     );
     res.json(rows);
@@ -301,28 +346,21 @@ router.get('/registros/:id_suscriptor', verificarToken, soloPersonal, soloNutrio
   }
 });
 
-// POST /api/nutricion/registros
 router.post('/registros', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   try {
     const {
       id_suscriptor, peso_kg, altura_cm, edad,
       pct_grasa, pct_musculo, actividad, objetivo, notas,
-      tmb, tdee,
-      proteinas_min, proteinas_max,
-      grasas_min, grasas_max,
-      carbs_min, carbs_max,
+      tmb, tdee, proteinas_min, proteinas_max, grasas_min, grasas_max, carbs_min, carbs_max,
     } = req.body;
-
     if (!id_suscriptor || !peso_kg || !altura_cm) {
       return res.status(400).json({ message: 'Suscriptor, peso y altura son obligatorios' });
     }
-
     const [result] = await db.query(
       `INSERT INTO registros_fisicos
         (id_suscriptor, id_nutriologo, peso_kg, altura_cm, edad,
          pct_grasa, pct_musculo, actividad, objetivo, notas,
-         tmb, tdee, proteinas_min, proteinas_max,
-         grasas_min, grasas_max, carbs_min, carbs_max)
+         tmb, tdee, proteinas_min, proteinas_max, grasas_min, grasas_max, carbs_min, carbs_max)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id_suscriptor, req.usuario.id, peso_kg, altura_cm, edad || null,
@@ -331,7 +369,6 @@ router.post('/registros', verificarToken, soloPersonal, soloNutriologo, async (r
         grasas_min || null, grasas_max || null, carbs_min || null, carbs_max || null,
       ]
     );
-
     res.status(201).json({ message: 'Registro guardado', id_registro: result.insertId });
   } catch (err) {
     console.error('[POST /nutricion/registros]', err);
@@ -339,16 +376,10 @@ router.post('/registros', verificarToken, soloPersonal, soloNutriologo, async (r
   }
 });
 
-// DELETE /api/nutricion/registros/:id
 router.delete('/registros/:id', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   try {
-    const [result] = await db.query(
-      'DELETE FROM registros_fisicos WHERE id_registro = ?',
-      [req.params.id]
-    );
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Registro no encontrado' });
-    }
+    const [result] = await db.query('DELETE FROM registros_fisicos WHERE id_registro = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Registro no encontrado' });
     res.json({ message: 'Registro eliminado' });
   } catch (err) {
     console.error('[DELETE /nutricion/registros/:id]', err);
@@ -356,33 +387,29 @@ router.delete('/registros/:id', verificarToken, soloPersonal, soloNutriologo, as
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 //  DIETAS
-// ════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 
-// GET /api/nutricion/dietas/:id_suscriptor
 router.get('/dietas/:id_suscriptor', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   try {
     const [[dieta]] = await db.query(
       `SELECT d.*, CONCAT(p.nombres, ' ', p.apellido_paterno) AS nutriologo
-       FROM dietas d
-       JOIN personal p ON p.id_personal = d.id_nutriologo
-       WHERE d.id_suscriptor = ?
-       ORDER BY d.creado_en DESC LIMIT 1`,
+       FROM dietas d JOIN personal p ON p.id_personal = d.id_nutriologo
+       WHERE d.id_suscriptor = ? ORDER BY d.creado_en DESC LIMIT 1`,
       [req.params.id_suscriptor]
     );
-
     if (!dieta) return res.json(null);
 
     const [comidas] = await db.query(
-      `SELECT dc.*, r.nombre AS receta_nombre
+      `SELECT dc.*, r.nombre AS receta_nombre,
+              r.calorias AS receta_calorias, r.proteinas_g AS receta_proteinas,
+              r.grasas_g AS receta_grasas,   r.carbohidratos_g AS receta_carbohidratos
        FROM dieta_comidas dc
        LEFT JOIN recetas r ON r.id_receta = dc.id_receta
-       WHERE dc.id_dieta = ?
-       ORDER BY dc.dia, dc.orden_comida`,
+       WHERE dc.id_dieta = ? ORDER BY dc.dia, dc.orden_comida`,
       [dieta.id_dieta]
     );
-
     dieta.comidas = comidas;
     res.json(dieta);
   } catch (err) {
@@ -391,63 +418,47 @@ router.get('/dietas/:id_suscriptor', verificarToken, soloPersonal, soloNutriolog
   }
 });
 
-// POST /api/nutricion/dietas
 router.post('/dietas', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   const conn = await db.getConnection();
   try {
     const { id_suscriptor, comidas } = req.body;
-
     if (!id_suscriptor || !Array.isArray(comidas) || comidas.length === 0) {
       return res.status(400).json({ message: 'Suscriptor y comidas son obligatorios' });
     }
 
     const [[activa]] = await conn.query(
       `SELECT id_suscripcion FROM suscripciones
-       WHERE id_suscriptor = ? AND estado = 'Activa' AND CURDATE() <= fecha_fin
-       LIMIT 1`,
+       WHERE id_suscriptor = ? AND estado = 'Activa' AND CURDATE() <= fecha_fin LIMIT 1`,
       [id_suscriptor]
     );
-
-    if (!activa) {
-      return res.status(403).json({ message: 'El suscriptor no tiene una membresía activa vigente' });
-    }
+    if (!activa) return res.status(403).json({ message: 'El suscriptor no tiene una membresía activa vigente' });
 
     const [[sesion]] = await conn.query(
-      `SELECT id_suscripcion, sesiones_nutriologo_restantes
-       FROM suscripciones
-       WHERE id_suscriptor = ? AND estado = 'Activa'
-         AND sesiones_nutriologo_restantes > 0
+      `SELECT id_suscripcion FROM suscripciones
+       WHERE id_suscriptor = ? AND estado = 'Activa' AND sesiones_nutriologo_restantes > 0
        ORDER BY id_suscripcion ASC LIMIT 1`,
       [id_suscriptor]
     );
-
-    if (!sesion) {
-      return res.status(400).json({ message: 'El suscriptor no tiene sesiones de nutriólogo disponibles' });
-    }
+    if (!sesion) return res.status(400).json({ message: 'El suscriptor no tiene sesiones de nutriólogo disponibles' });
 
     await conn.beginTransaction();
-
     await conn.query(
       'UPDATE suscripciones SET sesiones_nutriologo_restantes = sesiones_nutriologo_restantes - 1 WHERE id_suscripcion = ?',
       [sesion.id_suscripcion]
     );
-
     const [result] = await conn.query(
       'INSERT INTO dietas (id_suscriptor, id_nutriologo) VALUES (?, ?)',
       [id_suscriptor, req.usuario.id]
     );
-    const id_dieta = result.insertId;
-
     for (const c of comidas) {
       await conn.query(
         `INSERT INTO dieta_comidas (id_dieta, dia, orden_comida, descripcion, id_receta, calorias, notas)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id_dieta, c.dia, c.orden_comida, c.descripcion || null, c.id_receta || null, c.calorias || null, c.notas || null]
+        [result.insertId, c.dia, c.orden_comida, c.descripcion || null, c.id_receta || null, c.calorias || null, c.notas || null]
       );
     }
-
     await conn.commit();
-    res.status(201).json({ message: 'Dieta creada y sesión descontada', id_dieta });
+    res.status(201).json({ message: 'Dieta creada y sesión descontada', id_dieta: result.insertId });
   } catch (err) {
     await conn.rollback();
     console.error('[POST /nutricion/dietas]', err);

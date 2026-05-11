@@ -43,7 +43,11 @@ const pool = mysql.createPool({
 // ── Forzar zona horaria México en cada conexión ─────────────────────────────
 // El servidor MySQL remoto corre en UTC. Sin esto, NOW() y CURRENT_TIMESTAMP
 // guardan la hora UTC (6 h adelantadas respecto a México UTC-6).
+// NOTA: el guard `if (conn)` evita el crash "Cannot read properties of undefined
+//       (reading 'once')" que ocurre en mysql2 cuando el pool recibe una
+//       conexión undefined durante reconexiones o errores de red.
 pool.pool.on('connection', (conn) => {
+  if (!conn) return;
   conn.query("SET time_zone = '-06:00'");
 });
 

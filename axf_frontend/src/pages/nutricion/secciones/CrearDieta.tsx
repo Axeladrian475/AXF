@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getSuscriptoresNutricion, getRecetas, crearDieta, getRegistros } from '../../../api/nutricionApi'
-import type { SuscriptorNutricion, RecetaAPI } from '../../../api/nutricionApi'
+import { getSuscriptoresNutricion, getRecetas, getIngredientes, crearDieta, getRegistros } from '../../../api/nutricionApi'
+import type { SuscriptorNutricion, RecetaAPI, IngredienteAPI } from '../../../api/nutricionApi'
 import { generarPDFDieta } from '../../../utils/pdfExport'
 import type { DietaPDFData } from '../../../utils/pdfExport'
 
@@ -14,6 +14,9 @@ interface Comida {
   nombre: string
   texto: string
   kcal: string
+  prot: string
+  grasas: string
+  carbs: string
   notas: string
   id_receta?: number
 }
@@ -23,7 +26,7 @@ type Plan = Record<string, Comida[]>
 let comidaCounter = 0
 function nuevaComida(nombre?: string): Comida {
   comidaCounter++
-  return { id: comidaCounter, nombre: nombre ?? 'Comida', texto: '', kcal: '', notas: '' }
+  return { id: comidaCounter, nombre: nombre ?? 'Comida', texto: '', kcal: '', prot: '', grasas: '', carbs: '', notas: '' }
 }
 
 export default function CrearDieta({ onBack }: Props) {
@@ -36,6 +39,7 @@ export default function CrearDieta({ onBack }: Props) {
   // ── Datos del servidor ─────────────────────────────────────────────────────
   const [suscriptores, setSuscriptores] = useState<SuscriptorNutricion[]>([])
   const [recetas, setRecetas]           = useState<RecetaAPI[]>([])
+  const [ingredientes, setIngredientes] = useState<IngredienteAPI[]>([])
   const [cargando, setCargando]         = useState(true)
   const [loadError, setLoadError]       = useState('')
 
@@ -44,8 +48,11 @@ export default function CrearDieta({ onBack }: Props) {
   const [plan, setPlan]           = useState<Plan>({
     Lunes: [nuevaComida('Desayuno'), nuevaComida('Comida'), nuevaComida('Cena')],
   })
-  const [busReceta, setBusReceta] = useState('')
-  const [dragId, setDragId]       = useState<number | null>(null)
+  
+  const [tabSidebar, setTabSidebar] = useState<'recetas' | 'ingredientes'>('recetas')
+  const [busqueda, setBusqueda] = useState('')
+  const [dragItem, setDragItem] = useState<{ id: number, type: 'receta' | 'ingrediente' } | null>(null)
+  
   const [guardando, setGuardando] = useState(false)
   const [exito, setExito]         = useState('')
   const [errorGuardar, setErrorGuardar] = useState('')
@@ -54,9 +61,14 @@ export default function CrearDieta({ onBack }: Props) {
   useEffect(() => {
     const cargar = async () => {
       try {
-        const [sus, recs] = await Promise.all([getSuscriptoresNutricion(), getRecetas()])
+        const [sus, recs, ings] = await Promise.all([
+          getSuscriptoresNutricion(), 
+          getRecetas(),
+          getIngredientes()
+        ])
         setSuscriptores(sus)
         setRecetas(recs)
+        setIngredientes(ings)
       } catch (e: any) {
         setLoadError(e?.response?.data?.message ?? 'Error al cargar datos. Verifica tu sesión.')
       } finally { setCargando(false) }
@@ -119,34 +131,71 @@ export default function CrearDieta({ onBack }: Props) {
   const actualizarComida = (id: number, campo: keyof Comida, val: string) =>
     setComidas(comidas.map(c => c.id === id ? { ...c, [campo]: val } : c))
 
-  // Receta drag & drop
-  const soltarReceta = (comidaId: number, recetaId: number) => {
-    const receta = recetas.find(r => r.id_receta === recetaId)
-    if (!receta) return
-    const ingsTexto = receta.ingredientes
-      .map(i => `• ${i.nombre}: ${i.cantidad} ${i.unidad_medicion}`)
-      .join('\n')
-    const texto = `📋 ${receta.nombre} (${receta.calorias ?? 0} Kcal | ${receta.proteinas_g ?? 0}g prot)\n${ingsTexto}`
+  // Drag & drop recetas / ingredientes
+  const soltarItem = (comidaId: number) => {
+    if (!dragItem) return
+    let textoAgregado = ''
+    let addKcal = 0, addProt = 0, addGrasas = 0, addCarbs = 0
+    let idRecetaAsignada: number | undefined
+
+    if (dragItem.type === 'receta') {
+      const receta = recetas.find(r => r.id_receta === dragItem.id)
+      if (!receta) return
+      const ingsTexto = receta.ingredientes
+        .map(i => `• ${i.nombre}: ${i.cantidad} ${i.unidad_medicion}`)
+        .join('\n')
+      textoAgregado = `📋 ${receta.nombre}\n${ingsTexto}`
+      addKcal = parseFloat(receta.calorias as any) ?? 0
+      addProt = parseFloat(receta.proteinas_g as any) ?? 0
+      addGrasas = parseFloat(receta.grasas_g as any) ?? 0
+      addCarbs = parseFloat(receta.carbohidratos_g as any) ?? 0
+      idRecetaAsignada = receta.id_receta
+    } else {
+      const ing = ingredientes.find(i => i.id_ingrediente === dragItem.id)
+      if (!ing) return
+      textoAgregado = `• ${ing.nombre}: ${ing.cantidad_base} ${ing.unidad_medicion}`
+      addKcal = parseFloat(ing.kcal_base as any) ?? 0
+      addProt = parseFloat(ing.proteinas_base as any) ?? 0
+      addGrasas = parseFloat(ing.grasas_base as any) ?? 0
+      addCarbs = parseFloat(ing.carbohidratos_base as any) ?? 0
+    }
 
     setComidas(comidas.map(c => {
       if (c.id !== comidaId) return c
-      // Usar parseFloat + Math.round para evitar concatenación de strings
-      const kcalActual = Math.round(parseFloat(c.kcal) || 0)
-      const kcalReceta = Math.round(receta.calorias ?? 0)
+      const kcalActual = parseFloat(c.kcal) || 0
+      const protActual = parseFloat(c.prot) || 0
+      const grasasActual = parseFloat(c.grasas) || 0
+      const carbsActual = parseFloat(c.carbs) || 0
+      
       return {
         ...c,
-        texto: c.texto ? `${c.texto}\n\n${texto}` : texto,
-        kcal: String(kcalActual + kcalReceta),
-        id_receta: receta.id_receta,
+        texto: c.texto ? `${c.texto}\n\n${textoAgregado}` : textoAgregado,
+        kcal: String(Math.round(kcalActual + addKcal)),
+        prot: String(Math.round(protActual + addProt)),
+        grasas: String(Math.round(grasasActual + addGrasas)),
+        carbs: String(Math.round(carbsActual + addCarbs)),
+        id_receta: dragItem.type === 'receta' ? idRecetaAsignada : c.id_receta,
       }
     }))
+    setDragItem(null)
   }
 
-  const totalKcal = comidas.reduce((s, c) => s + (Math.round(parseFloat(c.kcal)) || 0), 0)
+  const totalesDia = useMemo(() => {
+    return comidas.reduce((s, c) => ({
+      kcal: s.kcal + (parseFloat(c.kcal) || 0),
+      prot: s.prot + (parseFloat(c.prot) || 0),
+      grasas: s.grasas + (parseFloat(c.grasas) || 0),
+      carbs: s.carbs + (parseFloat(c.carbs) || 0),
+    }), { kcal: 0, prot: 0, grasas: 0, carbs: 0 })
+  }, [comidas])
 
   const recetasFiltradas = useMemo(() =>
-    recetas.filter(r => r.nombre.toLowerCase().includes(busReceta.toLowerCase())),
-    [busReceta, recetas])
+    recetas.filter(r => r.nombre.toLowerCase().includes(busqueda.toLowerCase())),
+    [busqueda, recetas])
+
+  const ingredientesFiltrados = useMemo(() =>
+    ingredientes.filter(i => i.nombre.toLowerCase().includes(busqueda.toLowerCase())),
+    [busqueda, ingredientes])
 
   // ── Guardar dieta ─────────────────────────────────────────────────────────
   const guardarDieta = async () => {
@@ -154,7 +203,6 @@ export default function CrearDieta({ onBack }: Props) {
     setGuardando(true)
     setErrorGuardar('')
     try {
-      // Construir array de comidas para todos los días
       const comidasPayload: { dia: number; orden_comida: number; descripcion: string; id_receta?: number; calorias?: number; notas?: string }[] = []
 
       for (const [dia, coms] of Object.entries(plan)) {
@@ -178,7 +226,6 @@ export default function CrearDieta({ onBack }: Props) {
 
       setExito('✅ Dieta guardada. Generando PDF...')
 
-      // — Generar PDF profesional automáticamente —
       const fecha = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
       const usuario = JSON.parse(localStorage.getItem('usuario') ?? '{}')
       const nombreNutriologo = usuario.nombre ?? usuario.usuario ?? 'Nutriólogo'
@@ -303,18 +350,31 @@ export default function CrearDieta({ onBack }: Props) {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 italic">PDF se genera al guardar</span>
-            <div className="text-right">
-              <p className="text-xs text-gray-500">
-                Meta Diaria (TDEE)
-                {cargandoMeta && <span className="ml-1 text-gray-400 animate-pulse">···</span>}
-              </p>
-              <p className="font-black text-black">{metaDiaria.toLocaleString()} Kcal</p>
-              <p className={`text-xs font-bold ${totalKcal > metaDiaria ? 'text-red-500' : 'text-green-600'}`}>
-                Total hoy: {totalKcal.toLocaleString()} Kcal
-              </p>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-4 text-right">
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide font-bold">Proteínas</p>
+                <p className="text-sm font-black text-blue-600">{Math.round(totalesDia.prot)}g</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide font-bold">Grasas</p>
+                <p className="text-sm font-black text-yellow-500">{Math.round(totalesDia.grasas)}g</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide font-bold">Carbs</p>
+                <p className="text-sm font-black text-green-600">{Math.round(totalesDia.carbs)}g</p>
+              </div>
+              <div className="border-l border-gray-200 pl-4">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide font-bold">
+                  Kcal {diaActivo} / Meta
+                  {cargandoMeta && <span className="ml-1 text-gray-400 animate-pulse">···</span>}
+                </p>
+                <p className={`text-sm font-black ${totalesDia.kcal > metaDiaria ? 'text-red-500' : 'text-[#ea580c]'}`}>
+                  {Math.round(totalesDia.kcal).toLocaleString()} / {metaDiaria.toLocaleString()}
+                </p>
+              </div>
             </div>
+            <span className="text-[10px] text-gray-400 italic">PDF se genera al guardar</span>
           </div>
         </div>
 
@@ -344,27 +404,69 @@ export default function CrearDieta({ onBack }: Props) {
         </div>
 
         <div id="pdf-dieta" className="flex gap-4 items-start relative">
-          {/* Panel recetas */}
-          <div className="w-52 shrink-0 sticky top-4">
-            <p className="font-bold text-sm text-black mb-2">🔍 Buscar Receta</p>
-            <input type="text" placeholder="Buscar receta por nombre..." value={busReceta}
-              onChange={e => setBusReceta(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-1.5 text-xs text-black mb-2 bg-white" />
-            <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
-              {recetasFiltradas.map(r => (
-                <div key={r.id_receta} draggable onDragStart={() => setDragId(r.id_receta)}
-                  className="bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-grab hover:border-[#ea580c] hover:shadow-sm transition-all">
-                  <p className="text-xs font-bold text-black">{r.nombre}</p>
-                  <p className="text-xs text-gray-500">{r.calorias ?? 0} Kcal | {r.proteinas_g ?? 0}g Prot</p>
-                </div>
-              ))}
-              {recetasFiltradas.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>
+          
+          {/* Panel recetas / ingredientes */}
+          <div className="w-64 shrink-0 sticky top-4 flex flex-col max-h-[calc(100vh-120px)] bg-gray-50 p-3 rounded-xl border border-gray-200">
+            <div className="flex rounded-lg bg-gray-200 p-1 mb-3">
+              <button
+                onClick={() => { setTabSidebar('recetas'); setBusqueda(''); }}
+                className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${tabSidebar === 'recetas' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}
+              >
+                Recetas
+              </button>
+              <button
+                onClick={() => { setTabSidebar('ingredientes'); setBusqueda(''); }}
+                className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${tabSidebar === 'ingredientes' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}
+              >
+                Ingredientes
+              </button>
+            </div>
+
+            <input type="text" placeholder={`Buscar ${tabSidebar}...`} value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-1.5 text-xs text-black mb-3 bg-white shrink-0 focus:outline-none focus:border-[#ea580c]" />
+            
+            <div className="space-y-2 overflow-y-auto pr-1 flex-1 min-h-[300px]">
+              {tabSidebar === 'recetas' ? (
+                <>
+                  {recetasFiltradas.map(r => (
+                    <div key={r.id_receta} draggable onDragStart={() => setDragItem({ id: r.id_receta, type: 'receta' })}
+                      className="bg-white border border-gray-200 rounded-lg p-2 cursor-grab hover:border-[#ea580c] hover:shadow-sm transition-all">
+                      <p className="text-xs font-bold text-black mb-1">{r.nombre}</p>
+                      <div className="flex flex-wrap gap-1 text-[10px]">
+                        <span className="bg-orange-100 text-orange-800 px-1.5 rounded">{r.calorias ?? 0} Kcal</span>
+                        <span className="bg-blue-100 text-blue-800 px-1.5 rounded">{r.proteinas_g ?? 0}g Prot</span>
+                      </div>
+                    </div>
+                  ))}
+                  {recetasFiltradas.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>}
+                </>
+              ) : (
+                <>
+                  {ingredientesFiltrados.map(ing => (
+                    <div key={ing.id_ingrediente} draggable onDragStart={() => setDragItem({ id: ing.id_ingrediente, type: 'ingrediente' })}
+                      className="bg-white border border-gray-200 rounded-lg p-2 cursor-grab hover:border-[#ea580c] hover:shadow-sm transition-all">
+                      <div className="flex justify-between items-start mb-1.5">
+                        <p className="text-xs font-bold text-black leading-tight">{ing.nombre}</p>
+                        <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 rounded ml-1 whitespace-nowrap">
+                          {ing.cantidad_base}{ing.unidad_medicion}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1 text-center">
+                        <div className="bg-gray-50 rounded py-0.5"><p className="text-[8px] text-gray-400">KCAL</p><p className="text-[9px] font-bold text-black">{ing.kcal_base}</p></div>
+                        <div className="bg-gray-50 rounded py-0.5"><p className="text-[8px] text-gray-400">PROT</p><p className="text-[9px] font-bold text-black">{ing.proteinas_base}</p></div>
+                        <div className="bg-gray-50 rounded py-0.5"><p className="text-[8px] text-gray-400">GRAS</p><p className="text-[9px] font-bold text-black">{ing.grasas_base}</p></div>
+                        <div className="bg-gray-50 rounded py-0.5"><p className="text-[8px] text-gray-400">CARB</p><p className="text-[9px] font-bold text-black">{ing.carbohidratos_base}</p></div>
+                      </div>
+                    </div>
+                  ))}
+                  {ingredientesFiltrados.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>}
+                </>
               )}
             </div>
 
-            <div className="mt-4">
-              <p className="text-xs text-gray-400 italic text-center">📄 PDF se genera automáticamente al guardar</p>
+            <div className="mt-3 pt-3 border-t border-gray-200 shrink-0">
+              <p className="text-[10px] text-gray-400 italic text-center">Arrastra elementos hacia las comidas</p>
             </div>
           </div>
 
@@ -378,10 +480,13 @@ export default function CrearDieta({ onBack }: Props) {
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               {comidas.map(comida => (
                 <div key={comida.id}
-                  className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+                  className="border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => soltarItem(comida.id)}
+                >
                   <div className="flex items-center justify-between bg-gray-50 px-3 py-2 border-b border-gray-200">
                     <input
                       value={comida.nombre}
@@ -391,52 +496,63 @@ export default function CrearDieta({ onBack }: Props) {
                       className="text-red-400 hover:text-red-600 font-bold text-sm">✕</button>
                   </div>
 
-                  <div className="p-3 space-y-2">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">
-                        Ingredientes y Detalles <span className="text-gray-400">(arrastra una receta o escribe manualmente)</span>
+                  <div className="p-3">
+                    <div className="mb-3">
+                      <label className="block text-xs font-bold text-gray-600 mb-1">
+                        Ingredientes y Detalles <span className="font-normal text-gray-400">(escribe manual o suelta elementos aquí)</span>
                       </label>
                       <textarea
                         value={comida.texto}
                         onChange={e => actualizarComida(comida.id, 'texto', e.target.value)}
-                        placeholder="Escribe ingredientes o arrastra una receta aquí..."
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={() => { if (dragId) soltarReceta(comida.id, dragId); setDragId(null) }}
-                        rows={comida.texto ? Math.max(2, comida.texto.split('\n').length + 1) : 2}
-                        className="w-full border border-gray-200 rounded px-3 py-2 text-sm text-black bg-white resize-none focus:border-[#ea580c] focus:outline-none transition-colors" />
+                        placeholder="Arrastra una receta o un ingrediente aquí..."
+                        rows={comida.texto ? Math.max(3, comida.texto.split('\n').length + 1) : 3}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-black bg-white resize-none focus:border-[#ea580c] focus:outline-none transition-colors" />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-4 gap-3 mb-3">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Calorías (Kcal)</label>
-                        <input type="number" value={comida.kcal}
-                          onChange={e => actualizarComida(comida.id, 'kcal', e.target.value)}
-                          placeholder="0"
-                          className="w-full border border-gray-200 rounded px-3 py-1.5 text-sm text-black bg-white focus:outline-none" />
+                        <label className="block text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1">Calorías (Kcal)</label>
+                        <input type="number" value={comida.kcal} onChange={e => actualizarComida(comida.id, 'kcal', e.target.value)} placeholder="0"
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-orange-600 bg-orange-50 focus:outline-none" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Notas (Restricciones / Preparación)</label>
-                        <input type="text" value={comida.notas}
-                          onChange={e => actualizarComida(comida.id, 'notas', e.target.value)}
-                          placeholder="Ej: Usar poco aceite de oliva..."
-                          className="w-full border border-gray-200 rounded px-3 py-1.5 text-sm text-black bg-white focus:outline-none" />
+                        <label className="block text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1">Proteínas (g)</label>
+                        <input type="number" value={comida.prot} onChange={e => actualizarComida(comida.id, 'prot', e.target.value)} placeholder="0"
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-blue-600 bg-blue-50 focus:outline-none" />
                       </div>
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1">Grasas (g)</label>
+                        <input type="number" value={comida.grasas} onChange={e => actualizarComida(comida.id, 'grasas', e.target.value)} placeholder="0"
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-yellow-600 bg-yellow-50 focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1">Carbs (g)</label>
+                        <input type="number" value={comida.carbs} onChange={e => actualizarComida(comida.id, 'carbs', e.target.value)} placeholder="0"
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-green-600 bg-green-50 focus:outline-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Notas Adicionales</label>
+                      <input type="text" value={comida.notas}
+                        onChange={e => actualizarComida(comida.id, 'notas', e.target.value)}
+                        placeholder="Ej: Preparar sin sal, usar poco aceite..."
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-black bg-white focus:outline-none" />
                     </div>
                   </div>
                 </div>
               ))}
 
               {comidas.length === 0 && (
-                <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center text-gray-400 text-sm">
+                <div className="border-2 border-dashed border-gray-300 bg-gray-50 rounded-xl p-8 text-center text-gray-500 text-sm font-medium">
                   Presiona "+ Agregar Comida" para comenzar el plan de este día
                 </div>
               )}
             </div>
 
             {comidas.length > 0 && (
-              <div className="flex justify-end mt-4">
+              <div className="flex justify-end mt-5">
                 <button onClick={guardarDieta} disabled={guardando}
-                  className="bg-[#ea580c] text-white font-bold px-6 py-2 rounded hover:bg-[#c94a0a] transition-colors text-sm disabled:opacity-50">
+                  className="bg-[#1e293b] text-white font-bold px-8 py-2.5 rounded-lg hover:bg-[#0f172a] transition-colors text-sm disabled:opacity-50 shadow-md">
                   {guardando ? 'Guardando...' : '💾 Guardar Dieta Completa'}
                 </button>
               </div>

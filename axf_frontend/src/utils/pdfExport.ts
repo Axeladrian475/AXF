@@ -30,6 +30,9 @@ export interface ComidaPDF {
   nombre:   string
   texto:    string
   kcal:     string
+  prot:     string
+  grasas:   string
+  carbs:    string
   notas:    string
 }
 
@@ -310,7 +313,10 @@ export function generarPDFDieta(data: DietaPDFData) {
 
   const diaBlocks = diasConComidas.map(dia => {
     const comidas = data.plan[dia]
-    const totalKcalDia = comidas.reduce((s, c) => s + (parseInt(c.kcal) || 0), 0)
+    const totalKcalDia = Math.round(comidas.reduce((s, c) => s + (parseFloat(c.kcal) || 0), 0))
+    const totalProtDia = Math.round(comidas.reduce((s, c) => s + (parseFloat(c.prot) || 0), 0))
+    const totalGrasasDia = Math.round(comidas.reduce((s, c) => s + (parseFloat(c.grasas) || 0), 0))
+    const totalCarbsDia = Math.round(comidas.reduce((s, c) => s + (parseFloat(c.carbs) || 0), 0))
 
     const comidaCards = comidas.map((c, i) => {
       const lineas = c.texto
@@ -324,10 +330,12 @@ export function generarPDFDieta(data: DietaPDFData) {
                       justify-content:space-between;align-items:center;
                       border-bottom:1px solid #e2e8f0;">
             <span style="font-weight:700;color:#1e293b;font-size:13px;">${c.nombre}</span>
-            ${c.kcal ? `<span style="background:#ea580c;color:#fff;border-radius:20px;
-                                     padding:2px 10px;font-size:11px;font-weight:700;">
-                          ${c.kcal} kcal
-                        </span>` : ''}
+            <div style="display:flex;gap:6px;">
+              ${c.kcal && parseFloat(c.kcal) > 0 ? `<span style="background:#ea580c;color:#fff;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;">🔥 ${c.kcal} kcal</span>` : ''}
+              ${c.prot && parseFloat(c.prot) > 0 ? `<span style="background:#2563eb;color:#fff;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;">🥩 ${c.prot} g</span>` : ''}
+              ${c.grasas && parseFloat(c.grasas) > 0 ? `<span style="background:#eab308;color:#fff;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;">🥑 ${c.grasas} g</span>` : ''}
+              ${c.carbs && parseFloat(c.carbs) > 0 ? `<span style="background:#16a34a;color:#fff;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;">🍞 ${c.carbs} g</span>` : ''}
+            </div>
           </div>
           <div style="padding:10px 14px;">
             ${lineas}
@@ -340,12 +348,15 @@ export function generarPDFDieta(data: DietaPDFData) {
 
     return `
       <div style="page-break-inside:avoid;">
-        <div class="section-title">
-          ${dia}
+        <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>${dia}</span>
           ${totalKcalDia > 0
-            ? `<span style="float:right;font-size:11px;font-weight:600;color:#64748b;text-transform:none;letter-spacing:0;">
-                 Total: <span style="color:#ea580c;">${totalKcalDia.toLocaleString()} kcal</span>
-               </span>`
+            ? `<div style="font-size:10px;font-weight:600;color:#64748b;text-transform:none;letter-spacing:0;display:flex;gap:10px;">
+                 <span style="color:#ea580c;">🔥 ${totalKcalDia.toLocaleString()} kcal</span>
+                 <span style="color:#2563eb;">🥩 ${totalProtDia} g</span>
+                 <span style="color:#eab308;">🥑 ${totalGrasasDia} g</span>
+                 <span style="color:#16a34a;">🍞 ${totalCarbsDia} g</span>
+               </div>`
             : ''}
         </div>
         <div style="margin-bottom:18px;">${comidaCards}</div>
