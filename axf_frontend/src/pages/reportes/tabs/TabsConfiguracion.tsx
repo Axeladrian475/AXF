@@ -173,7 +173,7 @@ export default function TabsConfiguracion() {
           {/* Botón guardar */}
           <button
             onClick={guardar}
-            disabled={estado === 'guardando' || estado === 'cargando'}
+            disabled={estado === 'guardando'}
             className="w-full bg-[#1e293b] text-white font-bold px-6 py-2.5 rounded hover:bg-[#0f172a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center justify-center gap-2"
           >
             {estado === 'guardando' ? (

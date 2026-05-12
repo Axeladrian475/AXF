@@ -241,11 +241,13 @@ export async function resolverReporte(req, res) {
     const [[reporte]] = await db.query(
       `SELECT id_reporte, estado FROM reportes WHERE id_reporte = ?`, [id]
     );
-    if (!reporte) return res.status(404).json({ message: 'Reporte no encontrado.' });
-    // Eliminar el reporte — reporte_sumados y strikes_reporte se borran por CASCADE
-    await db.query(`DELETE FROM reportes WHERE id_reporte = ?`, [id]);
+    // Marcar como resuelto en lugar de eliminar, para conservar historial y análisis
+    await db.query(
+      `UPDATE reportes SET estado = 'Resuelto', resuelto_en = NOW() WHERE id_reporte = ?`, 
+      [id]
+    );
 
-    res.json({ message: 'Reporte resuelto y eliminado correctamente.', id_reporte: parseInt(id) });
+    res.json({ message: 'Reporte resuelto y archivado correctamente.', id_reporte: parseInt(id) });
   } catch (error) {
     console.error('[POST /reportes/:id/resolver]', error);
     res.status(500).json({ message: 'Error al resolver el reporte.' });
@@ -320,5 +322,79 @@ export async function resumenReportes(req, res) {
   } catch (error) {
     console.error('[GET /reportes/resumen]', error);
     res.status(500).json({ message: 'Error al obtener resumen.' });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/reportes/analisis
+// Analisis avanzado: Tasa de resolución y listas separadas de incidencias
+// Query params: fecha_inicio, fecha_fin
+// ════════════════════════════════════════════════════════════════════════════
+export async function analisisReportes(req, res) {
+  try {
+    const { fecha_inicio, fecha_fin } = req.query;
+    
+    if (!fecha_inicio || !fecha_fin) {
+      return res.status(400).json({ message: 'Las fechas inicio y fin son requeridas.' });
+    }
+
+    let id_sucursal = null;
+    if (req.usuario.rol === 'sucursal') {
+      id_sucursal = req.usuario.id;
+    } else if (req.usuario.rol === 'personal') {
+      const [[emp]] = await db.query(
+        `SELECT id_sucursal FROM personal WHERE id_personal = ? AND activo = 1`,
+        [req.usuario.id]
+      );
+      id_sucursal = emp?.id_sucursal ?? null;
+    }
+
+    const excluirPersonal = req.usuario.rol === 'personal' ? `AND r.categoria != 'Reporte_Personal'` : '';
+    const filtroSuc = id_sucursal ? 'AND r.id_sucursal = ?' : '';
+    const params = id_sucursal ? [fecha_inicio, fecha_fin, id_sucursal] : [fecha_inicio, fecha_fin];
+
+    // Obtener todos los reportes del periodo
+    const [reportesPeriodo] = await db.query(
+      `SELECT
+         r.id_reporte,
+         r.categoria,
+         r.descripcion,
+         r.estado,
+         r.num_strikes,
+         r.creado_en,
+         r.resuelto_en,
+         suc.nombre AS nombre_sucursal,
+         CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre_suscriptor
+       FROM reportes r
+       JOIN sucursales suc ON suc.id_sucursal = r.id_sucursal
+       JOIN suscriptores s ON s.id_suscriptor = r.id_suscriptor
+       WHERE DATE(r.creado_en) >= ? AND DATE(r.creado_en) <= ?
+       ${filtroSuc} ${excluirPersonal}
+       ORDER BY r.creado_en DESC`,
+      params
+    );
+
+    const pendientes = [];
+    const resueltos = [];
+    
+    reportesPeriodo.forEach(r => {
+      if (r.estado === 'Resuelto') resueltos.push(r);
+      else pendientes.push(r);
+    });
+
+    const total = reportesPeriodo.length;
+    const tasaResolucion = total > 0 ? ((resueltos.length / total) * 100).toFixed(2) : 0;
+
+    res.json({
+      total,
+      pendientes_count: pendientes.length,
+      resueltos_count: resueltos.length,
+      tasa_resolucion: parseFloat(tasaResolucion),
+      pendientes,
+      resueltos
+    });
+  } catch (error) {
+    console.error('[GET /reportes/analisis]', error);
+    res.status(500).json({ message: 'Error al obtener análisis de reportes.' });
   }
 }

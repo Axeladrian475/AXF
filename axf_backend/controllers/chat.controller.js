@@ -31,6 +31,7 @@ export async function listarConversaciones(req, res) {
            s.id_suscriptor,
            CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre_suscriptor,
            s.correo,
+           s.foto_url,
            (SELECT cm2.contenido
             FROM chat_mensajes cm2
             WHERE cm2.id_personal = ? AND cm2.id_suscriptor = s.id_suscriptor
@@ -509,6 +510,7 @@ export async function listarSuscriptoresDisponibles(req, res) {
          CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre,
          s.correo,
          s.telefono,
+         s.foto_url,
          EXISTS(
            SELECT 1 FROM chat_mensajes cm
            WHERE cm.id_personal = ? AND cm.id_suscriptor = s.id_suscriptor

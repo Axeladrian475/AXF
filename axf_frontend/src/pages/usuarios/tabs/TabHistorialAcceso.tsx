@@ -3,7 +3,7 @@
 //  Historial de accesos — conectado a GET /api/dashboard/accesos?fecha=
 // ============================================================================
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { RefreshCw }            from 'lucide-react'
 import axiosClient              from '../../../api/axiosClient'
 

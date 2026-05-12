@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Eye, EyeOff, Loader2, CheckCircle, RefreshCw, X } from 'lucide-react'
+import { Eye, EyeOff, Loader2, CheckCircle, RefreshCw, X, Camera } from 'lucide-react'
 import axiosClient from '../../../api/axiosClient'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -16,6 +16,7 @@ interface Suscriptor {
   correo:            string
   telefono:          string | null
   sucursal_registro: string
+  foto_url:          string | null
 }
 
 interface SuscriptorDetalle {
@@ -29,6 +30,7 @@ interface SuscriptorDetalle {
   direccion:        string | null
   codigo_postal:    string | null
   correo:           string
+  foto_url:         string | null
   tiene_nfc:        number   // 0 | 1
   tiene_huella:     number   // 0 | 1
   sucursal_registro: string
@@ -182,6 +184,45 @@ function ModalBiometrico({ sesion, onCancelar, onReintentar }: {
   )
 }
 
+// ─── Componente: Vista previa de foto para modificar ─────────────────────────
+function FotoPreviewModificar({
+  fotoUrlActual, archivo, onQuitar, onSeleccionar
+}: {
+  fotoUrlActual: string | null
+  archivo: File | null
+  onQuitar: () => void
+  onSeleccionar: () => void
+}) {
+  const url = archivo ? URL.createObjectURL(archivo) : (fotoUrlActual ? `${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${fotoUrlActual}` : null)
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className={`relative w-24 h-24 rounded-full border-4 overflow-hidden flex items-center justify-center
+        ${archivo ? 'border-[#ea580c]' : url ? 'border-gray-200' : 'border-dashed border-gray-300 bg-gray-50'}`}>
+        {url ? (
+          <>
+            <img src={url} alt="preview" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={archivo ? onQuitar : onSeleccionar}
+              className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity text-white text-[10px] font-bold"
+            >
+              {archivo ? 'Quitar nueva' : 'Cambiar foto'}
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={onSeleccionar} className="w-full h-full flex flex-col items-center justify-center hover:bg-gray-100 transition-colors">
+            <Camera size={24} className="text-gray-300 mb-1" />
+            <span className="text-[10px] text-gray-400 font-bold">Subir foto</span>
+          </button>
+        )}
+      </div>
+      <span className={`text-[10px] font-bold ${archivo ? 'text-green-600' : 'text-gray-400'}`}>
+        {archivo ? `✅ ${archivo.name.slice(0, 15)}...` : (fotoUrlActual ? 'Foto actual' : 'Sin foto')}
+      </span>
+    </div>
+  )
+}
+
 // ─── Modal Modificar Suscriptor ───────────────────────────────────────────────
 function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
   suscriptorId: number
@@ -202,6 +243,10 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
   })
   const [tieneNfc, setTieneNfc]       = useState(false)
   const [tieneHuella, setTieneHuella] = useState(false)
+
+  const [fotoUrlActual, setFotoUrlActual] = useState<string | null>(null)
+  const [foto, setFoto]                   = useState<File | null>(null)
+  const fotoInputRef                      = useRef<HTMLInputElement>(null)
 
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout>  | null>(null)
@@ -227,6 +272,7 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
         })
         setTieneNfc(data.tiene_nfc === 1)
         setTieneHuella(data.tiene_huella === 1)
+        setFotoUrlActual(data.foto_url)
       } catch {
         setAlerta({ tipo: 'error', mensaje: 'No se pudieron cargar los datos del suscriptor.' })
       } finally {
@@ -318,22 +364,26 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
 
     setGuardando(true)
     try {
-      const payload: Record<string, any> = {
-        nombres:          form.nombres.trim(),
-        apellido_paterno: form.apellido_paterno.trim(),
-        apellido_materno: form.apellido_materno.trim() || null,
-        fecha_nacimiento: form.fecha_nacimiento,
-        sexo:             form.sexo,
-        telefono:         form.telefono.trim() || null,
-        direccion:        form.direccion.trim() || null,
-        codigo_postal:    form.codigo_postal.trim() || null,
-        correo:           form.correo.trim(),
-      }
-      if (form.password.trim()) payload.password = form.password.trim()
-      if (form.nfc_uid)         payload.nfc_uid  = form.nfc_uid
-      if (form.huella_id)       payload.huella_template = form.huella_id
+      const fd = new FormData()
+      fd.append('nombres', form.nombres.trim())
+      fd.append('apellido_paterno', form.apellido_paterno.trim())
+      if (form.apellido_materno.trim()) fd.append('apellido_materno', form.apellido_materno.trim())
+      fd.append('fecha_nacimiento', form.fecha_nacimiento)
+      fd.append('sexo', form.sexo)
+      if (form.telefono.trim()) fd.append('telefono', form.telefono.trim())
+      if (form.direccion.trim()) fd.append('direccion', form.direccion.trim())
+      if (form.codigo_postal.trim()) fd.append('codigo_postal', form.codigo_postal.trim())
+      fd.append('correo', form.correo.trim())
 
-      const { data } = await axiosClient.put(`/suscriptores/${suscriptorId}`, payload)
+      if (form.password.trim()) fd.append('password', form.password.trim())
+      if (form.nfc_uid)         fd.append('nfc_uid', form.nfc_uid)
+      if (form.huella_id)       fd.append('huella_template', form.huella_id)
+      
+      if (foto) fd.append('foto', foto)
+
+      await axiosClient.put(`/suscriptores/${suscriptorId}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
       onGuardado(`${form.nombres.trim()} ${form.apellido_paterno.trim()}`)
     } catch (err: any) {
       setAlerta({ tipo: 'error', mensaje: err?.response?.data?.message ?? 'Error al guardar.' })
@@ -374,25 +424,46 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
               <form id="form-modificar" onSubmit={handleGuardar} className="space-y-4">
                 {alerta && <Alerta tipo={alerta.tipo} mensaje={alerta.mensaje} onClose={() => setAlerta(null)} />}
 
-                {/* Nombre */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-black mb-1">Nombres <span className="text-red-500">*</span></label>
-                    <input name="nombres" value={form.nombres}
-                      onChange={e => setForm(p => ({ ...p, nombres: e.target.value }))}
-                      disabled={guardando} className={inputCls} />
+                {/* Fila superior: Foto y Nombre */}
+                <div className="flex gap-5">
+                  <div className="shrink-0 mt-2">
+                    <FotoPreviewModificar
+                      fotoUrlActual={fotoUrlActual}
+                      archivo={foto}
+                      onQuitar={() => setFoto(null)}
+                      onSeleccionar={() => fotoInputRef.current?.click()}
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={fotoInputRef}
+                      onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (file) setFoto(file)
+                      }}
+                      className="hidden"
+                    />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-black mb-1">Apellido Paterno <span className="text-red-500">*</span></label>
-                    <input name="apellido_paterno" value={form.apellido_paterno}
-                      onChange={e => setForm(p => ({ ...p, apellido_paterno: e.target.value }))}
-                      disabled={guardando} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-black mb-1">Apellido Materno</label>
-                    <input name="apellido_materno" value={form.apellido_materno}
-                      onChange={e => setForm(p => ({ ...p, apellido_materno: e.target.value }))}
-                      disabled={guardando} className={inputCls} />
+
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                    <div>
+                      <label className="block text-xs font-bold text-black mb-1">Nombres <span className="text-red-500">*</span></label>
+                      <input name="nombres" value={form.nombres}
+                        onChange={e => setForm(p => ({ ...p, nombres: e.target.value }))}
+                        disabled={guardando} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-black mb-1">Apellido Paterno <span className="text-red-500">*</span></label>
+                      <input name="apellido_paterno" value={form.apellido_paterno}
+                        onChange={e => setForm(p => ({ ...p, apellido_paterno: e.target.value }))}
+                        disabled={guardando} className={inputCls} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-black mb-1">Apellido Materno</label>
+                      <input name="apellido_materno" value={form.apellido_materno}
+                        onChange={e => setForm(p => ({ ...p, apellido_materno: e.target.value }))}
+                        disabled={guardando} className={inputCls} />
+                    </div>
                   </div>
                 </div>
 
@@ -652,17 +723,32 @@ export default function TabsDirectorioDeUsuarios() {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b border-gray-200">
+              <th className="text-left font-bold text-black pb-2 pr-3 w-12">Foto</th>
               <th className="text-left font-bold text-black pb-2 pr-4">ID</th>
               <th className="text-left font-bold text-black pb-2 pr-4">Nombre Completo</th>
               <th className="text-left font-bold text-black pb-2 pr-4">Correo Electrónico</th>
               <th className="text-left font-bold text-black pb-2 pr-4">Teléfono</th>
-              <th className="text-left font-bold text-black pb-2 pr-4">Sucursal (Registro)</th>
+              <th className="text-left font-bold text-black pb-2 pr-4">Sucursal</th>
               <th className="text-left font-bold text-black pb-2">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {suscriptores.map(u => (
               <tr key={u.id_suscriptor} className="border-b border-gray-100 hover:bg-gray-50">
+                {/* Foto avatar */}
+                <td className="py-2 pr-3">
+                  {u.foto_url ? (
+                    <img
+                      src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${u.foto_url}`}
+                      alt={u.nombre_completo}
+                      className="w-9 h-9 rounded-full object-cover border-2 border-[#ea580c]/30"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-sm border-2 border-gray-300">
+                      {u.nombre_completo.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </td>
                 <td className="py-3 pr-4 text-black font-mono text-xs">SUS-{u.id_publico}</td>
                 <td className="py-3 pr-4 text-black font-bold">{u.nombre_completo}</td>
                 <td className="py-3 pr-4 text-black">{u.correo}</td>

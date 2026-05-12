@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1:3306
--- Tiempo de generación: 11-05-2026 a las 00:24:11
+-- Tiempo de generación: 12-05-2026 a las 02:25:39
 -- Versión del servidor: 11.8.6-MariaDB-log
 -- Versión de PHP: 7.2.34
 
@@ -646,10 +646,10 @@ INSERT INTO `dieta_comidas` (`id_comida`, `id_dieta`, `dia`, `orden_comida`, `de
 (59, 14, 1, 1, 'Desayuno', NULL, NULL, NULL),
 (60, 14, 1, 2, 'Comida', NULL, NULL, NULL),
 (61, 14, 1, 3, 'Cena', NULL, NULL, NULL),
-(62, 15, 1, 1, '📋 Ensalada (415.00 Kcal | 30.00g prot)\n• JI MIN: 1.00 pz\n• huevo: 5.00 g\n• JUNGKOK: 1.00 pz\n• Jitomate: 100.00 g\n• Verdolaga: 20.00 g\n• Aceite de olivo: 1.00 cdita', 6, 415.00, NULL),
-(63, 15, 1, 2, '📋 Ensalada (415.00 Kcal | 30.00g prot)\n• JI MIN: 1.00 pz\n• huevo: 5.00 g\n• JUNGKOK: 1.00 pz\n• Jitomate: 100.00 g\n• Verdolaga: 20.00 g\n• Aceite de olivo: 1.00 cdita', 6, 415.00, NULL),
+(62, 15, 1, 1, '📋 Ensalada (415.00 Kcal | 30.00g prot)\n• JI MIN: 1.00 pz\n• huevo: 5.00 g\n• JUNGKOK: 1.00 pz\n• Jitomate: 100.00 g\n• Verdolaga: 20.00 g\n• Aceite de olivo: 1.00 cdita', NULL, 415.00, NULL),
+(63, 15, 1, 2, '📋 Ensalada (415.00 Kcal | 30.00g prot)\n• JI MIN: 1.00 pz\n• huevo: 5.00 g\n• JUNGKOK: 1.00 pz\n• Jitomate: 100.00 g\n• Verdolaga: 20.00 g\n• Aceite de olivo: 1.00 cdita', NULL, 415.00, NULL),
 (64, 15, 1, 3, 'yogurt', NULL, NULL, NULL),
-(65, 15, 1, 4, '📋 Sandwich (123.00 Kcal | 12.00g prot)\n• Pan de caja: 100.00 g\n• Jamon: 100.00 g\n• Jitomate: 10220.00 g', 5, 123.00, NULL);
+(65, 15, 1, 4, '📋 Sandwich (123.00 Kcal | 12.00g prot)\n• Pan de caja: 100.00 g\n• Jamon: 100.00 g\n• Jitomate: 10220.00 g', NULL, 123.00, NULL);
 
 -- --------------------------------------------------------
 
@@ -678,7 +678,237 @@ INSERT INTO `ejercicios` (`id_ejercicio`, `nombre`, `imagen_url`, `creado_por`, 
 (21, 'Press Pucio', '/uploads/personal/ejercicio_1778249846671.jpg', 1, '2026-05-08 14:17:26'),
 (22, 'Curl predicador', '/uploads/personal/ejercicio_1778249886814.jpg', 1, '2026-05-08 14:18:06'),
 (23, 'Peso vivo', '/uploads/personal/ejercicio_1778249903379.jpg', 1, '2026-05-08 14:18:23'),
-(24, 'Introducciones pelvicas', '/uploads/personal/ejercicio_1778250010324.jpg', 1, '2026-05-08 14:19:03');
+(24, 'Introducciones pelvicas', '/uploads/personal/ejercicio_1778250010324.jpg', 1, '2026-05-08 14:19:03'),
+(25, 'Press plano con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(26, 'Press inclinado con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(27, 'Press declinado con barra', NULL, 1, '2026-05-11 01:23:29'),
+(28, 'Press declinado con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(29, 'Aperturas planas con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(30, 'Aperturas inclinadas con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(31, 'Aperturas en maquina pec deck', NULL, 1, '2026-05-11 01:23:29'),
+(32, 'Crossover en polea alta', NULL, 1, '2026-05-11 01:23:29'),
+(33, 'Crossover en polea baja', NULL, 1, '2026-05-11 01:23:29'),
+(34, 'Fondos en paralelas pecho', NULL, 1, '2026-05-11 01:23:29'),
+(35, 'Pullover con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(36, 'Press en maquina de pecho', NULL, 1, '2026-05-11 01:23:29'),
+(37, 'Flexiones de brazos', NULL, 1, '2026-05-11 01:23:29'),
+(38, 'Flexiones inclinadas pies elevados', NULL, 1, '2026-05-11 01:23:29'),
+(39, 'Flexiones con palmada', NULL, 1, '2026-05-11 01:23:29'),
+(40, 'Flexiones diamante', NULL, 1, '2026-05-11 01:23:29'),
+(41, 'Press con banda elastica', NULL, 1, '2026-05-11 01:23:29'),
+(42, 'Jalon al pecho agarre estrecho', NULL, 1, '2026-05-11 01:23:29'),
+(43, 'Jalon al pecho agarre neutro', NULL, 1, '2026-05-11 01:23:29'),
+(44, 'Jalon trasero', NULL, 1, '2026-05-11 01:23:29'),
+(45, 'Remo con barra pronado', NULL, 1, '2026-05-11 01:23:29'),
+(46, 'Remo con barra supino', NULL, 1, '2026-05-11 01:23:29'),
+(47, 'Remo con mancuerna un brazo', NULL, 1, '2026-05-11 01:23:29'),
+(48, 'Remo en polea baja agarre ancho', NULL, 1, '2026-05-11 01:23:29'),
+(49, 'Remo en polea baja agarre neutro', NULL, 1, '2026-05-11 01:23:29'),
+(50, 'Remo en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(51, 'Remo en T (T-bar row)', NULL, 1, '2026-05-11 01:23:29'),
+(52, 'Dominadas agarre prono', NULL, 1, '2026-05-11 01:23:29'),
+(53, 'Dominadas agarre supino', NULL, 1, '2026-05-11 01:23:29'),
+(54, 'Dominadas agarre neutro', NULL, 1, '2026-05-11 01:23:29'),
+(55, 'Pullover en polea', NULL, 1, '2026-05-11 01:23:29'),
+(56, 'Peso muerto convencional', NULL, 1, '2026-05-11 01:23:29'),
+(57, 'Peso muerto sumo', NULL, 1, '2026-05-11 01:23:29'),
+(58, 'Peso muerto rumano', NULL, 1, '2026-05-11 01:23:29'),
+(59, 'Peso muerto con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(60, 'Hiperextensiones en banco romano', NULL, 1, '2026-05-11 01:23:29'),
+(61, 'Buenos dias con barra', NULL, 1, '2026-05-11 01:23:29'),
+(62, 'Face pull en polea', NULL, 1, '2026-05-11 01:23:29'),
+(63, 'Remo invertido (Australian row)', NULL, 1, '2026-05-11 01:23:29'),
+(64, 'Press militar con barra de pie', NULL, 1, '2026-05-11 01:23:29'),
+(65, 'Press militar con barra sentado', NULL, 1, '2026-05-11 01:23:29'),
+(66, 'Press Arnold con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(67, 'Press con mancuernas sentado', NULL, 1, '2026-05-11 01:23:29'),
+(68, 'Press con mancuernas de pie', NULL, 1, '2026-05-11 01:23:29'),
+(69, 'Elevaciones laterales con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(70, 'Elevaciones laterales en polea', NULL, 1, '2026-05-11 01:23:29'),
+(71, 'Elevaciones frontales con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(72, 'Elevaciones frontales con disco', NULL, 1, '2026-05-11 01:23:29'),
+(73, 'Pajaro posterior con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(74, 'Pajaro posterior en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(75, 'Encogimientos de hombros con barra', NULL, 1, '2026-05-11 01:23:29'),
+(76, 'Encogimientos con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(77, 'Elevacion lateral tumbado', NULL, 1, '2026-05-11 01:23:29'),
+(78, 'Press en maquina de hombros', NULL, 1, '2026-05-11 01:23:29'),
+(79, 'Rotacion externa con banda', NULL, 1, '2026-05-11 01:23:29'),
+(80, 'Rotacion interna con polea', NULL, 1, '2026-05-11 01:23:29'),
+(81, 'YTW con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(82, 'Curl con barra recta', NULL, 1, '2026-05-11 01:23:29'),
+(83, 'Curl con barra EZ', NULL, 1, '2026-05-11 01:23:29'),
+(84, 'Curl alternado con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(85, 'Curl simultaneo con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(86, 'Curl martillo con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(87, 'Curl martillo en polea', NULL, 1, '2026-05-11 01:23:29'),
+(88, 'Curl concentrado', NULL, 1, '2026-05-11 01:23:29'),
+(89, 'Curl en polea baja', NULL, 1, '2026-05-11 01:23:29'),
+(90, 'Curl en polea alta', NULL, 1, '2026-05-11 01:23:29'),
+(91, 'Curl Scott con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(92, 'Curl Zottman', NULL, 1, '2026-05-11 01:23:29'),
+(93, 'Curl inclinado con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(94, 'Curl con banda elastica', NULL, 1, '2026-05-11 01:23:29'),
+(95, 'Curl de muneca con barra', NULL, 1, '2026-05-11 01:23:29'),
+(96, 'Press frances con barra EZ', NULL, 1, '2026-05-11 01:23:29'),
+(97, 'Press frances con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(98, 'Extension de triceps sobre la cabeza', NULL, 1, '2026-05-11 01:23:29'),
+(99, 'Extension con mancuerna un brazo', NULL, 1, '2026-05-11 01:23:29'),
+(100, 'Pushdown en polea agarre prono', NULL, 1, '2026-05-11 01:23:29'),
+(101, 'Pushdown en polea agarre supino', NULL, 1, '2026-05-11 01:23:29'),
+(102, 'Pushdown con cuerda en polea', NULL, 1, '2026-05-11 01:23:29'),
+(103, 'Extension en polea sobre la cabeza', NULL, 1, '2026-05-11 01:23:29'),
+(104, 'Fondos en banco triceps', NULL, 1, '2026-05-11 01:23:29'),
+(105, 'Patada de triceps con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(106, 'Press cerrado con barra', NULL, 1, '2026-05-11 01:23:29'),
+(107, 'Press cerrado en maquina Smith', NULL, 1, '2026-05-11 01:23:29'),
+(108, 'Triceps en polea con barra V', NULL, 1, '2026-05-11 01:23:29'),
+(109, 'Diamond push up', NULL, 1, '2026-05-11 01:23:29'),
+(110, 'Sentadilla con barra alta', NULL, 1, '2026-05-11 01:23:29'),
+(111, 'Sentadilla con barra baja', NULL, 1, '2026-05-11 01:23:29'),
+(112, 'Sentadilla hack con barra', NULL, 1, '2026-05-11 01:23:29'),
+(113, 'Sentadilla hack en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(114, 'Sentadilla sumo con barra', NULL, 1, '2026-05-11 01:23:29'),
+(115, 'Sentadilla goblet con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(116, 'Sentadilla con salto', NULL, 1, '2026-05-11 01:23:29'),
+(117, 'Sentadilla bulgara (split squat)', NULL, 1, '2026-05-11 01:23:29'),
+(118, 'Prensa de pierna 45 grados', NULL, 1, '2026-05-11 01:23:29'),
+(119, 'Prensa de pierna horizontal', NULL, 1, '2026-05-11 01:23:29'),
+(120, 'Extension de cuadriceps en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(121, 'Zancada caminando con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(122, 'Zancada estatica con barra', NULL, 1, '2026-05-11 01:23:29'),
+(123, 'Zancada reversa con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(124, 'Step up al caj?n con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(125, 'Pistol squat asistido', NULL, 1, '2026-05-11 01:23:29'),
+(126, 'Sissy squat', NULL, 1, '2026-05-11 01:23:29'),
+(127, 'Leg press prensa pie estrecho', NULL, 1, '2026-05-11 01:23:29'),
+(128, 'Curl femoral acostado en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(129, 'Curl femoral sentado en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(130, 'Curl femoral de pie en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(131, 'Curl nordico', NULL, 1, '2026-05-11 01:23:29'),
+(132, 'Peso muerto rigido con barra', NULL, 1, '2026-05-11 01:23:29'),
+(133, 'Peso muerto rigido con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(134, 'Good morning con barra', NULL, 1, '2026-05-11 01:23:29'),
+(135, 'Hip hinge con banda elastica', NULL, 1, '2026-05-11 01:23:29'),
+(136, 'Curl de isquio con balon suizo', NULL, 1, '2026-05-11 01:23:29'),
+(137, 'Hip thrust con barra', NULL, 1, '2026-05-11 01:23:29'),
+(138, 'Hip thrust con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(139, 'Puente de gluteo en suelo', NULL, 1, '2026-05-11 01:23:29'),
+(140, 'Puente de gluteo una pierna', NULL, 1, '2026-05-11 01:23:29'),
+(141, 'Patada de gluteo en polea baja', NULL, 1, '2026-05-11 01:23:29'),
+(142, 'Abduccion de cadera en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(143, 'Abduccion de cadera con banda', NULL, 1, '2026-05-11 01:23:29'),
+(144, 'Aduccion de cadera en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(145, 'Clamshell con banda', NULL, 1, '2026-05-11 01:23:29'),
+(146, 'Patada trasera en cuadrupedia', NULL, 1, '2026-05-11 01:23:29'),
+(147, 'Peso muerto a una pierna', NULL, 1, '2026-05-11 01:23:29'),
+(148, 'Step up lateral al cajon', NULL, 1, '2026-05-11 01:23:29'),
+(149, 'Monster walk con banda', NULL, 1, '2026-05-11 01:23:29'),
+(150, 'Fire hydrant con banda', NULL, 1, '2026-05-11 01:23:29'),
+(151, 'Elevacion de talon de pie en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(152, 'Elevacion de talon sentado en maquina', NULL, 1, '2026-05-11 01:23:29'),
+(153, 'Elevacion de talon con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(154, 'Elevacion de talon en prensa', NULL, 1, '2026-05-11 01:23:29'),
+(155, 'Elevacion de talon una pierna', NULL, 1, '2026-05-11 01:23:29'),
+(156, 'Salto a la comba doble pie', NULL, 1, '2026-05-11 01:23:29'),
+(157, 'Crunch abdominal clasico', NULL, 1, '2026-05-11 01:23:29'),
+(158, 'Crunch invertido', NULL, 1, '2026-05-11 01:23:29'),
+(159, 'Crunch en polea', NULL, 1, '2026-05-11 01:23:29'),
+(160, 'Crunch bicicleta', NULL, 1, '2026-05-11 01:23:29'),
+(161, 'Plancha frontal', NULL, 1, '2026-05-11 01:23:29'),
+(162, 'Plancha lateral derecha', NULL, 1, '2026-05-11 01:23:29'),
+(163, 'Plancha lateral izquierda', NULL, 1, '2026-05-11 01:23:29'),
+(164, 'Plancha con remo', NULL, 1, '2026-05-11 01:23:29'),
+(165, 'Plancha con toque de hombro', NULL, 1, '2026-05-11 01:23:29'),
+(166, 'Elevacion de piernas tumbado', NULL, 1, '2026-05-11 01:23:29'),
+(167, 'Elevacion de piernas en barra', NULL, 1, '2026-05-11 01:23:29'),
+(168, 'Rodillas al pecho en barra', NULL, 1, '2026-05-11 01:23:29'),
+(169, 'Russian twist con disco', NULL, 1, '2026-05-11 01:23:29'),
+(170, 'Russian twist con balon medicinal', NULL, 1, '2026-05-11 01:23:29'),
+(171, 'Dead bug', NULL, 1, '2026-05-11 01:23:29'),
+(172, 'Bird dog', NULL, 1, '2026-05-11 01:23:29'),
+(173, 'Hollow body hold', NULL, 1, '2026-05-11 01:23:29'),
+(174, 'Rollout con rueda abdominal', NULL, 1, '2026-05-11 01:23:29'),
+(175, 'Ab wheel de rodillas', NULL, 1, '2026-05-11 01:23:29'),
+(176, 'Windshield wiper', NULL, 1, '2026-05-11 01:23:29'),
+(177, 'Tijeras horizontales', NULL, 1, '2026-05-11 01:23:29'),
+(178, 'Tijeras verticales', NULL, 1, '2026-05-11 01:23:29'),
+(179, 'Toe touch crunch', NULL, 1, '2026-05-11 01:23:29'),
+(180, 'Dragon flag', NULL, 1, '2026-05-11 01:23:29'),
+(181, 'Palof press en polea', NULL, 1, '2026-05-11 01:23:29'),
+(182, 'Crunch oblicuo con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(183, 'Rotacion de tronco en polea', NULL, 1, '2026-05-11 01:23:29'),
+(184, 'Suitcase carry con mancuerna', NULL, 1, '2026-05-11 01:23:29'),
+(185, 'Burpee clasico', NULL, 1, '2026-05-11 01:23:29'),
+(186, 'Burpee con push up', NULL, 1, '2026-05-11 01:23:29'),
+(187, 'Box jump', NULL, 1, '2026-05-11 01:23:29'),
+(188, 'Box step up', NULL, 1, '2026-05-11 01:23:29'),
+(189, 'Mountain climbers', NULL, 1, '2026-05-11 01:23:29'),
+(190, 'Salto de cuerda continuo', NULL, 1, '2026-05-11 01:23:29'),
+(191, 'Salto de cuerda doble velocidad', NULL, 1, '2026-05-11 01:23:29'),
+(192, 'Jumping jacks', NULL, 1, '2026-05-11 01:23:29'),
+(193, 'Skipping alto', NULL, 1, '2026-05-11 01:23:29'),
+(194, 'Skipping bajo', NULL, 1, '2026-05-11 01:23:29'),
+(195, 'Sprint en caminadora', NULL, 1, '2026-05-11 01:23:29'),
+(196, 'Remo en ergometro', NULL, 1, '2026-05-11 01:23:29'),
+(197, 'Bicicleta estatica alta intensidad', NULL, 1, '2026-05-11 01:23:29'),
+(198, 'Eliptica moderada', NULL, 1, '2026-05-11 01:23:29'),
+(199, 'Sled push', NULL, 1, '2026-05-11 01:23:29'),
+(200, 'Sled pull', NULL, 1, '2026-05-11 01:23:29'),
+(201, 'Battle ropes olas alternadas', NULL, 1, '2026-05-11 01:23:29'),
+(202, 'Battle ropes olas simultaneas', NULL, 1, '2026-05-11 01:23:29'),
+(203, 'Farmer walk con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(204, 'Farmer walk con kettlebell', NULL, 1, '2026-05-11 01:23:29'),
+(205, 'Kettlebell swing dos manos', NULL, 1, '2026-05-11 01:23:29'),
+(206, 'Kettlebell swing una mano', NULL, 1, '2026-05-11 01:23:29'),
+(207, 'Kettlebell clean', NULL, 1, '2026-05-11 01:23:29'),
+(208, 'Kettlebell press un brazo', NULL, 1, '2026-05-11 01:23:29'),
+(209, 'Kettlebell snatch', NULL, 1, '2026-05-11 01:23:29'),
+(210, 'Kettlebell goblet squat', NULL, 1, '2026-05-11 01:23:29'),
+(211, 'Kettlebell windmill', NULL, 1, '2026-05-11 01:23:29'),
+(212, 'Kettlebell turkish get up', NULL, 1, '2026-05-11 01:23:29'),
+(213, 'Kettlebell Romanian deadlift', NULL, 1, '2026-05-11 01:23:29'),
+(214, 'Kettlebell halo', NULL, 1, '2026-05-11 01:23:29'),
+(215, 'Thruster con barra', NULL, 1, '2026-05-11 01:23:29'),
+(216, 'Thruster con mancuernas', NULL, 1, '2026-05-11 01:23:29'),
+(217, 'Wall ball', NULL, 1, '2026-05-11 01:23:29'),
+(218, 'Toes to bar', NULL, 1, '2026-05-11 01:23:29'),
+(219, 'Muscle up en barra', NULL, 1, '2026-05-11 01:23:29'),
+(220, 'Muscle up en anillas', NULL, 1, '2026-05-11 01:23:29'),
+(221, 'Power clean', NULL, 1, '2026-05-11 01:23:29'),
+(222, 'Hang power clean', NULL, 1, '2026-05-11 01:23:29'),
+(223, 'Push press', NULL, 1, '2026-05-11 01:23:29'),
+(224, 'Push jerk', NULL, 1, '2026-05-11 01:23:29'),
+(225, 'Snatch agarre ancho', NULL, 1, '2026-05-11 01:23:29'),
+(226, 'Clean and jerk', NULL, 1, '2026-05-11 01:23:29'),
+(227, 'Box dip en anillas', NULL, 1, '2026-05-11 01:23:29'),
+(228, 'Ring row', NULL, 1, '2026-05-11 01:23:29'),
+(229, 'GHD sit up', NULL, 1, '2026-05-11 01:23:29'),
+(230, 'Assault bike sprints', NULL, 1, '2026-05-11 01:23:29'),
+(231, 'Double under con cuerda', NULL, 1, '2026-05-11 01:23:29'),
+(232, 'Pike push up', NULL, 1, '2026-05-11 01:23:29'),
+(233, 'Archer push up', NULL, 1, '2026-05-11 01:23:29'),
+(234, 'Pseudo planche push up', NULL, 1, '2026-05-11 01:23:29'),
+(235, 'Handstand push up asistido', NULL, 1, '2026-05-11 01:23:29'),
+(236, 'L-sit en paralelas', NULL, 1, '2026-05-11 01:23:29'),
+(237, 'Front lever progresion', NULL, 1, '2026-05-11 01:23:29'),
+(238, 'Back lever progresion', NULL, 1, '2026-05-11 01:23:29'),
+(239, 'Human flag progresion', NULL, 1, '2026-05-11 01:23:29'),
+(240, 'Pistol squat completo', NULL, 1, '2026-05-11 01:23:29'),
+(241, 'Shrimp squat', NULL, 1, '2026-05-11 01:23:29'),
+(242, 'Dip en anillas', NULL, 1, '2026-05-11 01:23:29'),
+(243, 'Hip flexor stretch dinamico', NULL, 1, '2026-05-11 01:23:29'),
+(244, 'World greatest stretch', NULL, 1, '2026-05-11 01:23:29'),
+(245, 'Rotacion de cadera en suelo', NULL, 1, '2026-05-11 01:23:29'),
+(246, 'Gato-vaca (cat cow)', NULL, 1, '2026-05-11 01:23:29'),
+(247, 'Apertura de cadera 90 90', NULL, 1, '2026-05-11 01:23:29'),
+(248, 'Movilidad de tobillo en pared', NULL, 1, '2026-05-11 01:23:29'),
+(249, 'Movilidad toracica con foam roller', NULL, 1, '2026-05-11 01:23:29'),
+(250, 'Dislocaciones de hombro con pica', NULL, 1, '2026-05-11 01:23:29'),
+(251, 'Paseo del oso (bear crawl)', NULL, 1, '2026-05-11 01:23:29'),
+(252, 'Croc stretch', NULL, 1, '2026-05-11 01:23:29'),
+(253, 'Pigeon pose activo', NULL, 1, '2026-05-11 01:23:29'),
+(254, 'Romanian hip hinge movilidad', NULL, 1, '2026-05-11 01:23:29');
 
 -- --------------------------------------------------------
 
@@ -724,6 +954,229 @@ CREATE TABLE `ingredientes` (
   `grasas_base` decimal(6,2) NOT NULL DEFAULT 0.00 COMMENT 'Grasas (g) por cantidad_base de unidad',
   `carbohidratos_base` decimal(6,2) NOT NULL DEFAULT 0.00 COMMENT 'Carbohidratos (g) por cantidad_base de unidad'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `ingredientes`
+--
+
+INSERT INTO `ingredientes` (`id_ingrediente`, `nombre`, `unidad_medicion`, `creado_por`, `cantidad_base`, `kcal_base`, `proteinas_base`, `grasas_base`, `carbohidratos_base`) VALUES
+(22, 'Pechuga de pollo', 'g', 1, 100.00, 195.00, 29.50, 7.70, 0.00),
+(23, 'Pechuga de pollo sin piel', 'g', 1, 100.00, 165.00, 31.00, 3.60, 0.00),
+(24, 'Muslo de pollo sin piel', 'g', 1, 100.00, 209.00, 26.00, 10.90, 0.00),
+(25, 'Pierna de pollo sin piel', 'g', 1, 100.00, 191.00, 27.00, 9.00, 0.00),
+(26, 'Pavo pechuga sin piel', 'g', 1, 100.00, 135.00, 30.00, 1.00, 0.00),
+(27, 'Carne molida res 90/10', 'g', 1, 100.00, 218.00, 26.00, 12.00, 0.00),
+(28, 'Carne molida res 80/20', 'g', 1, 100.00, 254.00, 17.00, 20.00, 0.00),
+(29, 'Bistec de res sirloin', 'g', 1, 100.00, 207.00, 26.00, 11.00, 0.00),
+(30, 'Filete de res tenderloin', 'g', 1, 100.00, 271.00, 26.00, 18.00, 0.00),
+(31, 'Arrachera', 'g', 1, 100.00, 232.00, 25.00, 14.00, 0.00),
+(32, 'Lomo de cerdo', 'g', 1, 100.00, 143.00, 26.00, 3.50, 0.00),
+(33, 'Costilla de cerdo', 'g', 1, 100.00, 277.00, 18.00, 22.00, 0.00),
+(34, 'Tocino de cerdo', 'g', 1, 100.00, 541.00, 37.00, 42.00, 1.40),
+(35, 'Jamon de pavo bajo en grasa', 'g', 1, 100.00, 99.00, 15.00, 3.50, 2.80),
+(36, 'Jamon de pierna', 'g', 1, 100.00, 107.00, 16.00, 4.00, 1.60),
+(37, 'Chorizo de res', 'g', 1, 100.00, 348.00, 14.00, 31.00, 2.00),
+(38, 'Salchicha de pavo', 'pz', 1, 1.00, 70.00, 6.00, 4.50, 2.00),
+(39, 'Salchicha de cerdo', 'pz', 1, 1.00, 89.00, 3.00, 8.00, 1.00),
+(40, 'Salmon atlantico', 'g', 1, 100.00, 208.00, 20.00, 13.00, 0.00),
+(41, 'Tilapia fileteada', 'g', 1, 100.00, 128.00, 26.00, 2.70, 0.00),
+(42, 'Atun aleta amarilla fresco', 'g', 1, 100.00, 109.00, 24.00, 0.50, 0.00),
+(43, 'Atun en agua escurrido', 'g', 1, 100.00, 116.00, 26.00, 1.00, 0.00),
+(44, 'Atun en aceite escurrido', 'g', 1, 100.00, 198.00, 29.00, 9.00, 0.00),
+(45, 'Sardinas en agua', 'g', 1, 100.00, 135.00, 24.00, 5.00, 0.00),
+(46, 'Camaron cocido', 'g', 1, 100.00, 99.00, 24.00, 0.30, 0.20),
+(47, 'Pulpo cocido', 'g', 1, 100.00, 164.00, 30.00, 2.10, 4.40),
+(48, 'Merluza', 'g', 1, 100.00, 86.00, 17.00, 1.70, 0.00),
+(49, 'Trucha arcoiris', 'g', 1, 100.00, 141.00, 20.00, 6.20, 0.00),
+(50, 'Bacalao seco desalado', 'g', 1, 100.00, 82.00, 18.00, 0.70, 0.00),
+(51, 'Huevo entero grande', 'pz', 1, 1.00, 72.00, 6.30, 4.80, 0.40),
+(52, 'Clara de huevo', 'pz', 1, 1.00, 17.00, 3.60, 0.06, 0.24),
+(53, 'Yema de huevo', 'pz', 1, 1.00, 55.00, 2.70, 4.50, 0.61),
+(54, 'Claras liquidas pasteurizadas', 'ml', 1, 100.00, 52.00, 11.00, 0.20, 0.70),
+(55, 'Leche entera', 'ml', 1, 100.00, 61.00, 3.20, 3.30, 4.70),
+(56, 'Leche semidescremada', 'ml', 1, 100.00, 46.00, 3.40, 1.60, 4.80),
+(57, 'Leche descremada', 'ml', 1, 100.00, 34.00, 3.40, 0.20, 4.90),
+(58, 'Yogurt griego natural sin grasa', 'g', 1, 100.00, 59.00, 10.00, 0.40, 3.60),
+(59, 'Yogurt griego entero natural', 'g', 1, 100.00, 100.00, 9.00, 5.00, 3.60),
+(60, 'Yogurt natural regular', 'g', 1, 100.00, 61.00, 3.50, 3.30, 4.70),
+(61, 'Queso cottage bajo en grasa', 'g', 1, 100.00, 72.00, 12.00, 1.00, 2.70),
+(62, 'Queso cottage entero', 'g', 1, 100.00, 98.00, 11.00, 4.50, 2.70),
+(63, 'Queso panela', 'g', 1, 100.00, 275.00, 20.00, 18.00, 6.00),
+(64, 'Queso Oaxaca', 'g', 1, 100.00, 316.00, 22.00, 24.00, 0.50),
+(65, 'Queso manchego', 'g', 1, 100.00, 394.00, 25.00, 32.00, 0.00),
+(66, 'Queso manchego light', 'g', 1, 100.00, 280.00, 27.00, 18.00, 0.00),
+(67, 'Queso mozzarella', 'g', 1, 100.00, 280.00, 28.00, 17.00, 3.10),
+(68, 'Queso mozzarella light', 'g', 1, 100.00, 254.00, 32.00, 13.00, 3.00),
+(69, 'Queso crema regular', 'g', 1, 100.00, 342.00, 6.00, 34.00, 4.10),
+(70, 'Queso crema light', 'g', 1, 100.00, 257.00, 9.00, 23.00, 4.00),
+(71, 'Crema acida light', 'g', 1, 100.00, 181.00, 3.40, 17.00, 4.60),
+(72, 'Mantequilla sin sal', 'g', 1, 100.00, 717.00, 0.90, 81.00, 0.10),
+(73, 'Mantequilla', 'cda', 1, 1.00, 102.00, 0.12, 11.52, 0.01),
+(74, 'Frijoles negros cocidos', 'g', 1, 100.00, 132.00, 8.90, 0.50, 23.70),
+(75, 'Frijoles bayos cocidos', 'g', 1, 100.00, 127.00, 8.70, 0.50, 22.80),
+(76, 'Frijoles pintos cocidos', 'taza', 1, 1.00, 245.00, 15.41, 1.11, 44.84),
+(77, 'Lentejas cocidas', 'g', 1, 100.00, 116.00, 9.00, 0.40, 20.10),
+(78, 'Garbanzos cocidos', 'g', 1, 100.00, 164.00, 8.90, 2.60, 27.40),
+(79, 'Edamame cocido sin vaina', 'g', 1, 100.00, 121.00, 11.90, 5.20, 8.91),
+(80, 'Tofu firme', 'g', 1, 100.00, 76.00, 8.10, 4.20, 1.87),
+(81, 'Tofu sedoso', 'g', 1, 100.00, 55.00, 5.30, 2.70, 1.40),
+(82, 'Tempeh', 'g', 1, 100.00, 193.00, 19.00, 11.00, 9.40),
+(83, 'Proteina whey concentrada 80%', 'g', 1, 100.00, 379.00, 75.00, 7.00, 10.00),
+(84, 'Proteina whey isolada 90%', 'g', 1, 100.00, 370.00, 90.00, 1.00, 3.00),
+(85, 'Proteina caseina', 'g', 1, 100.00, 360.00, 80.00, 2.00, 8.00),
+(86, 'Proteina vegana chicharoplusarroz', 'g', 1, 100.00, 365.00, 72.00, 5.00, 11.00),
+(87, 'Proteina de soya aislada', 'g', 1, 100.00, 338.00, 80.00, 0.50, 0.00),
+(88, 'Arroz blanco cocido', 'g', 1, 100.00, 130.00, 2.70, 0.30, 28.00),
+(89, 'Arroz integral cocido', 'g', 1, 100.00, 111.00, 2.60, 0.90, 23.00),
+(90, 'Arroz jazmin cocido', 'g', 1, 100.00, 129.00, 2.69, 0.28, 27.94),
+(91, 'Avena cruda en hojuela', 'g', 1, 100.00, 389.00, 16.90, 6.90, 66.30),
+(92, 'Avena cocida con agua', 'taza', 1, 1.00, 166.00, 5.94, 3.56, 28.08),
+(93, 'Quinoa cocida', 'g', 1, 100.00, 120.00, 4.40, 1.90, 21.30),
+(94, 'Pasta integral cocida', 'g', 1, 100.00, 124.00, 5.30, 0.80, 26.60),
+(95, 'Pasta blanca cocida', 'g', 1, 100.00, 131.00, 5.00, 1.10, 25.00),
+(96, 'Papa blanca cocida sin cascara', 'g', 1, 100.00, 87.00, 1.90, 0.10, 20.10),
+(97, 'Papa blanca con cascara', 'pz', 1, 1.00, 161.00, 4.32, 0.17, 36.58),
+(98, 'Camote naranja cocido', 'g', 1, 100.00, 86.00, 1.60, 0.10, 20.10),
+(99, 'Tortilla de maiz', 'pz', 1, 1.00, 52.00, 1.40, 0.70, 10.70),
+(100, 'Tortilla de harina regular', 'pz', 1, 1.00, 146.00, 3.90, 3.50, 24.80),
+(101, 'Tortilla de harina integral', 'pz', 1, 1.00, 114.00, 3.70, 2.50, 20.10),
+(102, 'Pan blanco de caja', 'rebanada', 1, 1.00, 67.00, 1.90, 0.90, 12.40),
+(103, 'Pan integral de caja', 'rebanada', 1, 1.00, 69.00, 3.60, 1.10, 11.80),
+(104, 'Pan multigrano', 'rebanada', 1, 1.00, 65.00, 3.10, 1.00, 11.90),
+(105, 'Cebada perlada cocida', 'g', 1, 100.00, 123.00, 2.30, 0.40, 28.20),
+(106, 'Maiz dulce cocido', 'g', 1, 100.00, 96.00, 3.40, 1.50, 21.00),
+(107, 'Granola sin azucar', 'g', 1, 100.00, 489.00, 10.00, 21.00, 65.00),
+(108, 'Granola con miel', 'taza', 1, 1.00, 598.00, 13.29, 21.86, 83.27),
+(109, 'Masa de maiz nixtamalizado', 'g', 1, 100.00, 218.00, 5.60, 2.30, 43.70),
+(110, 'Amaranto reventado', 'g', 1, 100.00, 374.00, 14.45, 7.02, 65.25),
+(111, 'Platano maduro', 'pz', 1, 1.00, 105.00, 1.29, 0.39, 27.00),
+(112, 'Platano', 'g', 1, 100.00, 89.00, 1.09, 0.33, 22.84),
+(113, 'Manzana roja con cascara', 'pz', 1, 1.00, 95.00, 0.47, 0.31, 25.13),
+(114, 'Manzana verde', 'g', 1, 100.00, 52.00, 0.26, 0.17, 13.81),
+(115, 'Naranja', 'pz', 1, 1.00, 62.00, 1.23, 0.16, 15.40),
+(116, 'Fresa', 'g', 1, 100.00, 32.00, 0.67, 0.30, 7.68),
+(117, 'Arandano azul', 'g', 1, 100.00, 57.00, 0.74, 0.33, 14.49),
+(118, 'Mango Ataulfo', 'g', 1, 100.00, 60.00, 0.82, 0.38, 14.98),
+(119, 'Papaya', 'g', 1, 100.00, 43.00, 0.47, 0.26, 10.82),
+(120, 'Sandia', 'g', 1, 100.00, 30.00, 0.61, 0.15, 7.55),
+(121, 'Melon cantaloupe', 'g', 1, 100.00, 34.00, 0.84, 0.19, 8.16),
+(122, 'Pina', 'g', 1, 100.00, 50.00, 0.54, 0.12, 13.12),
+(123, 'Uvas rojas', 'g', 1, 100.00, 69.00, 0.72, 0.16, 18.10),
+(124, 'Kiwi', 'pz', 1, 1.00, 61.00, 1.14, 0.52, 14.66),
+(125, 'Durazno', 'pz', 1, 1.00, 38.00, 0.91, 0.25, 9.54),
+(126, 'Pera', 'pz', 1, 1.00, 101.00, 0.65, 0.20, 26.95),
+(127, 'Mandarina', 'pz', 1, 1.00, 37.00, 0.53, 0.15, 9.35),
+(128, 'Toronja', 'pz', 1, 1.00, 52.00, 0.95, 0.16, 13.11),
+(129, 'Aguacate Hass', 'pz', 1, 1.00, 234.00, 2.92, 21.40, 12.53),
+(130, 'Aguacate', 'g', 1, 100.00, 160.00, 2.00, 14.66, 8.53),
+(131, 'Guayaba', 'pz', 1, 1.00, 37.00, 1.40, 0.52, 7.89),
+(132, 'Ciruela', 'pz', 1, 1.00, 30.00, 0.46, 0.18, 7.54),
+(133, 'Cerezas', 'g', 1, 100.00, 50.00, 1.00, 0.30, 12.18),
+(134, 'Granada roja', 'pz', 1, 1.00, 234.00, 4.71, 3.30, 52.73),
+(135, 'Limon', 'pz', 1, 1.00, 17.00, 0.64, 0.17, 5.41),
+(136, 'Espinaca cruda', 'g', 1, 100.00, 23.00, 2.86, 0.39, 3.63),
+(137, 'Espinaca cocida', 'taza', 1, 1.00, 41.00, 5.35, 0.47, 6.75),
+(138, 'Brocoli crudo', 'g', 1, 100.00, 34.00, 2.82, 0.37, 6.64),
+(139, 'Brocoli cocido al vapor', 'taza', 1, 1.00, 55.00, 3.71, 0.64, 11.21),
+(140, 'Coliflor cruda', 'g', 1, 100.00, 25.00, 1.92, 0.28, 4.97),
+(141, 'Zanahoria cruda', 'g', 1, 100.00, 41.00, 0.93, 0.24, 9.58),
+(142, 'Zanahoria', 'pz', 1, 1.00, 25.00, 0.57, 0.15, 5.84),
+(143, 'Calabaza zucchini', 'g', 1, 100.00, 17.00, 1.21, 0.32, 3.11),
+(144, 'Jitomate bola', 'pz', 1, 1.00, 22.00, 1.08, 0.25, 4.82),
+(145, 'Jitomate', 'g', 1, 100.00, 18.00, 0.88, 0.20, 3.89),
+(146, 'Tomate cherry', 'g', 1, 100.00, 18.00, 0.88, 0.20, 3.92),
+(147, 'Pepino con cascara', 'g', 1, 100.00, 15.00, 0.65, 0.11, 3.63),
+(148, 'Lechuga romana', 'g', 1, 100.00, 17.00, 1.23, 0.30, 3.29),
+(149, 'Lechuga iceberg', 'g', 1, 100.00, 14.00, 0.90, 0.14, 2.97),
+(150, 'Pimiento rojo', 'pz', 1, 1.00, 31.00, 0.99, 0.30, 6.03),
+(151, 'Pimiento verde', 'pz', 1, 1.00, 24.00, 1.27, 0.21, 4.64),
+(152, 'Pimiento amarillo', 'pz', 1, 1.00, 50.00, 1.86, 0.34, 11.76),
+(153, 'Cebolla blanca', 'g', 1, 100.00, 40.00, 1.10, 0.10, 9.34),
+(154, 'Cebolla morada', 'g', 1, 100.00, 42.00, 0.90, 0.10, 10.11),
+(155, 'Ajo', 'diente', 1, 1.00, 4.00, 0.19, 0.01, 0.99),
+(156, 'Champinon blanco', 'g', 1, 100.00, 22.00, 3.09, 0.34, 3.26),
+(157, 'Champinon portobello', 'pz', 1, 1.00, 22.00, 1.96, 0.35, 4.03),
+(158, 'Apio', 'g', 1, 100.00, 16.00, 0.69, 0.17, 2.97),
+(159, 'Ejotes', 'g', 1, 100.00, 31.00, 1.83, 0.22, 6.97),
+(160, 'Esparragos', 'g', 1, 100.00, 20.00, 2.20, 0.12, 3.88),
+(161, 'Col rizada kale', 'g', 1, 100.00, 35.00, 2.92, 1.49, 4.42),
+(162, 'Betabel crudo', 'g', 1, 100.00, 43.00, 1.61, 0.17, 9.56),
+(163, 'Chayote', 'g', 1, 100.00, 24.00, 0.82, 0.13, 5.75),
+(164, 'Nopal cocido', 'g', 1, 100.00, 17.00, 1.32, 0.09, 3.33),
+(165, 'Nopal crudo', 'g', 1, 100.00, 16.00, 1.32, 0.09, 3.33),
+(166, 'Chicharo cocido', 'g', 1, 100.00, 84.00, 5.42, 0.22, 15.63),
+(167, 'Elote en grano cocido', 'g', 1, 100.00, 96.00, 3.41, 1.50, 20.98),
+(168, 'Verdolaga cocida', 'g', 1, 100.00, 20.00, 1.67, 0.14, 3.93),
+(169, 'Cilantro fresco', 'g', 1, 100.00, 23.00, 2.13, 0.52, 3.67),
+(170, 'Epazote fresco', 'g', 1, 100.00, 36.00, 1.77, 0.52, 7.44),
+(171, 'Col morada cruda', 'g', 1, 100.00, 31.00, 1.43, 0.16, 7.37),
+(172, 'Flor de calabaza', 'g', 1, 100.00, 20.00, 1.70, 0.20, 3.70),
+(173, 'Aceite de oliva extra virgen', 'ml', 1, 100.00, 884.00, 0.00, 100.00, 0.00),
+(174, 'Aceite de coco', 'cda', 1, 1.00, 117.00, 0.00, 13.60, 0.00),
+(175, 'Aceite de aguacate', 'cda', 1, 1.00, 124.00, 0.00, 14.00, 0.00),
+(176, 'Aceite de canola', 'cda', 1, 1.00, 124.00, 0.00, 14.00, 0.00),
+(177, 'Aceite vegetal de maiz', 'cda', 1, 1.00, 120.00, 0.00, 13.60, 0.00),
+(178, 'Almendras crudas', 'g', 1, 100.00, 579.00, 21.00, 50.00, 22.00),
+(179, 'Nuez de Castilla', 'g', 1, 100.00, 654.00, 15.20, 65.20, 13.71),
+(180, 'Cacahuate tostado sin sal', 'g', 1, 100.00, 585.00, 23.70, 49.70, 21.50),
+(181, 'Mantequilla de cacahuate natural', 'g', 1, 100.00, 589.00, 24.10, 50.40, 21.60),
+(182, 'Mantequilla de almendra natural', 'g', 1, 100.00, 614.00, 21.00, 55.50, 18.82),
+(183, 'Semillas de chia', 'g', 1, 100.00, 486.00, 16.50, 30.70, 42.10),
+(184, 'Semillas de linaza', 'g', 1, 100.00, 534.00, 18.29, 42.16, 28.88),
+(185, 'Semillas de girasol', 'g', 1, 100.00, 584.00, 20.78, 51.46, 20.00),
+(186, 'Semillas de calabaza pepitas', 'g', 1, 100.00, 559.00, 30.23, 49.05, 10.71),
+(187, 'Semillas de ajonjoli', 'g', 1, 100.00, 573.00, 17.73, 49.67, 23.45),
+(188, 'Coco rallado sin azucar', 'g', 1, 100.00, 660.00, 6.90, 64.50, 23.65),
+(189, 'Nuez de la India caju', 'g', 1, 100.00, 553.00, 18.22, 43.85, 30.19),
+(190, 'Pistache tostado sin sal', 'g', 1, 100.00, 572.00, 21.05, 45.39, 27.97),
+(191, 'Leche de almendra sin azucar', 'ml', 1, 100.00, 15.00, 0.59, 1.20, 0.58),
+(192, 'Leche de soya sin azucar', 'ml', 1, 100.00, 33.00, 3.00, 1.80, 0.50),
+(193, 'Leche de avena sin azucar', 'ml', 1, 100.00, 47.00, 1.00, 1.50, 6.60),
+(194, 'Leche de coco enlatada', 'ml', 1, 100.00, 197.00, 2.00, 21.00, 2.80),
+(195, 'Jugo de naranja natural', 'ml', 1, 100.00, 45.00, 0.70, 0.20, 10.40),
+(196, 'Jugo de tomate natural', 'ml', 1, 100.00, 17.00, 0.76, 0.05, 3.53),
+(197, 'Bebida deportiva isotonica', 'ml', 1, 100.00, 26.00, 0.00, 0.00, 7.00),
+(198, 'Agua de coco natural', 'ml', 1, 100.00, 19.00, 0.72, 0.20, 3.71),
+(199, 'Caldo de pollo bajo sodio', 'ml', 1, 100.00, 7.00, 0.41, 0.24, 0.64),
+(200, 'Caldo de res bajo sodio', 'ml', 1, 100.00, 8.00, 0.60, 0.30, 0.50),
+(201, 'Salsa de soya baja en sodio', 'ml', 1, 100.00, 60.00, 8.70, 0.10, 5.60),
+(202, 'Salsa inglesa Worcestershire', 'cda', 1, 1.00, 13.00, 0.00, 0.00, 3.30),
+(203, 'Vinagre de manzana', 'cda', 1, 1.00, 3.00, 0.00, 0.00, 0.14),
+(204, 'Mostaza amarilla', 'cdita', 1, 1.00, 3.00, 0.22, 0.17, 0.28),
+(205, 'Ketchup sin azucar', 'cda', 1, 1.00, 9.00, 0.27, 0.07, 2.14),
+(206, 'Mayonesa regular', 'cda', 1, 1.00, 94.00, 0.13, 10.33, 0.09),
+(207, 'Mayonesa light', 'cda', 1, 1.00, 49.00, 0.11, 5.00, 0.85),
+(208, 'Miel de abeja', 'cda', 1, 1.00, 64.00, 0.06, 0.00, 17.30),
+(209, 'Miel de agave', 'cda', 1, 1.00, 60.00, 0.00, 0.00, 16.00),
+(210, 'Azucar blanca', 'g', 1, 100.00, 387.00, 0.00, 0.00, 100.00),
+(211, 'Azucar morena', 'g', 1, 100.00, 380.00, 0.17, 0.00, 98.09),
+(212, 'Stevia en polvo', 'cdita', 1, 1.00, 0.00, 0.00, 0.00, 0.90),
+(213, 'Cacao en polvo sin azucar', 'g', 1, 100.00, 228.00, 19.60, 13.70, 57.90),
+(214, 'Canela molida', 'cdita', 1, 1.00, 6.00, 0.10, 0.03, 2.10),
+(215, 'Curcuma molida', 'cdita', 1, 1.00, 8.00, 0.17, 0.24, 1.43),
+(216, 'Jengibre fresco', 'g', 1, 100.00, 80.00, 1.82, 0.75, 17.77),
+(217, 'Pimienta negra molida', 'cdita', 1, 1.00, 6.00, 0.22, 0.07, 1.36),
+(218, 'Comino molido', 'cdita', 1, 1.00, 8.00, 0.38, 0.47, 0.93),
+(219, 'Oregano seco', 'cdita', 1, 1.00, 5.00, 0.17, 0.08, 1.29),
+(220, 'Chile chipotle en adobo', 'g', 1, 100.00, 119.00, 2.70, 5.20, 15.00),
+(221, 'Salsa verde cocida', 'ml', 1, 100.00, 21.00, 0.70, 0.70, 4.00),
+(222, 'Salsa picante tipo Valentina', 'ml', 1, 100.00, 11.00, 0.00, 0.00, 2.50),
+(223, 'Creatina monohidrato', 'g', 1, 100.00, 0.00, 0.00, 0.00, 0.00),
+(224, 'BCAA en polvo', 'g', 1, 100.00, 0.00, 80.00, 0.00, 0.00),
+(225, 'Glutamina en polvo', 'g', 1, 100.00, 0.00, 85.70, 0.00, 0.00),
+(226, 'Omega 3 en capsula', 'pz', 1, 1.00, 10.00, 0.00, 1.00, 0.00),
+(227, 'Colageno hidrolizado', 'g', 1, 100.00, 364.00, 91.00, 0.00, 0.00),
+(228, 'Electrolitos en polvo', 'g', 1, 100.00, 10.00, 0.00, 0.00, 2.50),
+(229, 'Harina de avena', 'g', 1, 100.00, 375.00, 13.00, 7.00, 67.00),
+(230, 'Harina de almendra', 'g', 1, 100.00, 571.00, 21.00, 50.00, 22.00),
+(231, 'Harina de coco', 'g', 1, 100.00, 400.00, 18.00, 14.00, 57.60),
+(232, 'Harina integral de trigo', 'g', 1, 100.00, 340.00, 13.20, 2.50, 72.57),
+(233, 'Harina blanca de trigo', 'g', 1, 100.00, 364.00, 10.33, 0.98, 76.31),
+(234, 'Bicarbonato de sodio', 'cdita', 1, 1.00, 0.00, 0.00, 0.00, 0.00),
+(235, 'Polvo para hornear', 'cdita', 1, 1.00, 2.00, 0.00, 0.00, 1.27),
+(236, 'Vainilla extracto natural', 'cdita', 1, 1.00, 12.00, 0.00, 0.00, 0.53),
+(237, 'Chocolate oscuro 70%', 'g', 1, 100.00, 598.00, 7.79, 42.63, 45.90),
+(238, 'Chips de chocolate amargo', 'g', 1, 100.00, 538.00, 5.54, 35.67, 60.49);
 
 -- --------------------------------------------------------
 
@@ -811,8 +1264,7 @@ CREATE TABLE `recetas` (
 --
 
 INSERT INTO `recetas` (`id_receta`, `nombre`, `imagen_url`, `proteinas_g`, `calorias`, `grasas_g`, `carbohidratos_g`, `creado_por`, `creado_en`) VALUES
-(5, 'Sandwich', NULL, 12.00, 123.00, 122.00, NULL, 1, '2026-05-07 02:19:25'),
-(6, 'Ensalada', NULL, 30.00, 415.00, 15.00, NULL, 1, '2026-05-08 14:31:35');
+(7, 'pollo a la parrilla', NULL, 29.50, 195.00, 7.70, 0.00, 1, '2026-05-11 01:09:48');
 
 -- --------------------------------------------------------
 
@@ -826,6 +1278,13 @@ CREATE TABLE `receta_ingredientes` (
   `id_ingrediente` int(10) UNSIGNED NOT NULL,
   `cantidad` decimal(8,2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `receta_ingredientes`
+--
+
+INSERT INTO `receta_ingredientes` (`id`, `id_receta`, `id_ingrediente`, `cantidad`) VALUES
+(21, 7, 22, 100.00);
 
 -- --------------------------------------------------------
 
@@ -952,7 +1411,7 @@ INSERT INTO `reportes` (`id_reporte`, `id_suscriptor`, `id_sucursal`, `categoria
 (5, 12, 6, 'Problema_Limpieza', 'see cagaron en el bano', NULL, 1, NULL, NULL, 'Abierto', 1, 0, '2026-04-28 05:02:16', '0000-00-00 00:00:00'),
 (6, 12, 1, 'Maquina_Dañada', 'Axel come pene', NULL, 0, NULL, NULL, 'Resuelto', 0, 0, '2026-04-28 05:16:47', '2026-04-28 06:03:25'),
 (7, 12, 6, 'Maquina_Dañada', 'poncho me mama mucho mi pollita rica', NULL, 0, NULL, NULL, 'Abierto', 1, 0, '2026-04-29 03:14:12', '0000-00-00 00:00:00'),
-(8, 12, 1, 'Otro', 'me metio duro last pollita poncho', NULL, 0, NULL, NULL, 'Abierto', 1, 0, '2026-04-29 03:15:19', '0000-00-00 00:00:00'),
+(8, 12, 1, 'Otro', 'me metio duro last pollita poncho', NULL, 0, NULL, NULL, 'En_Proceso', 1, 0, '2026-04-29 03:15:19', '0000-00-00 00:00:00'),
 (9, 12, 1, 'Baño_Tapado', 'Axel dejo una cagada que lo bautizo rodolfo', NULL, 0, NULL, NULL, 'En_Proceso', 1, 0, '2026-05-03 06:02:11', '0000-00-00 00:00:00'),
 (10, 12, 1, 'Maquina_Dañada', 'khfhjk', NULL, 0, NULL, NULL, 'Abierto', 1, 0, '2026-05-06 04:41:29', '0000-00-00 00:00:00'),
 (11, 12, 1, 'Maquina_Dañada', 'dsdfsdfs', NULL, 1, NULL, NULL, 'Abierto', 1, 0, '2026-05-06 04:46:06', '0000-00-00 00:00:00'),
@@ -1280,6 +1739,40 @@ INSERT INTO `tipos_suscripcion` (`id_tipo`, `id_sucursal`, `nombre`, `duracion_d
 (6, 1, 'Anual', 365, 4000.00, 10, 10, 1),
 (7, 1, 'prueba', 1, 1.00, 1, 1, 1);
 
+-- --------------------------------------------------------
+
+--
+-- Estructura Stand-in para la vista `v_receta_macros`
+-- (Véase abajo para la vista actual)
+--
+CREATE TABLE `v_receta_macros` (
+`id_receta` int(10) unsigned
+,`id_ingrediente` int(10) unsigned
+,`nombre_ingrediente` varchar(150)
+,`unidad_medicion` varchar(50)
+,`cantidad_base` decimal(8,2)
+,`cantidad_usada` decimal(8,2)
+,`factor` decimal(14,6)
+,`kcal` decimal(17,2)
+,`proteinas_g` decimal(15,2)
+,`grasas_g` decimal(15,2)
+,`carbohidratos_g` decimal(15,2)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura Stand-in para la vista `v_receta_totales`
+-- (Véase abajo para la vista actual)
+--
+CREATE TABLE `v_receta_totales` (
+`id_receta` int(10) unsigned
+,`total_kcal` decimal(39,2)
+,`total_proteinas_g` decimal(37,2)
+,`total_grasas_g` decimal(37,2)
+,`total_carbohidratos_g` decimal(37,2)
+);
+
 --
 -- Índices para tablas volcadas
 --
@@ -1595,7 +2088,7 @@ ALTER TABLE `dieta_comidas`
 -- AUTO_INCREMENT de la tabla `ejercicios`
 --
 ALTER TABLE `ejercicios`
-  MODIFY `id_ejercicio` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
+  MODIFY `id_ejercicio` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=255;
 
 --
 -- AUTO_INCREMENT de la tabla `hardware_sesiones`
@@ -1607,7 +2100,7 @@ ALTER TABLE `hardware_sesiones`
 -- AUTO_INCREMENT de la tabla `ingredientes`
 --
 ALTER TABLE `ingredientes`
-  MODIFY `id_ingrediente` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `id_ingrediente` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=269;
 
 --
 -- AUTO_INCREMENT de la tabla `personal`
@@ -1625,13 +2118,13 @@ ALTER TABLE `promociones`
 -- AUTO_INCREMENT de la tabla `recetas`
 --
 ALTER TABLE `recetas`
-  MODIFY `id_receta` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_receta` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT de la tabla `receta_ingredientes`
 --
 ALTER TABLE `receta_ingredientes`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT de la tabla `recompensas`
@@ -1710,6 +2203,24 @@ ALTER TABLE `suscriptores`
 --
 ALTER TABLE `tipos_suscripcion`
   MODIFY `id_tipo` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura para la vista `v_receta_macros`
+--
+DROP TABLE IF EXISTS `v_receta_macros`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`u544003664_axf`@`%` SQL SECURITY DEFINER VIEW `v_receta_macros`  AS SELECT `ri`.`id_receta` AS `id_receta`, `ri`.`id_ingrediente` AS `id_ingrediente`, `i`.`nombre` AS `nombre_ingrediente`, `i`.`unidad_medicion` AS `unidad_medicion`, `i`.`cantidad_base` AS `cantidad_base`, `ri`.`cantidad` AS `cantidad_usada`, round(`ri`.`cantidad` / `i`.`cantidad_base`,6) AS `factor`, round(`i`.`kcal_base` * (`ri`.`cantidad` / `i`.`cantidad_base`),2) AS `kcal`, round(`i`.`proteinas_base` * (`ri`.`cantidad` / `i`.`cantidad_base`),2) AS `proteinas_g`, round(`i`.`grasas_base` * (`ri`.`cantidad` / `i`.`cantidad_base`),2) AS `grasas_g`, round(`i`.`carbohidratos_base` * (`ri`.`cantidad` / `i`.`cantidad_base`),2) AS `carbohidratos_g` FROM (`receta_ingredientes` `ri` join `ingredientes` `i` on(`i`.`id_ingrediente` = `ri`.`id_ingrediente`)) ;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura para la vista `v_receta_totales`
+--
+DROP TABLE IF EXISTS `v_receta_totales`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`u544003664_axf`@`%` SQL SECURITY DEFINER VIEW `v_receta_totales`  AS SELECT `v_receta_macros`.`id_receta` AS `id_receta`, round(sum(`v_receta_macros`.`kcal`),2) AS `total_kcal`, round(sum(`v_receta_macros`.`proteinas_g`),2) AS `total_proteinas_g`, round(sum(`v_receta_macros`.`grasas_g`),2) AS `total_grasas_g`, round(sum(`v_receta_macros`.`carbohidratos_g`),2) AS `total_carbohidratos_g` FROM `v_receta_macros` GROUP BY `v_receta_macros`.`id_receta` ;
 
 --
 -- Restricciones para tablas volcadas

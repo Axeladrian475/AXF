@@ -88,6 +88,7 @@ export async function registrarSuscriptor(req, res) {
     if (!sexo)                     faltantes.push('sexo');
     if (!correo?.trim())           faltantes.push('correo');
     if (!password)                 faltantes.push('password');
+    if (!req.body.foto_url)        faltantes.push('foto (imagen del suscriptor)');
 
     if (faltantes.length > 0) {
       return res.status(400).json({
@@ -151,13 +152,17 @@ export async function registrarSuscriptor(req, res) {
     //       Por ahora se almacena NULL y se actualiza con PATCH /api/suscriptores/:id/huella.
     const huella_template = req.body.huella_template ?? null;
 
-    // ── 11. Insertar en la base de datos ──────────────────────────────────────
+    // ── 11. Foto del suscriptor ───────────────────────────────────────────────
+    // La ruta ya fue validada y adjuntada por el middleware de multer en la ruta.
+    const foto_url = req.body.foto_url;
+
+    // ── 12. Insertar en la base de datos ──────────────────────────────────────
     const [result] = await db.query(
       `INSERT INTO suscriptores
          (id_sucursal_registro, nombres, apellido_paterno, apellido_materno,
           fecha_nacimiento, sexo, direccion, codigo_postal, telefono,
-          correo, password_hash, nfc_uid, huella_template, terminos_aceptados)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          correo, password_hash, nfc_uid, huella_template, terminos_aceptados, foto_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id_sucursal_registro,
         nombres.trim(),
@@ -173,6 +178,7 @@ export async function registrarSuscriptor(req, res) {
         nfc_uid,            // NULL hasta integración ESP32
         huella_template,    // NULL hasta integración R307
         terminos_aceptados ? 1 : 0,
+        foto_url,
       ]
     );
 
@@ -265,6 +271,7 @@ export async function listarSuscriptores(req, res) {
            IFNULL(CONCAT(' ', s.apellido_materno),''))           AS nombre_completo,
          s.correo,
          s.telefono,
+         s.foto_url,
          suc.nombre                                              AS sucursal_registro,
          s.activo,
          s.puntos,
@@ -308,6 +315,7 @@ export async function obtenerSuscriptor(req, res) {
          s.nombres, s.apellido_paterno, s.apellido_materno,
          s.fecha_nacimiento, s.sexo,
          s.direccion, s.codigo_postal, s.telefono, s.correo,
+         s.foto_url,
          s.puntos, s.racha_dias, s.dias_descanso_semana,
          s.terminos_aceptados, s.activo, s.creado_en,
          CASE WHEN s.nfc_uid      IS NOT NULL THEN 1 ELSE 0 END AS tiene_nfc,
@@ -340,7 +348,7 @@ export async function modificarSuscriptor(req, res) {
     const { id } = req.params;
     const {
       nombres, apellido_paterno, apellido_materno,
-      fecha_nacimiento, sexo, direccion, codigo_postal, telefono, correo,
+      fecha_nacimiento, sexo, direccion, codigo_postal, telefono, correo, foto_url
     } = req.body;
 
     // Verificar que el suscriptor existe
@@ -377,7 +385,8 @@ export async function modificarSuscriptor(req, res) {
          direccion         = COALESCE(?, direccion),
          codigo_postal     = COALESCE(?, codigo_postal),
          telefono          = COALESCE(?, telefono),
-         correo            = COALESCE(?, correo)
+         correo            = COALESCE(?, correo),
+         foto_url          = COALESCE(?, foto_url)
        WHERE id_suscriptor = ?`,
       [
         nombres?.trim()           ?? null,
@@ -389,6 +398,7 @@ export async function modificarSuscriptor(req, res) {
         codigo_postal?.trim()     ?? null,
         telefono?.trim()          ?? null,
         correo?.trim().toLowerCase() ?? null,
+        foto_url                  ?? null,
         id,
       ]
     );

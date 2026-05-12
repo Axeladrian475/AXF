@@ -199,8 +199,8 @@ export default function TabsBuscarReportes() {
     setResolviendo(true); setMsgResolver(null)
     try {
       const { data } = await axiosClient.post(`/reportes/${modalResolver.id_reporte}/resolver`)
-      setMsgResolver({ tipo: 'ok', texto: data.message ?? 'Caso resuelto y eliminado.' })
-      setReportes(prev => prev.filter(r => r.id_reporte !== modalResolver.id_reporte))
+      setMsgResolver({ tipo: 'ok', texto: data.message ?? 'Caso resuelto y archivado.' })
+      setReportes(prev => prev.map(r => r.id_reporte === modalResolver.id_reporte ? { ...r, estado: 'Resuelto' as const } : r))
       setTimeout(() => { setModalResolver(null); setMsgResolver(null) }, 1500)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -546,8 +546,8 @@ export default function TabsBuscarReportes() {
             <div className="flex gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 mb-5">
               <span className="text-amber-500 text-base mt-0.5">⚠</span>
               <div>
-                <p className="text-sm font-semibold text-amber-800">Acción irreversible</p>
-                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">Este reporte será eliminado permanentemente de la base de datos.</p>
+                <p className="text-sm font-semibold text-amber-800">Cerrar reporte</p>
+                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">Este reporte se marcará como resuelto y se conservará para análisis histórico.</p>
               </div>
             </div>
 

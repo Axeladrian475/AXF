@@ -12,7 +12,7 @@
 // ============================================================================
 
 import { useState, useContext, useEffect, useRef } from 'react'
-import { Eye, EyeOff, Loader2, Wifi, RefreshCw, CheckCircle } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Wifi, RefreshCw, CheckCircle, Camera, X } from 'lucide-react'
 import { AuthContext }  from '../../../context/AuthContext'
 import axiosClient      from '../../../api/axiosClient'
 
@@ -196,6 +196,36 @@ const FORM_VACIO = {
   nfc_uid: '',
 }
 
+// ─── Componente: Vista previa de foto ────────────────────────────────────────
+function FotoPreview({ archivo, onQuitar }: { archivo: File | null; onQuitar: () => void }) {
+  const url = archivo ? URL.createObjectURL(archivo) : null
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className={`relative w-28 h-28 rounded-full border-4 overflow-hidden flex items-center justify-center
+        ${archivo ? 'border-[#ea580c]' : 'border-dashed border-gray-300 bg-gray-50'}`}>
+        {url ? (
+          <>
+            <img src={url} alt="preview" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={onQuitar}
+              className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow"
+              title="Quitar foto"
+            >
+              <X size={11} />
+            </button>
+          </>
+        ) : (
+          <Camera size={28} className="text-gray-300" />
+        )}
+      </div>
+      <span className={`text-xs font-bold ${archivo ? 'text-green-600' : 'text-red-500'}`}>
+        {archivo ? `✅ ${archivo.name.slice(0, 22)}${archivo.name.length > 22 ? '…' : ''}` : '⚠️ Foto obligatoria'}
+      </span>
+    </div>
+  )
+}
+
 // ─── Componente principal ────────────────────────────────────────────────────
 export default function TabsRegistrarNuevo() {
   const { user }                = useContext(AuthContext)
@@ -204,10 +234,11 @@ export default function TabsRegistrarNuevo() {
   const [enviando, setEnviando] = useState(false)
   const [alerta, setAlerta]     = useState<AlertaState>(null)
   const [sesionHw, setSesionHw] = useState<SesionHw | null>(null)
+  const [foto, setFoto]         = useState<File | null>(null)
+  const fotoInputRef            = useRef<HTMLInputElement>(null)
 
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout>  | null>(null)
-  const terminos_aceptados = true
 
   // ── Polling de estado ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -290,7 +321,7 @@ export default function TabsRegistrarNuevo() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(p => ({ ...p, [e.target.name]: e.target.value }))
 
-  const limpiarFormulario = () => { setForm(FORM_VACIO); setShowPass(false) }
+  const limpiarFormulario = () => { setForm(FORM_VACIO); setShowPass(false); setFoto(null) }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setAlerta(null)
@@ -302,22 +333,29 @@ export default function TabsRegistrarNuevo() {
       return setAlerta({ tipo: 'error', mensaje: 'La contraseña debe tener al menos 6 caracteres.' })
     if (!form.fecha_nacimiento)
       return setAlerta({ tipo: 'error', mensaje: 'La fecha de nacimiento es obligatoria.' })
+    if (!foto)
+      return setAlerta({ tipo: 'error', mensaje: 'La foto del suscriptor es obligatoria.' })
 
     setEnviando(true)
     try {
-      const { data } = await axiosClient.post('/suscriptores', {
-        nombres:          form.nombres.trim(),
-        apellido_paterno: form.apellido_paterno.trim(),
-        apellido_materno: form.apellido_materno.trim() || null,
-        fecha_nacimiento: form.fecha_nacimiento,
-        sexo:             SEXO_MAP[form.sexo] ?? 'M',
-        telefono:         form.telefono.trim() || null,
-        direccion:        form.direccion.trim() || null,
-        codigo_postal:    form.codigo_postal.trim() || null,
-        correo:           form.correo.trim(),
-        password:         form.password,
-        terminos_aceptados,
-        nfc_uid:          form.nfc_uid || null,
+      // Usar FormData para enviar la foto junto con los demás campos
+      const fd = new FormData()
+      fd.append('foto', foto)
+      fd.append('nombres',          form.nombres.trim())
+      fd.append('apellido_paterno', form.apellido_paterno.trim())
+      fd.append('apellido_materno', form.apellido_materno.trim() || '')
+      fd.append('fecha_nacimiento', form.fecha_nacimiento)
+      fd.append('sexo',             SEXO_MAP[form.sexo] ?? 'M')
+      fd.append('telefono',         form.telefono.trim())
+      fd.append('direccion',        form.direccion.trim())
+      fd.append('codigo_postal',    form.codigo_postal.trim())
+      fd.append('correo',           form.correo.trim())
+      fd.append('password',         form.password)
+      fd.append('terminos_aceptados', '1')
+      if (form.nfc_uid) fd.append('nfc_uid', form.nfc_uid)
+
+      const { data } = await axiosClient.post('/suscriptores', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       })
       setAlerta({ tipo: 'exito', mensaje: data.message ?? 'Suscriptor registrado correctamente.' })
       limpiarFormulario()
@@ -346,6 +384,36 @@ export default function TabsRegistrarNuevo() {
       {alerta && <Alerta tipo={alerta.tipo} mensaje={alerta.mensaje} onClose={() => setAlerta(null)} />}
 
       <form className="space-y-4" onSubmit={handleSubmit}>
+
+        {/* ── Foto del suscriptor (OBLIGATORIA) ─────────────────────────── */}
+        <div className="border-2 border-dashed rounded-xl p-5 bg-gray-50 flex items-center gap-6"
+          style={{ borderColor: foto ? '#ea580c' : '#e5e7eb' }}>
+          <FotoPreview archivo={foto} onQuitar={() => setFoto(null)} />
+          <div className="flex-1">
+            <p className="font-bold text-black text-sm mb-1">
+              Foto del Suscriptor <span className="text-red-500">*</span>
+            </p>
+            <p className="text-xs text-gray-500 mb-3">
+              Sube una foto clara del rostro. Formatos: JPG, PNG, WebP. Máx. 5 MB.
+            </p>
+            <button
+              type="button"
+              disabled={enviando}
+              onClick={() => fotoInputRef.current?.click()}
+              className="flex items-center gap-2 border-2 border-[#ea580c] text-[#ea580c] font-bold text-sm px-4 py-2 rounded-lg hover:bg-[#ea580c]/10 transition-colors disabled:opacity-50"
+            >
+              <Camera size={15} />
+              {foto ? 'Cambiar foto' : 'Seleccionar foto'}
+            </button>
+            <input
+              ref={fotoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => setFoto(e.target.files?.[0] ?? null)}
+            />
+          </div>
+        </div>
         {/* Nombre */}
         <div className="grid grid-cols-3 gap-4">
           <div>

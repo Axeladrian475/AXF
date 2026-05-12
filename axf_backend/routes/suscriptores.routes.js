@@ -76,6 +76,23 @@ const uploadInc = multer({
   },
 });
 
+// ── Configuración multer para fotos de suscriptores ───────────────────────────
+const UPLOADS_SUS = path.resolve(__dirname2, '..', 'uploads', 'suscriptores');
+if (!fs.existsSync(UPLOADS_SUS)) fs.mkdirSync(UPLOADS_SUS, { recursive: true });
+
+const uploadSuscriptor = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_SUS),
+    filename: (_req, file, cb) =>
+      cb(null, `sus_${Date.now()}${path.extname(file.originalname).toLowerCase()}`),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Solo se permiten imágenes (jpg, png, webp, etc.)'));
+  },
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 // POST /api/suscriptores/login
 // ════════════════════════════════════════════════════════════════════════════
@@ -671,7 +688,21 @@ router.use(verificarToken, personalOSucursal);
 
 // ─── Rutas sin parámetro :id ──────────────────────────────────────────────────
 router.get('/otras-sucursales', listarSuscriptoresOtrasSucursales);
-router.post('/', registrarSuscriptor);
+// La foto del suscriptor es OBLIGATORIA — el middleware valida que exista
+router.post(
+  '/',
+  uploadSuscriptor.single('foto'),
+  (req, res, next) => {
+    // Rechazar si no se subió ningún archivo
+    if (!req.file) {
+      return res.status(400).json({ message: 'La foto del suscriptor es obligatoria.' });
+    }
+    // Adjuntar la ruta pública al body para que el controller la use
+    req.body.foto_url = `/uploads/suscriptores/${req.file.filename}`;
+    next();
+  },
+  registrarSuscriptor,
+);
 router.get('/', listarSuscriptores);
 
 // ── POST /api/suscriptores/identificar ──────────────────────────────────────
@@ -706,7 +737,18 @@ router.post('/identificar', async (req, res) => {
 
 // ─── Rutas con parámetro :id ──────────────────────────────────────────────────
 router.get('/:id', obtenerSuscriptor);
-router.put('/:id', modificarSuscriptor);
+router.put('/:id', (req, res, next) => {
+  uploadSuscriptor.single('foto')(req, res, (err) => {
+    if (err) {
+      console.error('[Multer PUT] Error:', err);
+      return res.status(400).json({ message: err.message || 'Error al subir imagen.' });
+    }
+    if (req.file) {
+      req.body.foto_url = `/uploads/suscriptores/${req.file.filename}`;
+    }
+    next();
+  });
+}, modificarSuscriptor);
 router.delete('/:id', eliminarSuscriptor);
 router.post('/:id/migrar', migrarSuscriptor);
 router.get('/:id/suscripcion-activa', obtenerSuscripcionActiva);

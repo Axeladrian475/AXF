@@ -39,6 +39,7 @@ import {
   resolverReporte,
   historialStrikes,
   resumenReportes,
+  analisisReportes,
 } from '../controllers/reportes.controller.js';
 import {
   getConfigStrikes,
@@ -355,6 +356,7 @@ router.use(verificarToken);
 // IMPORTANTE: deben ir ANTES de /:id para evitar conflictos de routing
 
 router.get('/resumen',           personalOSucursal, resumenReportes);
+router.get('/analisis',          personalOSucursal, analisisReportes);
 router.get('/strikes/config',    personalOSucursal, getConfigStrikes);
 router.put('/strikes/config',    soloMaestro,       setConfigStrikes);  // ← Solo maestro
 router.post('/strikes/procesar', soloMaestro,       procesarManual);    // ← Solo maestro

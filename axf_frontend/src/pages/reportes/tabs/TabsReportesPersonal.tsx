@@ -95,8 +95,8 @@ export default function TabsReportesPersonal() {
     setResolviendo(true); setMsgResolver(null)
     try {
       await axiosClient.post(`/reportes/${modalResolver.id_reporte}/resolver`)
-      setReportes(prev => prev.filter(r => r.id_reporte !== modalResolver.id_reporte))
-      setMsgResolver({ tipo: 'ok', texto: 'Reporte resuelto y cerrado.' })
+      setReportes(prev => prev.map(r => r.id_reporte === modalResolver.id_reporte ? { ...r, estado: 'Resuelto' as const } : r))
+      setMsgResolver({ tipo: 'ok', texto: 'Reporte resuelto y archivado.' })
       setTimeout(() => { setModalResolver(null); setMsgResolver(null) }, 1200)
     } catch {
       setMsgResolver({ tipo: 'error', texto: 'Error al resolver el reporte.' })
@@ -383,7 +383,7 @@ export default function TabsReportesPersonal() {
               </div>
             )}
             <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 text-sm text-orange-700 mb-4">
-              ⚠️ Esta acción <strong>eliminará el reporte permanentemente</strong>. Úsala solo cuando hayas dado seguimiento al caso.
+              ⚠️ Este reporte se <strong>marcará como resuelto</strong> y se archivará para análisis histórico.
             </div>
             {msgResolver && (
               <div className={`rounded-lg px-3 py-2 text-sm mb-4 flex items-center gap-2

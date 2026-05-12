@@ -130,10 +130,9 @@ function TarjetaSuscripcion({ sub, index, esCorriendo, onEliminar }: {
 
 // ─── Tarjeta de plan (reutilizable para planes y promos) ─────────────────────
 function TarjetaPlan({
-  plan, tieneActiva, etiqueta, colorBoton, badge, onSeleccionar
+  plan, etiqueta, colorBoton, badge, onSeleccionar
 }: {
   plan: PlanUnificado
-  tieneActiva: boolean
   etiqueta: string
   colorBoton: string
   badge?: React.ReactNode
@@ -480,7 +479,6 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
               <TarjetaPlan
                 key={plan.id_tipo}
                 plan={toUnificado(plan)}
-                tieneActiva={!!tieneActiva}
                 etiqueta={tieneActiva ? 'Acumular Plan' : 'Suscribir'}
                 colorBoton="bg-[#ea580c] hover:bg-[#c94a0a]"
                 onSeleccionar={handleSeleccionarPlan}
@@ -510,7 +508,6 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
               <TarjetaPlan
                 key={promo.id_promocion}
                 plan={promoToUnificado(promo)}
-                tieneActiva={!!tieneActiva}
                 etiqueta="Aplicar Promoción"
                 colorBoton="bg-orange-500 hover:bg-orange-600"
                 badge={

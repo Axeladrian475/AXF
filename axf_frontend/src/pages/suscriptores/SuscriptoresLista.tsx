@@ -20,6 +20,7 @@ interface Suscriptor {
   puntos:           number
   creado_en:        string
   sucursal_registro: string
+  foto_url:         string | null
   // extra que agregamos al listar con filtro
   fecha_fin_suscripcion?: string | null
   plan_nombre?:           string | null
@@ -195,6 +196,7 @@ export default function SuscriptoresLista() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b-2 border-gray-200">
+                    <th className="text-left font-bold text-black pb-2 pr-3 w-12">Foto</th>
                     <th className="text-left font-bold text-black pb-2 pr-4">ID</th>
                     <th className="text-left font-bold text-black pb-2 pr-4">Nombre</th>
                     <th className="text-left font-bold text-black pb-2 pr-4">Correo</th>
@@ -208,6 +210,21 @@ export default function SuscriptoresLista() {
                   {suscriptores.map(s => (
                     <tr key={s.id_suscriptor}
                       className="border-b border-gray-100 hover:bg-white transition-colors">
+
+                      {/* Foto */}
+                      <td className="py-2 pr-3">
+                        {s.foto_url ? (
+                          <img
+                            src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${s.foto_url}`}
+                            alt={s.nombre_completo}
+                            className="w-9 h-9 rounded-full object-cover border-2 border-[#ea580c]/30"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-sm border-2 border-gray-300">
+                            {s.nombre_completo.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </td>
 
                       {/* ID */}
                       <td className="py-3 pr-4">

@@ -18,6 +18,7 @@ interface Conversacion {
   ultimo_mensaje_en:   string | null
   ultimo_enviado_por:  'personal' | 'suscriptor' | null
   no_leidos:           number
+  foto_url:            string | null
 }
 
 interface Mensaje {
@@ -39,6 +40,7 @@ interface SuscriptorDisponible {
   nombre:        string
   correo:        string
   tiene_chat:    number
+  foto_url:      string | null
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -466,7 +468,7 @@ export default function Chat() {
       setConversaciones(prev => [{
         id_suscriptor: s.id_suscriptor, nombre_suscriptor: s.nombre,
         correo: s.correo, ultimo_mensaje: null, ultimo_mensaje_en: null,
-        ultimo_enviado_por: null, no_leidos: 0,
+        ultimo_enviado_por: null, no_leidos: 0, foto_url: s.foto_url
       }, ...prev])
     }
     setSuscActivoId(s.id_suscriptor)
@@ -559,10 +561,18 @@ export default function Chat() {
               <div className="flex justify-between items-center gap-1">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="relative shrink-0">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold
-                      ${suscActivoId === c.id_suscriptor ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-600'}`}>
-                      {c.nombre_suscriptor.charAt(0).toUpperCase()}
-                    </div>
+                    {c.foto_url ? (
+                      <img
+                        src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${c.foto_url}`}
+                        alt={c.nombre_suscriptor}
+                        className="w-9 h-9 rounded-full object-cover border-2 border-transparent"
+                      />
+                    ) : (
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold
+                        ${suscActivoId === c.id_suscriptor ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-600'}`}>
+                        {c.nombre_suscriptor.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     {/* Punto online (si el suscriptor está conectado) */}
                     {onlineStatus[`suscriptor:${c.id_suscriptor}`] && (
                       <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-white" />
@@ -613,9 +623,17 @@ export default function Chat() {
             {/* Header */}
             <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-3 bg-white shrink-0">
               <div className="relative">
-                <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm">
-                  {suscActivo?.nombre_suscriptor.charAt(0).toUpperCase() ?? '?'}
-                </div>
+                {suscActivo?.foto_url ? (
+                  <img
+                    src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${suscActivo.foto_url}`}
+                    alt={suscActivo.nombre_suscriptor}
+                    className="w-9 h-9 rounded-full object-cover border-2 border-orange-100"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm">
+                    {suscActivo?.nombre_suscriptor.charAt(0).toUpperCase() ?? '?'}
+                  </div>
+                )}
                 {onlineStatus[`suscriptor:${suscActivoId}`] && (
                   <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-white" />
                 )}
@@ -701,8 +719,18 @@ export default function Chat() {
                         }}
                       >
                         {!esMio && (
-                          <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold shrink-0 mb-1">
-                            {suscActivo?.nombre_suscriptor.charAt(0).toUpperCase()}
+                          <div className="shrink-0 mb-1">
+                            {suscActivo?.foto_url ? (
+                              <img
+                                src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${suscActivo.foto_url}`}
+                                alt="avatar"
+                                className="w-7 h-7 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold">
+                                {suscActivo?.nombre_suscriptor.charAt(0).toUpperCase()}
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -766,9 +794,17 @@ export default function Chat() {
                   {/* Indicador escribiendo */}
                   {escribiendo && (
                     <div className="flex items-end gap-2 justify-start">
-                      <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold shrink-0">
-                        {suscActivo?.nombre_suscriptor.charAt(0).toUpperCase()}
-                      </div>
+                      {suscActivo?.foto_url ? (
+                        <img
+                          src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${suscActivo.foto_url}`}
+                          alt="avatar"
+                          className="w-7 h-7 rounded-full object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold shrink-0">
+                          {suscActivo?.nombre_suscriptor.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex gap-1 items-center">
                         <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                         <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -870,9 +906,17 @@ export default function Chat() {
                   onClick={() => iniciarConversacion(s)}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-orange-50 cursor-pointer border-b border-gray-50 transition-colors"
                 >
-                  <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0">
-                    {s.nombre.charAt(0).toUpperCase()}
-                  </div>
+                  {s.foto_url ? (
+                    <img
+                      src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${s.foto_url}`}
+                      alt={s.nombre}
+                      className="w-9 h-9 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0">
+                      {s.nombre.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-gray-800 truncate">{s.nombre}</p>
                     <p className="text-xs text-gray-400 truncate">{s.correo}</p>
