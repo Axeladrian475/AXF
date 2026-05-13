@@ -106,7 +106,7 @@ router.post('/login', async (req, res) => {
 
     const [[suscriptor]] = await db.query(
       `SELECT id_suscriptor, nombres, apellido_paterno, correo,
-              id_sucursal_registro, password_hash, activo
+              id_sucursal_registro, password_hash, activo, foto_url
        FROM suscriptores
        WHERE correo = ? AND activo = 1`,
       [email.trim().toLowerCase()]
@@ -146,6 +146,7 @@ router.post('/login', async (req, res) => {
         sucursalId: suscriptor.id_sucursal_registro,
         suscripcionActiva: !!sub,
         fechaVencimiento: sub ? sub.fecha_fin : null,
+        foto_url: suscriptor.foto_url ?? null,
       },
     });
 
