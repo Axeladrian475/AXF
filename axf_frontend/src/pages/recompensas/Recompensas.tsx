@@ -21,9 +21,9 @@ type NfcEstado =
 // ── Mensajes de paso del ESP32 ───────────────────────────────────────────────
 const PASOS_LEGIBLES: Record<string, string> = {
   esperando_dispositivo: 'Esperando al dispositivo…',
-  listo_para_leer:       'Dispositivo listo. Acerca la tarjeta.',
-  acerca_tarjeta:        'Acerca la tarjeta NFC al lector.',
-  tarjeta_detectada:     'Tarjeta detectada, procesando…',
+  listo_para_leer:       'Dispositivo listo. Coloca tu dedo en el sensor.',
+  acerca_tarjeta:        'Coloca tu dedo en el sensor de huella.',
+  tarjeta_detectada:     'Huella detectada, procesando…',
   enviando:              'Enviando datos…',
   completado:            'Lectura completada.',
 }
@@ -86,11 +86,11 @@ export default function Recompensas() {
 
     let token: string
     try {
-      const sesion = await iniciarSesionHardware('nfc')
+      const sesion = await iniciarSesionHardware('huella_leer')
       token = sesion.token
     } catch {
       setNfcEstado('error')
-      setNfcError('No se pudo iniciar la sesión con el lector NFC.')
+      setNfcError('No se pudo iniciar la sesión con el sensor de huella.')
       return
     }
 
@@ -108,12 +108,12 @@ export default function Recompensas() {
           setNfcEstado('identificando')
           setNfcPaso('completado')
           try {
-            const sus = await identificarSuscriptor('nfc', poll.valor)
+            const sus = await identificarSuscriptor('huella', poll.valor)
             setSuscriptor(sus)
             setNfcEstado('ok')
           } catch {
             setNfcEstado('error')
-            setNfcError('No se encontró ningún suscriptor con esa tarjeta NFC.')
+            setNfcError('No se encontró ningún suscriptor con esa huella.')
           }
         }
 
@@ -125,7 +125,7 @@ export default function Recompensas() {
       } catch {
         clearInterval(pollRef.current!)
         setNfcEstado('error')
-        setNfcError('Se perdió la conexión con el lector NFC.')
+        setNfcError('Se perdió la conexión con el sensor de huella.')
       }
     }, 1500)
   }
@@ -171,7 +171,7 @@ export default function Recompensas() {
         <div>
           <h1 className="text-lg font-bold text-black">🏆 Módulo de Recompensas</h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Identifica al suscriptor con su tarjeta NFC y canjea sus puntos.
+            Identifica al suscriptor con su huella dactilar y canjea sus puntos.
           </p>
         </div>
         <button
@@ -190,7 +190,7 @@ export default function Recompensas() {
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-black text-sm">1. Identificar Suscriptor</h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            Pide al suscriptor que acerque su tarjeta NFC al lector.
+            Pide al suscriptor que coloque su dedo en el sensor de huella.
           </p>
         </div>
 
@@ -203,8 +203,8 @@ export default function Recompensas() {
                 onClick={iniciarNFC}
                 className="inline-flex items-center gap-2 bg-[#ea580c] hover:bg-[#c94a0a] active:scale-95 transition-all text-white font-bold px-5 py-2.5 rounded text-sm shadow-sm w-fit"
               >
-                <span>💳</span>
-                <span>Leer Tarjeta NFC</span>
+                <span>👆</span>
+                <span>Leer Huella Dactilar</span>
               </button>
 
               {/* Error */}
@@ -225,11 +225,11 @@ export default function Recompensas() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-4 border border-gray-200 rounded px-5 py-4">
                 <div className="w-10 h-10 rounded-full bg-orange-50 border border-orange-200 flex items-center justify-center text-xl flex-shrink-0">
-                  💳
+                  👆
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-bold text-black">
-                    {nfcEstado === 'identificando' ? 'Identificando suscriptor…' : 'Esperando tarjeta NFC…'}
+                    {nfcEstado === 'identificando' ? 'Identificando suscriptor…' : 'Esperando huella dactilar…'}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">{pasoLegible}</p>
                   <div className="mt-2 w-40 h-1 bg-gray-100 rounded-full overflow-hidden">

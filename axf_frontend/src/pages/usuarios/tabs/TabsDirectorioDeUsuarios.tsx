@@ -322,7 +322,8 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
 
   const iniciarLectura = async (tipo: TipoLectura) => {
     try {
-      const { data } = await axiosClient.post('/hardware/token', { tipo })
+      const tipoBackend = tipo === 'huella' ? 'huella_enroll' : tipo;
+      const { data } = await axiosClient.post('/hardware/token', { tipo: tipoBackend })
       setSesionHw({ token: data.token, tipo, estado: 'pending', paso: 'esperando_dispositivo' })
     } catch {
       setAlerta({ tipo: 'error', mensaje: 'Error al iniciar. Verifica que el backend esté corriendo.' })
@@ -376,8 +377,12 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
       fd.append('correo', form.correo.trim())
 
       if (form.password.trim()) fd.append('password', form.password.trim())
-      if (form.nfc_uid)         fd.append('nfc_uid', form.nfc_uid)
-      if (form.huella_id)       fd.append('huella_template', form.huella_id)
+      
+      if (form.nfc_uid) fd.append('nfc_uid', form.nfc_uid)
+      else if (!tieneNfc) fd.append('nfc_uid', '')
+
+      if (form.huella_id) fd.append('huella_template', form.huella_id)
+      else if (!tieneHuella) fd.append('huella_template', '')
       
       if (foto) fd.append('foto', foto)
 
@@ -558,10 +563,13 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
                               ? <span>Tarjeta registrada</span>
                               : <span>Sin tarjeta</span>}
                         </div>
-                        {form.nfc_uid && (
+                        {form.nfc_uid ? (
                           <button type="button" onClick={() => setForm(p => ({ ...p, nfc_uid: '' }))}
                             className="text-gray-400 hover:text-red-500 text-xs px-1">✕</button>
-                        )}
+                        ) : tieneNfc ? (
+                          <button type="button" onClick={() => setTieneNfc(false)}
+                            className="text-gray-400 hover:text-red-500 text-xs px-1">✕</button>
+                        ) : null}
                       </div>
                     </div>
 
@@ -582,10 +590,13 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
                               ? <span>Huella registrada</span>
                               : <span>Sin huella</span>}
                         </div>
-                        {form.huella_id && (
+                        {form.huella_id ? (
                           <button type="button" onClick={() => setForm(p => ({ ...p, huella_id: '' }))}
                             className="text-gray-400 hover:text-red-500 text-xs px-1">✕</button>
-                        )}
+                        ) : tieneHuella ? (
+                          <button type="button" onClick={() => setTieneHuella(false)}
+                            className="text-gray-400 hover:text-red-500 text-xs px-1">✕</button>
+                        ) : null}
                       </div>
                     </div>
                   </div>

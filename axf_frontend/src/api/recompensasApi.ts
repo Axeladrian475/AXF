@@ -79,7 +79,7 @@ export async function identificarSuscriptor(
  * El ESP32 hace polling de este token para saber qué debe leer.
  */
 export async function iniciarSesionHardware(
-  tipo: 'nfc' | 'huella'
+  tipo: 'nfc' | 'huella' | 'huella_enroll' | 'huella_leer'
 ): Promise<HardwareToken> {
   const { data } = await axiosClient.post<HardwareToken>('/hardware/token', { tipo });
   return data;

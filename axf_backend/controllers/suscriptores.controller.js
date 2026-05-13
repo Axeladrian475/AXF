@@ -341,19 +341,20 @@ export async function obtenerSuscriptor(req, res) {
 // ════════════════════════════════════════════════════════════════════════════
 // PUT /api/suscriptores/:id
 // Modificar datos de un suscriptor existente.
-// No modifica password ni campos de hardware (NFC/huella tienen sus propios endpoints).
+// No modifica password. Permite actualizar los campos de hardware (NFC/huella).
 // ════════════════════════════════════════════════════════════════════════════
 export async function modificarSuscriptor(req, res) {
   try {
     const { id } = req.params;
     const {
       nombres, apellido_paterno, apellido_materno,
-      fecha_nacimiento, sexo, direccion, codigo_postal, telefono, correo, foto_url
+      fecha_nacimiento, sexo, direccion, codigo_postal, telefono, correo, foto_url,
+      nfc_uid, huella_template
     } = req.body;
 
     // Verificar que el suscriptor existe
     const [[existe]] = await db.query(
-      `SELECT id_suscriptor FROM suscriptores WHERE id_suscriptor = ? AND activo = 1`,
+      `SELECT id_suscriptor, nfc_uid, huella_template FROM suscriptores WHERE id_suscriptor = ? AND activo = 1`,
       [id]
     );
     if (!existe) {
@@ -375,6 +376,9 @@ export async function modificarSuscriptor(req, res) {
       return res.status(400).json({ message: 'Sexo inválido. Valores aceptados: M, F, Otro.' });
     }
 
+    const finalNfc = req.body.nfc_uid !== undefined ? (req.body.nfc_uid || null) : existe.nfc_uid;
+    const finalHuella = req.body.huella_template !== undefined ? (req.body.huella_template || null) : existe.huella_template;
+
     await db.query(
       `UPDATE suscriptores SET
          nombres           = COALESCE(?, nombres),
@@ -386,7 +390,9 @@ export async function modificarSuscriptor(req, res) {
          codigo_postal     = COALESCE(?, codigo_postal),
          telefono          = COALESCE(?, telefono),
          correo            = COALESCE(?, correo),
-         foto_url          = COALESCE(?, foto_url)
+         foto_url          = COALESCE(?, foto_url),
+         nfc_uid           = ?,
+         huella_template   = ?
        WHERE id_suscriptor = ?`,
       [
         nombres?.trim()           ?? null,
@@ -399,6 +405,8 @@ export async function modificarSuscriptor(req, res) {
         telefono?.trim()          ?? null,
         correo?.trim().toLowerCase() ?? null,
         foto_url                  ?? null,
+        finalNfc,
+        finalHuella,
         id,
       ]
     );
@@ -406,7 +414,8 @@ export async function modificarSuscriptor(req, res) {
     res.json({ message: 'Suscriptor actualizado correctamente.' });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ message: 'Correo electrónico ya registrado.' });
+      const campo = error.message.includes('nfc') ? 'NFC' : 'correo electrónico';
+      return res.status(409).json({ message: `Ya existe un registro con ese ${campo}.` });
     }
     console.error('[PUT /suscriptores/:id]', error);
     res.status(500).json({ message: 'Error al modificar el suscriptor.' });
