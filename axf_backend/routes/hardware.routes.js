@@ -1,14 +1,25 @@
 // ============================================================================
-//  routes/hardware.routes.js  (v5 — NFC + Huella + Long-Polling)
+//  routes/hardware.routes.js  (v6 — SSE + Polling Unificado)
 //
-//  Mejoras de velocidad:
-//   • GET /poll/:token usa long-polling: la respuesta se retiene hasta 8s
-//     esperando un cambio de estado antes de devolver "sin cambios".
-//     El frontend recibe la respuesta en <100ms cuando el ESP32 reporta,
-//     en lugar de esperar el siguiente ciclo de polling corto.
-//   • POST /estado notifica inmediatamente a los listeners activos.
-//   • POST /evento notifica inmediatamente a los listeners activos.
-//   • POST /cancelar notifica inmediatamente a los listeners activos.
+//  MEJORAS v6 respecto a v5:
+//  ─────────────────────────────────────────────────────────────────────────
+//  1. GET /siguiente/cualquiera: devuelve el primer token pendiente de
+//     CUALQUIER tipo en un solo request. El ESP32 ya no necesita hacer 3
+//     requests separados (nfc / huella_enroll / huella_leer).
+//
+//  2. GET /sse/:token — Server-Sent Events:
+//     El frontend escucha actualizaciones en tiempo real vía SSE (EventSource).
+//     • Latencia ~0ms: el evento llega en cuanto el ESP32 reporta.
+//     • Sin setInterval en el frontend.
+//     • El servidor envía un keep-alive cada 20s para mantener la conexión.
+//     • Reemplaza el long-poll de /poll/:token (este sigue disponible como
+//       fallback para navegadores con límite de conexiones).
+//
+//  3. notificarSSE(): al recibir estado/evento/cancelar del ESP32, emite
+//     inmediatamente a todos los clientes SSE registrados para ese token.
+//
+//  4. Limpieza de sesiones antiguas también en /token para no acumular
+//     registros huérfanos.
 // ============================================================================
 
 import express from 'express';
@@ -37,31 +48,51 @@ async function leerAforo(conn, id_sucursal) {
   return aforo ? aforo.personas_dentro : 0;
 }
 
-// ─── Long-Poll: mapa token → lista de {res, timeout} esperando ───────────────
-// Cuando el ESP32 reporta un cambio (estado/evento/cancelar), notificamos
-// inmediatamente a todos los res que estén esperando ese token.
-const waiters = new Map(); // token → [ { res, timeoutId } ]
+// ─── SSE: mapa token → lista de res (clientes web escuchando) ────────────────
+// Cada cliente llama GET /sse/:token y recibe eventos en tiempo real.
+const sseClients = new Map(); // token → Set<res>
+
+function addSSEClient(token, res) {
+  if (!sseClients.has(token)) sseClients.set(token, new Set());
+  sseClients.get(token).add(res);
+}
+
+function removeSSEClient(token, res) {
+  const set = sseClients.get(token);
+  if (set) {
+    set.delete(res);
+    if (set.size === 0) sseClients.delete(token);
+  }
+}
+
+function notificarSSE(token, payload) {
+  const set = sseClients.get(token);
+  if (!set || set.size === 0) return;
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const res of set) {
+    try { res.write(data); } catch (_) { /* cliente ya desconectado */ }
+  }
+}
+
+// ─── Long-Poll: mapa token → lista de {res, timeout} (fallback) ──────────────
+const waiters = new Map();
 
 function notificarWaiters(token, payload) {
   const list = waiters.get(token);
   if (!list || list.length === 0) return;
-  // Copiar y limpiar antes de iterar (evita doble-send)
   const pending = [...list];
   waiters.set(token, []);
   for (const { res, timeoutId } of pending) {
     clearTimeout(timeoutId);
-    try { res.json(payload); } catch (_) { /* ya cerrada */ }
+    try { res.json(payload); } catch (_) { }
   }
 }
 
 function addWaiter(token, res) {
-  // Timeout de 8 s: si no hay cambio, devolvemos estado actual
   const timeoutId = setTimeout(async () => {
     const list = waiters.get(token) ?? [];
     const idx = list.findIndex(w => w.res === res);
     if (idx !== -1) list.splice(idx, 1);
-
-    // Leer estado actual y responder
     try {
       const [[sesion]] = await db.query(
         `SELECT tipo, valor, estado, paso FROM hardware_sesiones WHERE token = ?`,
@@ -79,6 +110,12 @@ function addWaiter(token, res) {
   waiters.set(token, list);
 }
 
+// ─── Notificar a SSE + waiters ───────────────────────────────────────────────
+function notificarClientes(token, payload) {
+  notificarSSE(token, payload);
+  notificarWaiters(token, payload);
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // POST /api/hardware/token
 // ════════════════════════════════════════════════════════════════════════════
@@ -94,7 +131,8 @@ router.post('/token', async (req, res) => {
      VALUES (?, ?, '', 0, 'pending', 'esperando_dispositivo')`,
     [token, tipo]
   );
-  // Limpiar sesiones antiguas (> 3 min) en segundo plano
+
+  // Limpiar sesiones antiguas en segundo plano
   db.query(
     `DELETE FROM hardware_sesiones WHERE creado_en < DATE_SUB(NOW(), INTERVAL 3 MINUTE)`
   ).catch(() => { });
@@ -104,14 +142,19 @@ router.post('/token', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// GET /api/hardware/siguiente/:tipo   (nfc | huella | huella_enroll | huella_leer | cualquiera)
+// GET /api/hardware/siguiente/:tipo
+// tipo puede ser: nfc | huella | huella_enroll | huella_leer | cualquiera
+//
+// El ESP32 usa "cualquiera" → un solo request para detectar cualquier tarea.
+// El frontend puede usar tipos específicos si necesita crear tokens por tipo.
 // ════════════════════════════════════════════════════════════════════════════
 router.get('/siguiente/:tipo', verificarApiKey, async (req, res) => {
   const { tipo } = req.params;
-  
+
   let sesion;
-  
+
   if (tipo === 'cualquiera') {
+    // Polling unificado: primer token pendiente sin importar tipo
     const [rows] = await db.query(
       `SELECT token, tipo FROM hardware_sesiones
        WHERE estado = 'pending' AND usado = 0
@@ -138,8 +181,12 @@ router.get('/siguiente/:tipo', verificarApiKey, async (req, res) => {
     [sesion.token]
   );
 
-  // Notificar inmediatamente al frontend que está esperando este token
-  notificarWaiters(sesion.token, { estado: 'reading', paso: 'listo_para_leer', tipo: sesion.tipo });
+  // Notificar inmediatamente al frontend que ya fue recogido por el ESP32
+  notificarClientes(sesion.token, {
+    estado: 'reading',
+    paso: 'listo_para_leer',
+    tipo: sesion.tipo,
+  });
 
   console.log(`[HW] ESP32 recogió token ${sesion.tipo.toUpperCase()}: ${sesion.token}`);
   res.json({ hay: true, token: sesion.token, tipo: sesion.tipo });
@@ -165,8 +212,7 @@ router.post('/estado', verificarApiKey, async (req, res) => {
     [paso, token_sesion]
   );
 
-  // Notificar al frontend inmediatamente
-  notificarWaiters(token_sesion, { estado: 'reading', paso, tipo: sesion.tipo });
+  notificarClientes(token_sesion, { estado: 'reading', paso, tipo: sesion.tipo });
 
   res.json({ ok: true });
 });
@@ -183,7 +229,7 @@ router.post('/cancelar', verificarApiKey, async (req, res) => {
     [motivo || 'error_desconocido', token_sesion]
   );
 
-  notificarWaiters(token_sesion, { estado: 'error', paso: motivo || 'error_desconocido' });
+  notificarClientes(token_sesion, { estado: 'error', paso: motivo || 'error_desconocido' });
 
   res.json({ ok: true });
 });
@@ -209,16 +255,72 @@ router.post('/evento', verificarApiKey, async (req, res) => {
     [valor, token_sesion]
   );
 
-  // Notificar al frontend inmediatamente con el valor final
-  notificarWaiters(token_sesion, { estado: 'done', tipo, valor });
+  // Notificar con el valor final → SSE + waiters
+  notificarClientes(token_sesion, { estado: 'done', tipo, valor });
 
   res.json({ ok: true });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// GET /api/hardware/poll/:token  — Long-Poll
-// El frontend llama esto en un loop. La respuesta se retiene hasta 8 s.
-// Si el ESP32 reporta algo antes, responde de inmediato.
+// GET /api/hardware/sse/:token  — Server-Sent Events (RECOMENDADO)
+//
+// El frontend crea un EventSource a esta URL y recibe actualizaciones
+// en tiempo real sin polling. Latencia ~0ms.
+//
+// Eventos emitidos:
+//   data: {"estado":"reading","paso":"acerca_tarjeta","tipo":"nfc"}
+//   data: {"estado":"done","tipo":"nfc","valor":"04:AB:CD:EF"}
+//   data: {"estado":"error","paso":"timeout_nfc"}
+//
+// Keep-alive cada 20s: ": ping\n\n" (comentario SSE, no dispara onmessage)
+// ════════════════════════════════════════════════════════════════════════════
+router.get('/sse/:token', async (req, res) => {
+  const { token } = req.params;
+
+  const [[sesion]] = await db.query(
+    `SELECT tipo, valor, estado, paso FROM hardware_sesiones WHERE token = ?`,
+    [token]
+  );
+  if (!sesion) return res.status(404).json({ message: 'Token no encontrado' });
+
+  // Si ya hay resultado terminal, responder de inmediato como JSON normal
+  if (sesion.estado === 'done') {
+    return res.json({ estado: 'done', tipo: sesion.tipo, valor: sesion.valor });
+  }
+  if (sesion.estado === 'error') {
+    return res.json({ estado: 'error', paso: sesion.paso });
+  }
+
+  // Configurar SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  // Enviar estado inicial inmediatamente
+  res.write(`data: ${JSON.stringify({ estado: sesion.estado, paso: sesion.paso, tipo: sesion.tipo })}\n\n`);
+
+  // Registrar cliente SSE
+  addSSEClient(token, res);
+
+  // Keep-alive cada 20s (previene timeout de proxies/nginx)
+  const keepAlive = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch (_) { }
+  }, 20000);
+
+  // Limpiar al desconectar
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    removeSSEClient(token, res);
+    console.log(`[SSE] Cliente desconectado: ${token}`);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/hardware/poll/:token  — Long-Poll (fallback)
+// Mantenido por compatibilidad con versiones anteriores del frontend.
+// Para nuevas implementaciones, usar /sse/:token en su lugar.
 // ════════════════════════════════════════════════════════════════════════════
 router.get('/poll/:token', async (req, res) => {
   const { token } = req.params;
@@ -229,16 +331,12 @@ router.get('/poll/:token', async (req, res) => {
   );
   if (!sesion) return res.status(404).json({ message: 'Token no encontrado' });
 
-  // Si ya hay resultado terminal, responder de inmediato
   if (sesion.estado === 'done') return res.json({ estado: 'done', tipo: sesion.tipo, valor: sesion.valor });
   if (sesion.estado === 'error') return res.json({ estado: 'error', paso: sesion.paso });
 
-  // Estado intermedio → long-poll hasta que el ESP32 notifique o 8 s pasen
-  // Configurar headers para mantener la conexión abierta
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('X-Accel-Buffering', 'no');
 
-  // Limpiar si el cliente se desconecta
   req.on('close', () => {
     const list = waiters.get(token) ?? [];
     const idx = list.findIndex(w => w.res === res);

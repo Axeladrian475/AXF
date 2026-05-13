@@ -86,8 +86,50 @@ export async function iniciarSesionHardware(
 }
 
 /**
- * Consulta el estado actual de la sesión de hardware.
- * Llamar cada ~1.5 s hasta que estado === 'done' o 'error'.
+ * Escucha actualizaciones de hardware vía Server-Sent Events (SSE).
+ * Latencia ~0ms: el evento llega en cuanto el ESP32 reporta.
+ *
+ * Devuelve una función cleanup para cerrar la conexión.
+ *
+ * @param token    Token de sesión de hardware
+ * @param onUpdate Callback con el estado actualizado
+ * @returns        Función para cerrar el EventSource
+ */
+export function escucharHardwareSSE(
+  token: string,
+  onUpdate: (poll: HardwarePoll) => void
+): () => void {
+  // Obtener la base URL del axiosClient
+  const baseURL = (axiosClient.defaults.baseURL ?? '').replace(/\/$/, '');
+
+  // Incluir el JWT en la URL como query param ya que EventSource no acepta headers
+  const jwtToken = localStorage.getItem('token') ?? '';
+  const url = `${baseURL}/hardware/sse/${token}?jwt=${jwtToken}`;
+
+  const es = new EventSource(url);
+
+  es.onmessage = (event) => {
+    try {
+      const data: HardwarePoll = JSON.parse(event.data);
+      onUpdate(data);
+    } catch (_) {
+      // ignorar frames de keep-alive malformados
+    }
+  };
+
+  es.onerror = () => {
+    // EventSource reintenta automáticamente; si el estado ya es terminal,
+    // el backend responderá con JSON (no SSE) y onmessage recibirá el resultado.
+    onUpdate({ estado: 'error', paso: 'conexion_perdida' });
+    es.close();
+  };
+
+  return () => es.close();
+}
+
+/**
+ * Consulta el estado actual de la sesión de hardware (fallback polling).
+ * Preferir escucharHardwareSSE() para latencia mínima.
  */
 export async function pollHardware(token: string): Promise<HardwarePoll> {
   const { data } = await axiosClient.get<HardwarePoll>(`/hardware/poll/${token}`);

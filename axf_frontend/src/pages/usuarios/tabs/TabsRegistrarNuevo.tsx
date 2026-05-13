@@ -2,18 +2,12 @@
 //  pages/usuarios/tabs/TabsRegistrarNuevo.tsx
 //  Formulario de registro — integración ESP32 (NFC + Huella dactilar)
 //
-//  Flujo de captura NFC:
-//  1. Personal presiona "Leer NFC"
-//  2. Se llama POST /api/hardware/token { tipo: "nfc" } → devuelve token
-//  3. El ESP32 hace polling automático y recoge el token → estado "reading"
-//  4. El modal muestra instrucciones paso a paso
-//  5. Si éxito → campo nfc_uid se autocompleta → modal cierra
-//
-//  Flujo de captura Huella:
-//  1. Personal presiona "Escanear Huella"
-//  2. Se llama POST /api/hardware/token { tipo: "huella" } → devuelve token
-//  3. El ESP32 detecta la tarea y guía al usuario en dos tomas
-//  4. Si éxito → campo huella_id se autocompleta → modal cierra
+//  Flujo de captura NFC / Huella (v6 — SSE):
+//  1. Personal presiona "Leer NFC" o "Escanear Huella"
+//  2. Se llama POST /api/hardware/token → devuelve token
+//  3. Se abre un EventSource a GET /api/hardware/sse/:token
+//  4. El ESP32 recoge el token y reporta pasos → llegan en ~0ms vía SSE
+//  5. Al completar → campo se autocompleta → modal cierra
 // ============================================================================
 
 import { useState, useContext, useEffect, useRef } from 'react'
@@ -278,62 +272,78 @@ export default function TabsRegistrarNuevo() {
   const [foto, setFoto]         = useState<File | null>(null)
   const fotoInputRef            = useRef<HTMLInputElement>(null)
 
-  const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>  | null>(null)
+  // Ref que guarda la función para cerrar el EventSource activo
+  const sseCleanupRef = useRef<(() => void) | null>(null)
 
-  // ── Polling de estado ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!sesionHw || sesionHw.estado === 'done' || sesionHw.estado === 'error') {
-      clearInterval(pollRef.current!)
-      clearTimeout(timeoutRef.current!)
-      return
-    }
+  // Cerrar SSE al desmontar el componente
+  useEffect(() => () => { sseCleanupRef.current?.() }, [])
 
-    pollRef.current = setInterval(async () => {
+  // ── Escuchar estado vía SSE ────────────────────────────────────────────────
+  function iniciarSSE(token: string) {
+    // Cerrar cualquier SSE anterior
+    sseCleanupRef.current?.()
+
+    const baseURL = (axiosClient.defaults.baseURL ?? '').replace(/\/$/, '')
+    const jwt = localStorage.getItem('token') ?? ''
+    const url = `${baseURL}/hardware/sse/${token}?jwt=${jwt}`
+    const es = new EventSource(url)
+
+    // Timeout de 90s (huella necesita más tiempo por las dos tomas)
+    const timeoutId = setTimeout(() => {
+      es.close()
+      sseCleanupRef.current = null
+      setSesionHw(prev => prev ? { ...prev, estado: 'error', paso: 'timeout_general' } : null)
+    }, 90000)
+
+    es.onmessage = (event) => {
       try {
-        const { data } = await axiosClient.get(`/hardware/poll/${sesionHw.token}`)
+        const data = JSON.parse(event.data)
 
         if (data.estado === 'done') {
-          clearInterval(pollRef.current!)
-          clearTimeout(timeoutRef.current!)
+          clearTimeout(timeoutId)
+          es.close()
+          sseCleanupRef.current = null
 
-          // Rellenar el campo correspondiente según el tipo
           if (data.tipo === 'nfc') {
             setForm(p => ({ ...p, nfc_uid: data.valor }))
-          } else if (data.tipo === 'huella') {
+          } else if (data.tipo === 'huella' || data.tipo === 'huella_enroll') {
             setForm(p => ({ ...p, huella_id: data.valor }))
           }
 
           setSesionHw(prev => prev ? { ...prev, estado: 'done', paso: 'completado' } : null)
-          const etiqueta = data.tipo === 'nfc' ? `Tarjeta NFC: ${data.valor}` : `Huella en posición: ${data.valor}`
+          const etiqueta = (data.tipo === 'nfc')
+            ? `Tarjeta NFC: ${data.valor}`
+            : `Huella en posición: ${data.valor}`
           setTimeout(() => {
             setSesionHw(null)
             setAlerta({ tipo: 'exito', mensaje: `✅ ${etiqueta}` })
           }, 1500)
 
         } else if (data.estado === 'error') {
-          clearInterval(pollRef.current!)
-          clearTimeout(timeoutRef.current!)
+          clearTimeout(timeoutId)
+          es.close()
+          sseCleanupRef.current = null
           setSesionHw(prev => prev ? { ...prev, estado: 'error', paso: data.paso } : null)
+
         } else {
+          // estado intermedio: reading / pending
           setSesionHw(prev => prev ? { ...prev, estado: data.estado as EstadoHw, paso: data.paso } : null)
         }
-      } catch {
-        // silencioso — no interrumpir el polling por error de red puntual
-      }
-    }, 1500)
-
-    // Timeout de 90 segundos (huella necesita más tiempo por las dos tomas)
-    timeoutRef.current = setTimeout(() => {
-      clearInterval(pollRef.current!)
-      setSesionHw(prev => prev ? { ...prev, estado: 'error', paso: 'timeout_general' } : null)
-    }, 90000)
-
-    return () => {
-      clearInterval(pollRef.current!)
-      clearTimeout(timeoutRef.current!)
+      } catch { /* ignorar frames mal formados */ }
     }
-  }, [sesionHw?.token])
+
+    es.onerror = () => {
+      clearTimeout(timeoutId)
+      es.close()
+      sseCleanupRef.current = null
+      setSesionHw(prev => prev ? { ...prev, estado: 'error', paso: 'error_red' } : null)
+    }
+
+    sseCleanupRef.current = () => {
+      clearTimeout(timeoutId)
+      es.close()
+    }
+  }
 
   // ── Iniciar lectura NFC ────────────────────────────────────────────────────
   const iniciarLecturaNFC = async () => {
@@ -341,6 +351,7 @@ export default function TabsRegistrarNuevo() {
     try {
       const { data } = await axiosClient.post('/hardware/token', { tipo: 'nfc' })
       setSesionHw({ token: data.token, tipo: 'nfc', estado: 'pending', paso: 'esperando_dispositivo' })
+      iniciarSSE(data.token)
     } catch {
       setAlerta({ tipo: 'error', mensaje: 'Error al iniciar. Verifica que el backend esté corriendo.' })
     }
@@ -352,6 +363,7 @@ export default function TabsRegistrarNuevo() {
     try {
       const { data } = await axiosClient.post('/hardware/token', { tipo: 'huella_enroll' })
       setSesionHw({ token: data.token, tipo: 'huella', estado: 'pending', paso: 'esperando_dispositivo' })
+      iniciarSSE(data.token)
     } catch {
       setAlerta({ tipo: 'error', mensaje: 'Error al iniciar. Verifica que el backend esté corriendo.' })
     }
@@ -360,8 +372,8 @@ export default function TabsRegistrarNuevo() {
   // ── Cancelar lectura ───────────────────────────────────────────────────────
   const cancelarLectura = async () => {
     if (!sesionHw) return
-    clearInterval(pollRef.current!)
-    clearTimeout(timeoutRef.current!)
+    sseCleanupRef.current?.()
+    sseCleanupRef.current = null
     try {
       await axiosClient.post('/hardware/cancelar', {
         api_key: 'axf_esp32_2025',
@@ -375,6 +387,8 @@ export default function TabsRegistrarNuevo() {
   // ── Reintentar ─────────────────────────────────────────────────────────────
   const reintentar = async () => {
     const tipoAnterior = sesionHw?.tipo ?? 'nfc'
+    sseCleanupRef.current?.()
+    sseCleanupRef.current = null
     setSesionHw(null)
     setTimeout(() => {
       if (tipoAnterior === 'huella') iniciarLecturaHuella()

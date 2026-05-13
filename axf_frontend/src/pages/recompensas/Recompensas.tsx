@@ -4,13 +4,13 @@ import {
   canjearRecompensa,
   identificarSuscriptor,
   iniciarSesionHardware,
-  pollHardware,
+  escucharHardwareSSE,
   type Recompensa,
   type SuscriptorIdentificado,
 } from '../../api/recompensasApi'
 
-// ── Tipos de paso en el flujo NFC ────────────────────────────────────────────
-type NfcEstado =
+// ── Tipos de paso en el flujo de identificación ──────────────────────────────
+type SensorEstado =
   | 'idle'
   | 'pendiente'     // token generado, esperando al ESP32
   | 'leyendo'       // ESP32 recogió el token, aguardando lectura
@@ -26,6 +26,7 @@ const PASOS_LEGIBLES: Record<string, string> = {
   tarjeta_detectada:     'Huella detectada, procesando…',
   enviando:              'Enviando datos…',
   completado:            'Lectura completada.',
+  conexion_perdida:      'Conexión perdida con el sensor.',
 }
 
 // ── Spinner reutilizable ─────────────────────────────────────────────────────
@@ -44,16 +45,17 @@ export default function Recompensas() {
   const [errorApi,    setErrorApi]    = useState<string | null>(null)
 
   // ── Suscriptor identificado ──────────────────────────────────────────────
-  const [suscriptor,   setSuscriptor]   = useState<SuscriptorIdentificado | null>(null)
+  const [suscriptor, setSuscriptor] = useState<SuscriptorIdentificado | null>(null)
 
   // ── Recompensa seleccionada ──────────────────────────────────────────────
   const [seleccionada, setSeleccionada] = useState<Recompensa | null>(null)
 
-  // ── Flujo NFC ────────────────────────────────────────────────────────────
-  const [nfcEstado, setNfcEstado] = useState<NfcEstado>('idle')
-  const [nfcPaso,   setNfcPaso]   = useState<string>('')
-  const [nfcError,  setNfcError]  = useState<string | null>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // ── Flujo sensor ─────────────────────────────────────────────────────────
+  const [sensorEstado, setSensorEstado] = useState<SensorEstado>('idle')
+  const [sensorPaso,   setSensorPaso]   = useState<string>('')
+  const [sensorError,  setSensorError]  = useState<string | null>(null)
+  // cleanup de SSE o intervalo activo
+  const cleanupRef = useRef<(() => void) | null>(null)
 
   // ── Canje ────────────────────────────────────────────────────────────────
   const [canjeOk,    setCanjeOk]    = useState<{ mensaje: string; restantes: number } | null>(null)
@@ -62,7 +64,9 @@ export default function Recompensas() {
 
   // ── Cargar recompensas ───────────────────────────────────────────────────
   useEffect(() => { cargarRecompensas() }, [])
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  // Limpiar SSE al desmontar
+  useEffect(() => () => { cleanupRef.current?.() }, [])
 
   async function cargarRecompensas() {
     setCargando(true)
@@ -76,12 +80,15 @@ export default function Recompensas() {
     }
   }
 
-  // ── Iniciar lectura NFC ──────────────────────────────────────────────────
-  async function iniciarNFC() {
-    if (pollRef.current) clearInterval(pollRef.current)
-    setNfcEstado('pendiente')
-    setNfcPaso('esperando_dispositivo')
-    setNfcError(null)
+  // ── Iniciar lectura de huella (SSE) ──────────────────────────────────────
+  async function iniciarHuella() {
+    // Cerrar SSE anterior si existe
+    cleanupRef.current?.()
+    cleanupRef.current = null
+
+    setSensorEstado('pendiente')
+    setSensorPaso('esperando_dispositivo')
+    setSensorError(null)
     setSuscriptor(null)
 
     let token: string
@@ -89,52 +96,61 @@ export default function Recompensas() {
       const sesion = await iniciarSesionHardware('huella_leer')
       token = sesion.token
     } catch {
-      setNfcEstado('error')
-      setNfcError('No se pudo iniciar la sesión con el sensor de huella.')
+      setSensorEstado('error')
+      setSensorError('No se pudo iniciar la sesión con el sensor de huella.')
       return
     }
 
-    pollRef.current = setInterval(async () => {
-      try {
-        const poll = await pollHardware(token)
-
-        if (poll.estado === 'reading') {
-          setNfcEstado('leyendo')
-          setNfcPaso(poll.paso ?? 'listo_para_leer')
-        }
-
-        if (poll.estado === 'done' && poll.valor) {
-          clearInterval(pollRef.current!)
-          setNfcEstado('identificando')
-          setNfcPaso('completado')
-          try {
-            const sus = await identificarSuscriptor('huella', poll.valor)
-            setSuscriptor(sus)
-            setNfcEstado('ok')
-          } catch {
-            setNfcEstado('error')
-            setNfcError('No se encontró ningún suscriptor con esa huella.')
-          }
-        }
-
-        if (poll.estado === 'error') {
-          clearInterval(pollRef.current!)
-          setNfcEstado('error')
-          setNfcError(`Error del lector: ${poll.paso ?? 'desconocido'}`)
-        }
-      } catch {
-        clearInterval(pollRef.current!)
-        setNfcEstado('error')
-        setNfcError('Se perdió la conexión con el sensor de huella.')
+    // Escuchar actualizaciones vía SSE (0ms latencia cuando el ESP32 reporta)
+    const cerrarSSE = escucharHardwareSSE(token, async (poll) => {
+      if (poll.estado === 'reading') {
+        setSensorEstado('leyendo')
+        setSensorPaso(poll.paso ?? 'listo_para_leer')
       }
-    }, 1500)
+
+      if (poll.estado === 'done' && poll.valor) {
+        // Cerrar SSE inmediatamente
+        cerrarSSE()
+        cleanupRef.current = null
+
+        setSensorEstado('identificando')
+        setSensorPaso('completado')
+        try {
+          const sus = await identificarSuscriptor('huella', poll.valor)
+          setSuscriptor(sus)
+          setSensorEstado('ok')
+        } catch {
+          setSensorEstado('error')
+          setSensorError('No se encontró ningún suscriptor con esa huella.')
+        }
+      }
+
+      if (poll.estado === 'error') {
+        cerrarSSE()
+        cleanupRef.current = null
+        setSensorEstado('error')
+        const motivo = poll.paso ?? 'desconocido'
+        setSensorError(
+          motivo === 'huella_no_encontrada'
+            ? 'Huella no registrada en el sistema.'
+            : motivo === 'timeout_dedo'
+            ? 'No se detectó ningún dedo (tiempo agotado).'
+            : motivo === 'conexion_perdida'
+            ? 'Se perdió la conexión con el sensor de huella.'
+            : `Error del lector: ${motivo}`
+        )
+      }
+    })
+
+    cleanupRef.current = cerrarSSE
   }
 
-  function cancelarNFC() {
-    if (pollRef.current) clearInterval(pollRef.current)
-    setNfcEstado('idle')
-    setNfcPaso('')
-    setNfcError(null)
+  function cancelarSensor() {
+    cleanupRef.current?.()
+    cleanupRef.current = null
+    setSensorEstado('idle')
+    setSensorPaso('')
+    setSensorError(null)
     setSuscriptor(null)
   }
 
@@ -160,7 +176,7 @@ export default function Recompensas() {
     ? suscriptor.puntos < seleccionada.costo_puntos
     : false
 
-  const pasoLegible = PASOS_LEGIBLES[nfcPaso] ?? nfcPaso
+  const pasoLegible = PASOS_LEGIBLES[sensorPaso] ?? sensorPaso
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -186,7 +202,6 @@ export default function Recompensas() {
       {/* ══ PASO 1: IDENTIFICAR SUSCRIPTOR ════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
 
-        {/* Encabezado de sección */}
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-black text-sm">1. Identificar Suscriptor</h2>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -196,23 +211,22 @@ export default function Recompensas() {
 
         <div className="p-6">
 
-          {/* Estado: idle o error — mostrar botón */}
-          {(nfcEstado === 'idle' || nfcEstado === 'error') && (
+          {/* Estado: idle o error */}
+          {(sensorEstado === 'idle' || sensorEstado === 'error') && (
             <div className="flex flex-col gap-3">
               <button
-                onClick={iniciarNFC}
+                onClick={iniciarHuella}
                 className="inline-flex items-center gap-2 bg-[#ea580c] hover:bg-[#c94a0a] active:scale-95 transition-all text-white font-bold px-5 py-2.5 rounded text-sm shadow-sm w-fit"
               >
                 <span>👆</span>
                 <span>Leer Huella Dactilar</span>
               </button>
 
-              {/* Error */}
-              {nfcEstado === 'error' && nfcError && (
+              {sensorEstado === 'error' && sensorError && (
                 <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded px-4 py-3">
                   <span className="text-red-500 text-sm">⚠️</span>
                   <div>
-                    <p className="text-red-700 text-sm font-semibold">{nfcError}</p>
+                    <p className="text-red-700 text-sm font-semibold">{sensorError}</p>
                     <p className="text-red-400 text-xs mt-0.5">Intenta de nuevo.</p>
                   </div>
                 </div>
@@ -221,7 +235,7 @@ export default function Recompensas() {
           )}
 
           {/* Estado: leyendo / pendiente / identificando */}
-          {(nfcEstado === 'pendiente' || nfcEstado === 'leyendo' || nfcEstado === 'identificando') && (
+          {(sensorEstado === 'pendiente' || sensorEstado === 'leyendo' || sensorEstado === 'identificando') && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-4 border border-gray-200 rounded px-5 py-4">
                 <div className="w-10 h-10 rounded-full bg-orange-50 border border-orange-200 flex items-center justify-center text-xl flex-shrink-0">
@@ -229,7 +243,7 @@ export default function Recompensas() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-bold text-black">
-                    {nfcEstado === 'identificando' ? 'Identificando suscriptor…' : 'Esperando huella dactilar…'}
+                    {sensorEstado === 'identificando' ? 'Identificando suscriptor…' : 'Esperando huella dactilar…'}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">{pasoLegible}</p>
                   <div className="mt-2 w-40 h-1 bg-gray-100 rounded-full overflow-hidden">
@@ -239,7 +253,7 @@ export default function Recompensas() {
                 <Spinner />
               </div>
               <button
-                onClick={cancelarNFC}
+                onClick={cancelarSensor}
                 className="text-xs text-gray-400 hover:text-gray-600 underline w-fit"
               >
                 Cancelar
@@ -248,7 +262,7 @@ export default function Recompensas() {
           )}
 
           {/* Estado: ok — suscriptor identificado */}
-          {nfcEstado === 'ok' && suscriptor && (
+          {sensorEstado === 'ok' && suscriptor && (
             <div className="flex items-center gap-4 border border-gray-200 rounded px-5 py-4">
               <div className="w-10 h-10 rounded-full bg-green-50 border border-green-200 flex items-center justify-center text-lg flex-shrink-0">
                 ✅
@@ -262,7 +276,7 @@ export default function Recompensas() {
                 </p>
               </div>
               <button
-                onClick={cancelarNFC}
+                onClick={cancelarSensor}
                 className="text-gray-300 hover:text-gray-500 text-xl leading-none transition-colors"
                 title="Cambiar suscriptor"
               >
@@ -283,7 +297,6 @@ export default function Recompensas() {
 
         <div className="p-6">
 
-          {/* Cargando */}
           {cargando && (
             <div className="flex items-center justify-center gap-3 text-gray-400 text-sm py-10">
               <Spinner />
@@ -291,7 +304,6 @@ export default function Recompensas() {
             </div>
           )}
 
-          {/* Error API */}
           {!cargando && errorApi && (
             <div className="border border-red-200 bg-red-50 rounded px-4 py-3 text-center">
               <p className="text-red-600 text-sm font-semibold">{errorApi}</p>
@@ -304,7 +316,6 @@ export default function Recompensas() {
             </div>
           )}
 
-          {/* Sin recompensas */}
           {!cargando && !errorApi && recompensas.length === 0 && (
             <div className="text-center py-10 text-gray-400">
               <p className="text-3xl mb-2">🏆</p>
@@ -312,7 +323,6 @@ export default function Recompensas() {
             </div>
           )}
 
-          {/* Tabla */}
           {!cargando && recompensas.length > 0 && (
             <table className="w-full text-sm border-collapse">
               <thead>
