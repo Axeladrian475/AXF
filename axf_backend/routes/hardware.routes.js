@@ -245,10 +245,18 @@ router.post('/evento', verificarApiKey, async (req, res) => {
   }
 
   const [[sesion]] = await db.query(
-    `SELECT * FROM hardware_sesiones WHERE token = ? AND tipo = ? AND usado = 0`,
+    `SELECT * FROM hardware_sesiones WHERE token = ? AND tipo = ? AND usado = 0 AND estado IN ('pending','reading')`,
     [token_sesion, tipo]
   );
-  if (!sesion) return res.status(404).json({ message: 'Token inválido, expirado o ya usado' });
+  if (!sesion) {
+    // Log de diagnóstico
+    const [[debug]] = await db.query(
+      `SELECT token, tipo, estado, usado FROM hardware_sesiones WHERE token = ? LIMIT 1`,
+      [token_sesion]
+    ).catch(() => [[null]]);
+    console.warn(`[HW/EVENTO] Fallo: token=${token_sesion} tipo_esp32=${tipo}`, debug ?? 'NO EXISTE EN BD');
+    return res.status(404).json({ message: 'Token inválido, expirado o ya usado' });
+  }
 
   await db.query(
     `UPDATE hardware_sesiones SET valor = ?, usado = 1, estado = 'done', paso = 'completado' WHERE token = ?`,

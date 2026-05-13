@@ -101,16 +101,17 @@ export default function Recompensas() {
       return
     }
 
-    // Escuchar actualizaciones vía SSE (0ms latencia cuando el ESP32 reporta)
-    const cerrarSSE = escucharHardwareSSE(token, async (poll) => {
+    // Escuchar actualizaciones vía SSE
+    // CORREGIDO: escucharHardwareSSE ya cierra la conexión internamente en estados terminales,
+    // por lo que NO llamamos cerrar() dentro del callback (evita el bug de closure).
+    const cerrar = escucharHardwareSSE(token, async (poll) => {
       if (poll.estado === 'reading') {
         setSensorEstado('leyendo')
         setSensorPaso(poll.paso ?? 'listo_para_leer')
       }
 
       if (poll.estado === 'done' && poll.valor) {
-        // Cerrar SSE inmediatamente
-        cerrarSSE()
+        // SSE ya se cerró internamente; solo limpiar ref
         cleanupRef.current = null
 
         setSensorEstado('identificando')
@@ -126,7 +127,7 @@ export default function Recompensas() {
       }
 
       if (poll.estado === 'error') {
-        cerrarSSE()
+        // SSE ya se cerró internamente; solo limpiar ref
         cleanupRef.current = null
         setSensorEstado('error')
         const motivo = poll.paso ?? 'desconocido'
@@ -142,7 +143,7 @@ export default function Recompensas() {
       }
     })
 
-    cleanupRef.current = cerrarSSE
+    cleanupRef.current = cerrar
   }
 
   function cancelarSensor() {

@@ -314,10 +314,11 @@ export default function TabsRegistrarNuevo() {
           const etiqueta = (data.tipo === 'nfc')
             ? `Tarjeta NFC: ${data.valor}`
             : `Huella en posición: ${data.valor}`
+          // Cerrar el modal rápido (600ms): el valor ya está guardado en el form
           setTimeout(() => {
             setSesionHw(null)
             setAlerta({ tipo: 'exito', mensaje: `✅ ${etiqueta}` })
-          }, 1500)
+          }, 600)
 
         } else if (data.estado === 'error') {
           clearTimeout(timeoutId)
@@ -387,13 +388,23 @@ export default function TabsRegistrarNuevo() {
   // ── Reintentar ─────────────────────────────────────────────────────────────
   const reintentar = async () => {
     const tipoAnterior = sesionHw?.tipo ?? 'nfc'
+    // Cerrar SSE anterior
     sseCleanupRef.current?.()
     sseCleanupRef.current = null
+    // Cancelar en el backend para liberar el token (evita que el ESP32 lo procese)
+    if (sesionHw) {
+      try {
+        await axiosClient.post('/hardware/cancelar', {
+          api_key: 'axf_esp32_2025',
+          token_sesion: sesionHw.token,
+          motivo: 'cancelado_por_frontend',
+        })
+      } catch { /* silencioso */ }
+    }
     setSesionHw(null)
-    setTimeout(() => {
-      if (tipoAnterior === 'huella') iniciarLecturaHuella()
-      else iniciarLecturaNFC()
-    }, 100)
+    // Iniciar directamente sin setTimeout — React procesa el setState en batch
+    if (tipoAnterior === 'huella') iniciarLecturaHuella()
+    else iniciarLecturaNFC()
   }
 
   // ── Form handlers ──────────────────────────────────────────────────────────

@@ -99,32 +99,54 @@ export function escucharHardwareSSE(
   token: string,
   onUpdate: (poll: HardwarePoll) => void
 ): () => void {
-  // Obtener la base URL del axiosClient
   const baseURL = (axiosClient.defaults.baseURL ?? '').replace(/\/$/, '');
-
-  // Incluir el JWT en la URL como query param ya que EventSource no acepta headers
   const jwtToken = localStorage.getItem('token') ?? '';
   const url = `${baseURL}/hardware/sse/${token}?jwt=${jwtToken}`;
 
   const es = new EventSource(url);
+  let cerrado = false;
+
+  // Timeout de seguridad: si en 90s no hay respuesta, cierra y reporta error
+  const timeoutId = setTimeout(() => {
+    if (!cerrado) {
+      cerrado = true;
+      es.close();
+      onUpdate({ estado: 'error', paso: 'timeout_general' });
+    }
+  }, 90000);
 
   es.onmessage = (event) => {
+    if (cerrado) return;
     try {
       const data: HardwarePoll = JSON.parse(event.data);
       onUpdate(data);
+
+      // Si el estado es terminal, cerrar la conexión
+      if (data.estado === 'done' || data.estado === 'error') {
+        cerrado = true;
+        clearTimeout(timeoutId);
+        es.close();
+      }
     } catch (_) {
       // ignorar frames de keep-alive malformados
     }
   };
 
   es.onerror = () => {
-    // EventSource reintenta automáticamente; si el estado ya es terminal,
-    // el backend responderá con JSON (no SSE) y onmessage recibirá el resultado.
-    onUpdate({ estado: 'error', paso: 'conexion_perdida' });
+    if (cerrado) return;
+    cerrado = true;
+    clearTimeout(timeoutId);
     es.close();
+    onUpdate({ estado: 'error', paso: 'conexion_perdida' });
   };
 
-  return () => es.close();
+  return () => {
+    if (!cerrado) {
+      cerrado = true;
+      clearTimeout(timeoutId);
+      es.close();
+    }
+  };
 }
 
 /**
