@@ -106,7 +106,7 @@ router.post('/login', async (req, res) => {
 
     const [[suscriptor]] = await db.query(
       `SELECT id_suscriptor, nombres, apellido_paterno, correo,
-              id_sucursal_registro, password_hash, activo, foto_url
+              id_sucursal_registro, password_hash, activo
        FROM suscriptores
        WHERE correo = ? AND activo = 1`,
       [email.trim().toLowerCase()]
@@ -146,7 +146,6 @@ router.post('/login', async (req, res) => {
         sucursalId: suscriptor.id_sucursal_registro,
         suscripcionActiva: !!sub,
         fechaVencimiento: sub ? sub.fecha_fin : null,
-        foto_url: suscriptor.foto_url ?? null,
       },
     });
 
@@ -206,7 +205,7 @@ router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
     const id = req.usuario.id;
 
     const [rutinas] = await db.query(
-      `SELECT r.id_rutina, r.notas_pdf,
+      `SELECT r.id_rutina, r.nombre, r.notas_pdf,
               DATE_FORMAT(r.creado_en, '%Y-%m-%dT%H:%i:%s.000Z') AS creado_en,
               COALESCE(CONCAT(p.nombres, ' ', p.apellido_paterno), 'Entrenador') AS entrenador
        FROM rutinas r
@@ -221,7 +220,7 @@ router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
         `SELECT re.id AS id_rutina_ejercicio,
                 re.orden, re.series, re.repeticiones,
                 re.descanso_seg, re.peso_kg, re.descripcion_tecnica,
-                e.nombre, e.imagen_url
+                e.nombre, e.imagen_url, e.grupo_muscular
          FROM rutina_ejercicios re
          JOIN ejercicios e ON e.id_ejercicio = re.id_ejercicio
          WHERE re.id_rutina = ?
