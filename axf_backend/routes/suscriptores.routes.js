@@ -182,27 +182,28 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
   try {
     const id = req.usuario.id;
 
-    // 1) ¿Tiene suscripción EN CURSO ahora mismo? (estado='Activa')
-    //    También obtiene el nombre del plan actual.
+    // 1) Plan actualmente EN CURSO: fecha_inicio <= hoy <= fecha_fin
     const [[subActiva]] = await db.query(
       `SELECT ts.nombre AS nombre_plan
        FROM suscripciones s
        LEFT JOIN tipos_suscripcion ts ON ts.id_tipo = s.id_tipo
-       WHERE s.id_suscriptor = ? AND s.estado = 'Activa' AND s.fecha_fin >= CURDATE()
-       ORDER BY s.fecha_fin DESC LIMIT 1`,
+       WHERE s.id_suscriptor = ?
+         AND s.estado = 'Activa'
+         AND s.fecha_inicio <= CURDATE()
+         AND s.fecha_fin    >= CURDATE()
+       ORDER BY s.fecha_fin ASC LIMIT 1`,
       [id]
     );
 
-    // 2) Vencimiento FINAL y días totales restantes
-    //    Incluye suscripciones acumuladas (Activa + Acumulada) para obtener
-    //    el MAX(fecha_fin), que es la fecha real de vencimiento del usuario.
+    // 2) Vencimiento FINAL = MAX(fecha_fin) de todas las suscripciones activas
     const [[totales]] = await db.query(
       `SELECT
-         DATE_FORMAT(MAX(s.fecha_fin), '%Y-%m-%d')            AS vencimiento_final,
-         GREATEST(DATEDIFF(MAX(s.fecha_fin), CURDATE()), 0)   AS dias_restantes
+         DATE_FORMAT(MAX(s.fecha_fin), '%Y-%m-%d')          AS vencimiento_final,
+         GREATEST(DATEDIFF(MAX(s.fecha_fin), CURDATE()), 0) AS dias_restantes,
+         CURDATE() AS hoy
        FROM suscripciones s
        WHERE s.id_suscriptor = ?
-         AND s.estado IN ('Activa', 'Acumulada')
+         AND s.estado = 'Activa'
          AND s.fecha_fin >= CURDATE()`,
       [id]
     );
@@ -212,6 +213,12 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
       `SELECT racha_dias, dias_descanso_semana FROM suscriptores WHERE id_suscriptor = ?`,
       [id]
     );
+
+    // LOG DE DIAGNÓSTICO — ver en consola del servidor
+    console.log(`[SUB /movil/suscripcion]`,
+      `id=${id}`,
+      `subActiva=${JSON.stringify(subActiva)}`,
+      `totales=${JSON.stringify(totales)}`);
 
     res.json({
       activa:               !!subActiva,
@@ -771,12 +778,39 @@ router.get('/movil/aforo', verificarSuscriptor, async (req, res) => {
 
     const porcentaje = Math.round((aforo.personas_dentro / aforo.capacidad_maxima) * 100);
 
+    // Consulta de afluencia por horarios del día de hoy
+    const [[graficaData]] = await db.query(
+      `SELECT 
+        SUM(CASE WHEN HOUR(fecha_hora) >= 6 AND HOUR(fecha_hora) < 9 THEN 1 ELSE 0 END) AS h_6am,
+        SUM(CASE WHEN HOUR(fecha_hora) >= 9 AND HOUR(fecha_hora) < 12 THEN 1 ELSE 0 END) AS h_9am,
+        SUM(CASE WHEN HOUR(fecha_hora) >= 12 AND HOUR(fecha_hora) < 18 THEN 1 ELSE 0 END) AS h_12pm,
+        SUM(CASE WHEN HOUR(fecha_hora) >= 18 AND HOUR(fecha_hora) < 20 THEN 1 ELSE 0 END) AS h_6pm,
+        SUM(CASE WHEN HOUR(fecha_hora) >= 20 AND HOUR(fecha_hora) < 22 THEN 1 ELSE 0 END) AS h_8pm,
+        SUM(CASE WHEN HOUR(fecha_hora) >= 22 AND HOUR(fecha_hora) < 24 THEN 1 ELSE 0 END) AS h_10pm
+      FROM accesos
+      WHERE id_sucursal = ? 
+        AND DATE(fecha_hora) = CURDATE() 
+        AND resultado = 'Permitido'
+        AND tipo_movimiento = 'Entrada'`,
+      [id_sucursal]
+    );
+
+    const grafica = [
+      Number(graficaData?.h_6am || 0),
+      Number(graficaData?.h_9am || 0),
+      Number(graficaData?.h_12pm || 0),
+      Number(graficaData?.h_6pm || 0),
+      Number(graficaData?.h_8pm || 0),
+      Number(graficaData?.h_10pm || 0),
+    ];
+
     res.json({
       personas_dentro:  aforo.personas_dentro,
       capacidad_maxima: aforo.capacidad_maxima,
       nombre_sucursal:  aforo.nombre_sucursal,
       actualizado_en:   aforo.actualizado_en,
       porcentaje:       Math.min(porcentaje, 100),
+      grafica:          grafica
     });
   } catch (err) {
     console.error('[GET /suscriptores/movil/aforo]', err);
