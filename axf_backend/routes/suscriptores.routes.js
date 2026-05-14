@@ -94,6 +94,41 @@ const uploadSuscriptor = multer({
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// ── DEBUG TEMPORAL (quitar después de resolver el problema de login) ──────────
+router.get('/debug-login/:email', async (req, res) => {
+  try {
+    const email = req.params.email.trim();
+    // Busca sin restricción de activo ni case
+    const [rows] = await db.query(
+      `SELECT id_suscriptor, nombres, correo, activo,
+              LENGTH(password_hash) AS hash_len,
+              LEFT(password_hash, 7) AS hash_prefix
+       FROM suscriptores
+       WHERE LOWER(correo) = LOWER(?)`,
+      [email]
+    );
+    res.json({ encontrado: rows.length > 0, datos: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/suscriptores/resetpwd  (temporal - quitar después)
+router.post('/resetpwd', async (req, res) => {
+  try {
+    const { email, nuevaPassword } = req.body;
+    const hash = await bcrypt.hash(nuevaPassword, 12);
+    await db.query(
+      `UPDATE suscriptores SET password_hash = ?, activo = 1
+       WHERE LOWER(correo) = LOWER(?)`,
+      [hash, email.trim()]
+    );
+    res.json({ ok: true, message: `Contraseña actualizada para ${email}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/suscriptores/login
 // ════════════════════════════════════════════════════════════════════════════
 router.post('/login', async (req, res) => {
@@ -104,12 +139,13 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Correo y contraseña son requeridos.' });
     }
 
+    // LOWER() en ambos lados para evitar problemas de colación case-sensitive
     const [[suscriptor]] = await db.query(
       `SELECT id_suscriptor, nombres, apellido_paterno, correo,
               id_sucursal_registro, password_hash, activo, foto_url
        FROM suscriptores
-       WHERE correo = ? AND activo = 1`,
-      [email.trim().toLowerCase()]
+       WHERE LOWER(correo) = LOWER(?) AND activo = 1`,
+      [email.trim()]
     );
 
     if (!suscriptor) {

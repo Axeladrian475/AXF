@@ -37,7 +37,8 @@ import reportesRoutes         from './routes/reportes.routes.js';
 import movilNutricionRoutes   from './routes/movil.nutricion.routes.js';  // ← NUEVO
 
 // ── Motor de strikes ─────────────────────────────────────────────────────────
-import { procesarStrikes } from './services/strikes.service.js';
+import { procesarStrikes }      from './services/strikes.service.js';
+import { iniciarRecordatorios } from './services/recordatorio.service.js';
 
 const app = express();
 
@@ -97,6 +98,7 @@ async function startServer() {
       console.log(`[SERVER] Listening on port ${PORT}`);
       console.log(`[WS]     Socket.io listo en ws://localhost:${PORT}`);
       iniciarMotorStrikes();
+      iniciarRecordatorios();
     });
   } catch (error) {
     console.error('[DB] Connection error:', error.message);
