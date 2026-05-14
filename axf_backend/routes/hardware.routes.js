@@ -95,6 +95,16 @@ async function actualizarRacha(queryFn, id_suscriptor) {
       `UPDATE suscriptores SET racha_dias = ? WHERE id_suscriptor = ?`,
       [nuevaRacha, id_suscriptor]
     );
+
+    // 🏆 Bonus de 30 puntos al completar cada mes de racha (30, 60, 90…)
+    if (nuevaRacha % 30 === 0) {
+      await queryFn(
+        `UPDATE suscriptores SET puntos = puntos + 30 WHERE id_suscriptor = ?`,
+        [id_suscriptor]
+      );
+      console.log(`[RACHA] 🏆 Bonus +30 pts → suscriptor ${id_suscriptor} (racha ${nuevaRacha} días)`);
+    }
+
     console.log(`[RACHA] Suscriptor ${id_suscriptor}: ${sus.racha_dias} → ${nuevaRacha} días`);
   } catch (err) {
     console.error('[RACHA] Error:', err.message);
@@ -454,9 +464,24 @@ router.post('/acceso', verificarApiKey, async (req, res) => {
       );
       tipo_movimiento = (!ultimo || ultimo.tipo_movimiento === 'Salida') ? 'Entrada' : 'Salida';
 
-      // Actualizar racha ANTES de insertar el acceso del día
+      // ── Actualizar racha + dar 10 puntos por primera Entrada del día ─────────
       if (tipo_movimiento === 'Entrada') {
+        // 1) Racha
         await actualizarRacha((sql, p) => db.query(sql, p), suscriptor.id_suscriptor);
+        // 2) Puntos: solo en la primera entrada del día
+        const [[yaEntro]] = await db.queryWithRetry(
+          `SELECT COUNT(*) AS total FROM accesos
+           WHERE id_suscriptor = ? AND resultado = 'Permitido'
+             AND tipo_movimiento = 'Entrada' AND DATE(fecha_hora) = CURDATE()`,
+          [suscriptor.id_suscriptor]
+        );
+        if ((yaEntro?.total ?? 0) === 0) {
+          await db.queryWithRetry(
+            `UPDATE suscriptores SET puntos = puntos + 10 WHERE id_suscriptor = ?`,
+            [suscriptor.id_suscriptor]
+          );
+          console.log(`[HW/ACCESO] +10 pts → ${nombre}`);
+        }
       }
     }
 
@@ -558,6 +583,24 @@ router.post('/acceso/sucursal', verificarApiKey, async (req, res) => {
     }
 
     const personasDentro = await leerAforo(conn, id_sucursal);
+
+    // ── Dar 10 puntos por primera Entrada válida del día ──────────────────────
+    if (movimiento === 'Entrada') {
+      const [[yaEntro]] = await conn.query(
+        `SELECT COUNT(*) AS total FROM accesos
+         WHERE id_suscriptor = ? AND resultado = 'Permitido'
+           AND tipo_movimiento = 'Entrada' AND DATE(fecha_hora) = CURDATE()`,
+        [suscriptor.id_suscriptor]
+      );
+      if ((yaEntro?.total ?? 0) === 0) {
+        await conn.query(
+          `UPDATE suscriptores SET puntos = puntos + 10 WHERE id_suscriptor = ?`,
+          [suscriptor.id_suscriptor]
+        );
+        console.log(`[HW/ACCESO/SUC] +10 pts → ${nombre}`);
+      }
+    }
+
     await conn.commit();
 
     console.log(`[HW/ACCESO] ${movimiento} — ${nombre} — Aforo: ${personasDentro}`);

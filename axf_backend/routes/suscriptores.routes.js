@@ -208,9 +208,9 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
       [id]
     );
 
-    // 3) Racha y días de descanso
+    // 3) Racha, puntos y días de descanso
     const [[sus]] = await db.query(
-      `SELECT racha_dias, dias_descanso_semana FROM suscriptores WHERE id_suscriptor = ?`,
+      `SELECT racha_dias, dias_descanso_semana, puntos FROM suscriptores WHERE id_suscriptor = ?`,
       [id]
     );
 
@@ -227,6 +227,7 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
       nombre_plan:          subActiva?.nombre_plan        ?? null,
       racha_dias:           sus?.racha_dias               ?? 0,
       dias_descanso_semana: sus?.dias_descanso_semana     ?? 0,
+      puntos:               sus?.puntos                  ?? 0,
     });
   } catch (err) {
     console.error('[GET /suscriptores/movil/suscripcion]', err);
