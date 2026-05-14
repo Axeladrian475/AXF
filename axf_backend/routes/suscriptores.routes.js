@@ -189,10 +189,16 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
        ORDER BY s.fecha_fin DESC LIMIT 1`,
       [id]
     );
+    const [[sus]] = await db.query(
+      `SELECT racha_dias, dias_descanso_semana FROM suscriptores WHERE id_suscriptor = ?`,
+      [id]
+    );
     res.json({
       activa: !!sub,
       vencimiento_final: sub ? sub.fecha_fin : null,
       nombre_plan: sub ? (sub.nombre_plan || null) : null,
+      racha_dias:          sus?.racha_dias          ?? 0,
+      dias_descanso_semana: sus?.dias_descanso_semana ?? 0,
     });
   } catch (err) {
     console.error('[GET /suscriptores/movil/suscripcion]', err);
@@ -754,6 +760,26 @@ router.get('/movil/aforo', verificarSuscriptor, async (req, res) => {
   } catch (err) {
     console.error('[GET /suscriptores/movil/aforo]', err);
     res.status(500).json({ message: 'Error al obtener el aforo.' });
+  }
+});
+
+// ── PUT /api/suscriptores/movil/descanso ───────────────────────────────────────
+// Actualiza los días de descanso por semana del suscriptor (0–6).
+router.put('/movil/descanso', verificarSuscriptor, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+    const dias = parseInt(req.body.dias_descanso, 10);
+    if (isNaN(dias) || dias < 0 || dias > 6) {
+      return res.status(400).json({ message: 'dias_descanso debe ser entre 0 y 6' });
+    }
+    await db.query(
+      `UPDATE suscriptores SET dias_descanso_semana = ? WHERE id_suscriptor = ?`,
+      [dias, id_suscriptor]
+    );
+    res.json({ success: true, dias_descanso_semana: dias });
+  } catch (err) {
+    console.error('[PUT /suscriptores/movil/descanso]', err);
+    res.status(500).json({ message: 'Error al actualizar días de descanso' });
   }
 });
 

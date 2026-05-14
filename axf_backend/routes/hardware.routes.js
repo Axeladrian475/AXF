@@ -48,6 +48,60 @@ async function leerAforo(conn, id_sucursal) {
   return aforo ? aforo.personas_dentro : 0;
 }
 
+// ─── Helper: actualizar racha de asistencia ────────────────────────────────────
+// queryFn: función (sql, params) => Promise — puede ser db.query o conn.query
+// Llamar ANTES de insertar el acceso del día para que el check "¿ya entró hoy?"
+// no encuentre la entrada que estamos a punto de registrar.
+async function actualizarRacha(queryFn, id_suscriptor) {
+  try {
+    const [[sus]] = await queryFn(
+      `SELECT racha_dias, dias_descanso_semana FROM suscriptores WHERE id_suscriptor = ?`,
+      [id_suscriptor]
+    );
+    if (!sus) return;
+
+    // ¿Ya tuvo Entrada hoy? → no duplicar
+    const [[entradaHoy]] = await queryFn(
+      `SELECT id_acceso FROM accesos
+       WHERE id_suscriptor = ? AND tipo_movimiento = 'Entrada'
+         AND DATE(fecha_hora) = CURDATE()
+       LIMIT 1`,
+      [id_suscriptor]
+    );
+    if (entradaHoy) return;
+
+    // Última Entrada anterior a hoy
+    const [[ultima]] = await queryFn(
+      `SELECT DATE(fecha_hora) AS fecha FROM accesos
+       WHERE id_suscriptor = ? AND tipo_movimiento = 'Entrada'
+         AND DATE(fecha_hora) < CURDATE()
+       ORDER BY fecha_hora DESC LIMIT 1`,
+      [id_suscriptor]
+    );
+
+    let nuevaRacha;
+    if (!ultima) {
+      nuevaRacha = 1; // Primera asistencia
+    } else {
+      const hoy = new Date(); hoy.setHours(0,0,0,0);
+      const ult  = new Date(ultima.fecha); ult.setHours(0,0,0,0);
+      const diasFaltados = Math.round((hoy - ult) / 86400000) - 1;
+      nuevaRacha = diasFaltados <= sus.dias_descanso_semana
+        ? sus.racha_dias + 1
+        : 1; // Racha rota
+    }
+
+    await queryFn(
+      `UPDATE suscriptores SET racha_dias = ? WHERE id_suscriptor = ?`,
+      [nuevaRacha, id_suscriptor]
+    );
+    console.log(`[RACHA] Suscriptor ${id_suscriptor}: ${sus.racha_dias} → ${nuevaRacha} días`);
+  } catch (err) {
+    console.error('[RACHA] Error:', err.message);
+    // No bloquear el acceso si la racha falla
+  }
+}
+
 // ─── SSE: mapa token → lista de res (clientes web escuchando) ────────────────
 // Cada cliente llama GET /sse/:token y recibe eventos en tiempo real.
 const sseClients = new Map(); // token → Set<res>
@@ -399,6 +453,11 @@ router.post('/acceso', verificarApiKey, async (req, res) => {
         [suscriptor.id_suscriptor, suscriptor.id_sucursal_registro]
       );
       tipo_movimiento = (!ultimo || ultimo.tipo_movimiento === 'Salida') ? 'Entrada' : 'Salida';
+
+      // Actualizar racha ANTES de insertar el acceso del día
+      if (tipo_movimiento === 'Entrada') {
+        await actualizarRacha((sql, p) => db.query(sql, p), suscriptor.id_suscriptor);
+      }
     }
 
     await db.queryWithRetry(
@@ -472,6 +531,11 @@ router.post('/acceso/sucursal', verificarApiKey, async (req, res) => {
     );
 
     const movimiento = (!ultimoMovimiento || ultimoMovimiento.tipo_movimiento === 'Salida') ? 'Entrada' : 'Salida';
+
+    // Actualizar racha ANTES de insertar el acceso del día
+    if (movimiento === 'Entrada') {
+      await actualizarRacha(conn.query.bind(conn), suscriptor.id_suscriptor);
+    }
 
     await conn.query(
       `INSERT INTO accesos (id_suscriptor, id_sucursal, metodo, resultado, tipo_movimiento, fecha_hora)
