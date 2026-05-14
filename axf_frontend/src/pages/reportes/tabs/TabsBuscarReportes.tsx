@@ -22,6 +22,7 @@ interface Reporte {
   horas_desde_creacion:        number
   nombre_personal_reportado:   string | null
   puesto_personal_reportado:   string | null
+  foto_personal_reportado:     string | null
 }
 
 interface Strike {
@@ -392,12 +393,29 @@ export default function TabsBuscarReportes() {
                         <p className="font-medium text-slate-800 text-xs">{r.nombre_suscriptor}</p>
                         <p className="text-slate-400 text-[10px] mt-0.5">{r.correo_suscriptor}</p>
                         {esPersonal && r.nombre_personal_reportado && (
-                          <div className="mt-2 bg-rose-100 border border-rose-200 rounded-lg px-2.5 py-1.5">
-                            <p className="text-[9px] font-bold text-rose-600 uppercase tracking-wider mb-0.5">Reportado</p>
-                            <p className="text-[11px] font-semibold text-rose-800">{r.nombre_personal_reportado}</p>
-                            {r.puesto_personal_reportado && (
-                              <p className="text-[10px] text-rose-500">{r.puesto_personal_reportado}</p>
+                          <div className="mt-2 bg-rose-50 border border-rose-200 rounded-xl px-2.5 py-2 flex items-center gap-2.5">
+                            {/* Avatar del personal reportado */}
+                            {r.foto_personal_reportado ? (
+                              <img
+                                src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${r.foto_personal_reportado}`}
+                                alt={r.nombre_personal_reportado}
+                                className="w-9 h-9 rounded-full object-cover shrink-0 border-2 border-rose-300"
+                                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-rose-200 flex items-center justify-center shrink-0">
+                                <span className="text-rose-700 font-bold text-sm">
+                                  {r.nombre_personal_reportado.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
                             )}
+                            <div className="min-w-0">
+                              <p className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Reportado</p>
+                              <p className="text-[11px] font-semibold text-rose-800 truncate">{r.nombre_personal_reportado}</p>
+                              {r.puesto_personal_reportado && (
+                                <p className="text-[10px] text-rose-400">{r.puesto_personal_reportado.replace(/_/g, ' ')}</p>
+                              )}
+                            </div>
                           </div>
                         )}
                       </td>

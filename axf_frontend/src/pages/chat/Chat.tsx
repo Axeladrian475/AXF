@@ -653,7 +653,19 @@ export default function Chat() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-300">{user?.nombre?.split(' ')[0]}</span>
+                <span className="text-xs text-gray-400">{user?.nombre?.split(' ')[0]}</span>
+                {user?.foto_url ? (
+                  <img
+                    src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${user.foto_url}`}
+                    alt="mi foto"
+                    className="w-8 h-8 rounded-full object-cover border-2 border-orange-200"
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-bold">
+                    {user?.nombre?.charAt(0).toUpperCase() ?? 'P'}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -786,6 +798,24 @@ export default function Chat() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                             </svg>
                           </button>
+                        )}
+
+                        {/* Avatar del personal (burbujas propias — lado derecho) */}
+                        {esMio && (
+                          <div className="shrink-0 mb-1">
+                            {user?.foto_url ? (
+                              <img
+                                src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${user.foto_url}`}
+                                alt="mi avatar"
+                                className="w-7 h-7 rounded-full object-cover"
+                                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-green-200 text-green-700 flex items-center justify-center text-xs font-bold">
+                                {user?.nombre?.charAt(0).toUpperCase() ?? 'P'}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )

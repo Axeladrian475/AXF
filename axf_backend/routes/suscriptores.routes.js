@@ -206,7 +206,7 @@ router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
     const id = req.usuario.id;
 
     const [rutinas] = await db.query(
-      `SELECT r.id_rutina, r.notas_pdf,
+      `SELECT r.id_rutina, r.nombre, r.notas_pdf,
               DATE_FORMAT(r.creado_en, '%Y-%m-%dT%H:%i:%s.000Z') AS creado_en,
               COALESCE(CONCAT(p.nombres, ' ', p.apellido_paterno), 'Entrenador') AS entrenador
        FROM rutinas r
@@ -221,14 +221,45 @@ router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
         `SELECT re.id AS id_rutina_ejercicio,
                 re.orden, re.series, re.repeticiones,
                 re.descanso_seg, re.peso_kg, re.descripcion_tecnica,
-                e.nombre, e.imagen_url
+                e.nombre, e.imagen_url,
+                FLOOR(re.orden / 100) AS bloque_idx
          FROM rutina_ejercicios re
          JOIN ejercicios e ON e.id_ejercicio = re.id_ejercicio
          WHERE re.id_rutina = ?
          ORDER BY re.orden ASC`,
         [rutina.id_rutina]
       );
-      rutina.ejercicios = ejercicios;
+
+      // Extraer nombres de bloques del notas_pdf
+      // Formato esperado: "Pecho: texto\nEspalda: texto\nPiernas: texto"
+      const bloqueNombres = {};
+      if (rutina.notas_pdf) {
+        const lineas = rutina.notas_pdf.split('\n');
+        lineas.forEach((linea, idx) => {
+          const match = linea.match(/^([^:]+):/);
+          if (match) {
+            bloqueNombres[idx] = match[1].trim();
+          }
+        });
+      }
+
+      // Asignar grupo_muscular a cada ejercicio según su bloque_idx
+      rutina.ejercicios = ejercicios.map(ej => ({
+        ...ej,
+        grupo_muscular: bloqueNombres[ej.bloque_idx] ?? null
+      }));
+
+      // Construir lista de bloques ordenada para la app
+      const bloquesMap = {};
+      rutina.ejercicios.forEach(ej => {
+        const key = ej.bloque_idx;
+        if (!bloquesMap[key]) {
+          bloquesMap[key] = bloqueNombres[key] ?? null;
+        }
+      });
+      rutina.bloques = Object.entries(bloquesMap)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([idx, nombre]) => ({ bloque_idx: Number(idx), nombre }));
     }
 
     res.json(rutinas);

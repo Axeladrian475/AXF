@@ -94,6 +94,7 @@ export async function listarReportes(req, res) {
          -- Personal reportado (si aplica)
          CONCAT(p.nombres, ' ', p.apellido_paterno) AS nombre_personal_reportado,
          p.puesto                                   AS puesto_personal_reportado,
+         p.foto_url                                 AS foto_personal_reportado,
          -- Último strike registrado
          (SELECT sr.generado_en
           FROM strikes_reporte sr
