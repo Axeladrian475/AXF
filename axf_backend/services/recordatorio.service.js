@@ -11,7 +11,7 @@
 import cron      from 'node-cron';
 import admin     from 'firebase-admin';
 import { createRequire } from 'module';
-import db        from '../database/db.js';
+import db        from '../config/database.js';
 
 // ─── Inicializar Firebase Admin (una sola vez) ────────────────────────────────
 let firebaseInitialized = false;
