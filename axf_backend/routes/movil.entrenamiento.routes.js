@@ -94,9 +94,14 @@ router.get('/historial/:id_rutina_ejercicio', verificarSuscriptor, async (req, r
     // Agrupar por fecha (sesión)
     const sesionesMap = new Map();
     for (const r of registros) {
-      const fechaStr = r.fecha instanceof Date
-        ? r.fecha.toISOString().split('T')[0]
-        : String(r.fecha).split('T')[0];
+      let fechaStr = "Desconocida";
+      if (r.fecha instanceof Date && !isNaN(r.fecha)) {
+        fechaStr = r.fecha.toISOString().split('T')[0];
+      } else if (typeof r.fecha === 'string' && r.fecha !== '0000-00-00') {
+        fechaStr = r.fecha.split('T')[0];
+      } else if (r.registrado_en instanceof Date && !isNaN(r.registrado_en)) {
+        fechaStr = r.registrado_en.toISOString().split('T')[0];
+      }
 
       if (!sesionesMap.has(fechaStr)) {
         sesionesMap.set(fechaStr, { fecha: fechaStr, series: [] });
