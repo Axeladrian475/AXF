@@ -771,4 +771,55 @@ router.post('/:id/aplicar-promo', aplicarPromocion);
 router.delete('/:id/suscripcion/:id_sub', cancelarSuscripcion);
 router.get('/:id/accesos', obtenerHistorialAccesos);
 
+
+// ── GET /api/suscriptores/movil/aforo ─────────────────────────────────────────
+// Devuelve el aforo actual de la sucursal del suscriptor logueado.
+// Incluye capacidad máxima para mostrar porcentaje en la app móvil.
+router.get('/movil/aforo', verificarSuscriptor, async (req, res) => {
+  try {
+    const id_sucursal = req.suscriptor.id_sucursal;
+
+    const [[aforo]] = await db.query(
+      `SELECT
+         sa.personas_dentro,
+         sa.actualizado_en,
+         COALESCE(s.capacidad_maxima, 50) AS capacidad_maxima,
+         s.nombre                          AS nombre_sucursal
+       FROM sucursal_aforo sa
+       INNER JOIN sucursales s ON s.id_sucursal = sa.id_sucursal
+       WHERE sa.id_sucursal = ?`,
+      [id_sucursal]
+    );
+
+    if (!aforo) {
+      // Si no hay registro aún, retornar 0
+      const [[suc]] = await db.query(
+        `SELECT nombre, COALESCE(capacidad_maxima, 50) AS capacidad_maxima
+         FROM sucursales WHERE id_sucursal = ?`,
+        [id_sucursal]
+      );
+      return res.json({
+        personas_dentro:  0,
+        capacidad_maxima: suc?.capacidad_maxima ?? 50,
+        nombre_sucursal:  suc?.nombre ?? '',
+        actualizado_en:   null,
+        porcentaje:       0,
+      });
+    }
+
+    const porcentaje = Math.round((aforo.personas_dentro / aforo.capacidad_maxima) * 100);
+
+    res.json({
+      personas_dentro:  aforo.personas_dentro,
+      capacidad_maxima: aforo.capacidad_maxima,
+      nombre_sucursal:  aforo.nombre_sucursal,
+      actualizado_en:   aforo.actualizado_en,
+      porcentaje:       Math.min(porcentaje, 100),
+    });
+  } catch (err) {
+    console.error('[GET /suscriptores/movil/aforo]', err);
+    res.status(500).json({ message: 'Error al obtener el aforo.' });
+  }
+});
+
 export default router;
