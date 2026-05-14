@@ -141,6 +141,7 @@ export default function CrearRutina({ onBack }: Props) {
         r.ejercicios.map((ej, ejIdx) => ({
           id_ejercicio: ej.id_ejercicio,
           orden: rIdx * 100 + ejIdx + 1,
+          nombre_bloque: r.nombre,           // ← nombre del músculo/grupo
           series: parseInt(ej.series) || 3,
           repeticiones: parseInt(ej.reps) || 10,
           descanso_seg: parseInt(ej.descanso) || 60,

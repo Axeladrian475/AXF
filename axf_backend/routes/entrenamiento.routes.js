@@ -196,7 +196,7 @@ router.get('/suscriptores', verificarToken, soloPersonal, soloEntrenador, async 
 // ════════════════════════════════════════════════════════════════════════════════
 
 // POST /api/entrenamiento/rutinas
-// Body: { id_suscriptor, notas_pdf?, ejercicios: [{ id_ejercicio, orden, series, repeticiones, descanso_seg?, peso_kg?, descripcion_tecnica? }] }
+// Body: { id_suscriptor, notas_pdf?, ejercicios: [{ id_ejercicio, orden, nombre_bloque?, series, repeticiones, descanso_seg?, peso_kg?, descripcion_tecnica? }] }
 router.post('/rutinas', verificarToken, soloPersonal, soloEntrenador, async (req, res) => {
   const conn = await db.getConnection();
   try {
@@ -251,13 +251,14 @@ router.post('/rutinas', verificarToken, soloPersonal, soloEntrenador, async (req
     for (const ej of ejercicios) {
       await conn.query(
         `INSERT INTO rutina_ejercicios
-          (id_rutina, id_ejercicio, orden, series, repeticiones, descanso_seg, peso_kg, descripcion_tecnica)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id_rutina, id_ejercicio, orden, series, repeticiones, descanso_seg, peso_kg, descripcion_tecnica, nombre_bloque)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id_rutina, ej.id_ejercicio, ej.orden,
           ej.series, ej.repeticiones,
           ej.descanso_seg || null, ej.peso_kg || null,
           ej.descripcion_tecnica || null,
+          ej.nombre_bloque || null,
         ]
       );
     }
