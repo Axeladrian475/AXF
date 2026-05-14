@@ -181,24 +181,45 @@ function verificarSuscriptor(req, res, next) {
 router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
   try {
     const id = req.usuario.id;
-    const [[sub]] = await db.query(
-      `SELECT s.fecha_fin, ts.nombre AS nombre_plan
+
+    // 1) ¿Tiene suscripción EN CURSO ahora mismo? (estado='Activa')
+    //    También obtiene el nombre del plan actual.
+    const [[subActiva]] = await db.query(
+      `SELECT ts.nombre AS nombre_plan
        FROM suscripciones s
        LEFT JOIN tipos_suscripcion ts ON ts.id_tipo = s.id_tipo
        WHERE s.id_suscriptor = ? AND s.estado = 'Activa' AND s.fecha_fin >= CURDATE()
        ORDER BY s.fecha_fin DESC LIMIT 1`,
       [id]
     );
+
+    // 2) Vencimiento FINAL y días totales restantes
+    //    Incluye suscripciones acumuladas (Activa + Acumulada) para obtener
+    //    el MAX(fecha_fin), que es la fecha real de vencimiento del usuario.
+    const [[totales]] = await db.query(
+      `SELECT
+         DATE_FORMAT(MAX(s.fecha_fin), '%Y-%m-%d')            AS vencimiento_final,
+         GREATEST(DATEDIFF(MAX(s.fecha_fin), CURDATE()), 0)   AS dias_restantes
+       FROM suscripciones s
+       WHERE s.id_suscriptor = ?
+         AND s.estado IN ('Activa', 'Acumulada')
+         AND s.fecha_fin >= CURDATE()`,
+      [id]
+    );
+
+    // 3) Racha y días de descanso
     const [[sus]] = await db.query(
       `SELECT racha_dias, dias_descanso_semana FROM suscriptores WHERE id_suscriptor = ?`,
       [id]
     );
+
     res.json({
-      activa: !!sub,
-      vencimiento_final: sub ? sub.fecha_fin : null,
-      nombre_plan: sub ? (sub.nombre_plan || null) : null,
-      racha_dias:          sus?.racha_dias          ?? 0,
-      dias_descanso_semana: sus?.dias_descanso_semana ?? 0,
+      activa:               !!subActiva,
+      vencimiento_final:    totales?.vencimiento_final    ?? null,
+      dias_restantes:       totales?.dias_restantes       ?? 0,
+      nombre_plan:          subActiva?.nombre_plan        ?? null,
+      racha_dias:           sus?.racha_dias               ?? 0,
+      dias_descanso_semana: sus?.dias_descanso_semana     ?? 0,
     });
   } catch (err) {
     console.error('[GET /suscriptores/movil/suscripcion]', err);
