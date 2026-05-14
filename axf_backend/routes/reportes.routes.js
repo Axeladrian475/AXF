@@ -40,6 +40,7 @@ import {
   historialStrikes,
   resumenReportes,
   analisisReportes,
+  analisisPersonal,
 } from '../controllers/reportes.controller.js';
 import {
   getConfigStrikes,
@@ -357,6 +358,7 @@ router.use(verificarToken);
 
 router.get('/resumen',           personalOSucursal, resumenReportes);
 router.get('/analisis',          personalOSucursal, analisisReportes);
+router.get('/analisis/personal', personalOSucursal, analisisPersonal);
 router.get('/strikes/config',    personalOSucursal, getConfigStrikes);
 router.put('/strikes/config',    soloMaestro,       setConfigStrikes);  // ← Solo maestro
 router.post('/strikes/procesar', soloMaestro,       procesarManual);    // ← Solo maestro

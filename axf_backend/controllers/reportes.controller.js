@@ -377,11 +377,20 @@ export async function analisisReportes(req, res) {
 
     const pendientes = [];
     const resueltos = [];
+    const categorias_conteo = {};
     
     reportesPeriodo.forEach(r => {
       if (r.estado === 'Resuelto') resueltos.push(r);
       else pendientes.push(r);
+
+      const cat = r.categoria;
+      categorias_conteo[cat] = (categorias_conteo[cat] || 0) + 1;
     });
+
+    const categorias_chart = Object.keys(categorias_conteo).map(name => ({
+      name: name.replace(/_/g, ' '),
+      cantidad: categorias_conteo[name]
+    })).sort((a, b) => b.cantidad - a.cantidad);
 
     const total = reportesPeriodo.length;
     const tasaResolucion = total > 0 ? ((resueltos.length / total) * 100).toFixed(2) : 0;
@@ -392,10 +401,72 @@ export async function analisisReportes(req, res) {
       resueltos_count: resueltos.length,
       tasa_resolucion: parseFloat(tasaResolucion),
       pendientes,
-      resueltos
+      resueltos,
+      categorias_chart
     });
   } catch (error) {
     console.error('[GET /reportes/analisis]', error);
     res.status(500).json({ message: 'Error al obtener análisis de reportes.' });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/reportes/analisis/personal
+// Analisis de correlacion: Servicios vs Reportes por cada empleado
+// Query params: fecha_inicio, fecha_fin
+// ════════════════════════════════════════════════════════════════════════════
+export async function analisisPersonal(req, res) {
+  try {
+    const { fecha_inicio, fecha_fin } = req.query;
+    if (!fecha_inicio || !fecha_fin) {
+      return res.status(400).json({ message: 'Las fechas inicio y fin son requeridas.' });
+    }
+
+    let id_sucursal = null;
+    if (req.usuario.rol === 'sucursal') {
+      id_sucursal = req.usuario.id;
+    } else if (req.usuario.rol === 'personal') {
+      const [[emp]] = await db.query(
+        `SELECT id_sucursal FROM personal WHERE id_personal = ? AND activo = 1`,
+        [req.usuario.id]
+      );
+      id_sucursal = emp?.id_sucursal ?? null;
+    }
+
+    const params = [fecha_inicio, fecha_fin, fecha_inicio, fecha_fin, fecha_inicio, fecha_fin];
+    const filtroSuc = id_sucursal ? `WHERE p.id_sucursal = ?` : '';
+    if (id_sucursal) params.push(id_sucursal);
+
+    const [rows] = await db.query(
+      `SELECT
+         p.id_personal,
+         CONCAT(p.nombres, ' ', p.apellido_paterno) AS nombre,
+         p.puesto,
+         p.foto_url,
+         (SELECT COUNT(*) FROM dietas d WHERE d.id_nutriologo = p.id_personal AND DATE(d.creado_en) >= ? AND DATE(d.creado_en) <= ?) AS total_dietas,
+         (SELECT COUNT(*) FROM rutinas r_u WHERE r_u.id_entrenador = p.id_personal AND DATE(r_u.creado_en) >= ? AND DATE(r_u.creado_en) <= ?) AS total_rutinas,
+         (SELECT COUNT(*) FROM reportes r WHERE r.id_personal_reportado = p.id_personal AND r.categoria = 'Reporte_Personal' AND DATE(r.creado_en) >= ? AND DATE(r.creado_en) <= ?) AS total_reportes
+       FROM personal p
+       ${filtroSuc}
+       ORDER BY total_reportes DESC, (total_dietas + total_rutinas) DESC`,
+      params
+    );
+
+    const resultados = rows.map(r => {
+      const servicios = r.total_dietas + r.total_rutinas;
+      // Correlación: reportes por cada 100 servicios
+      const ratio = servicios > 0 ? ((r.total_reportes / servicios) * 100).toFixed(2) : (r.total_reportes > 0 ? 'Infinity' : '0.00');
+      
+      return {
+        ...r,
+        total_servicios: servicios,
+        tasa_reportes: parseFloat(ratio) || 0
+      };
+    });
+
+    res.json(resultados);
+  } catch (error) {
+    console.error('[GET /reportes/analisis/personal]', error);
+    res.status(500).json({ message: 'Error al obtener análisis de personal.' });
   }
 }

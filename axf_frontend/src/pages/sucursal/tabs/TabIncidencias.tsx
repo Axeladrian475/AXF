@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import axiosClient from '../../../api/axiosClient'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie } from 'recharts'
 
 interface AnalisisData {
   total: number
@@ -8,6 +9,19 @@ interface AnalisisData {
   tasa_resolucion: number
   pendientes: any[]
   resueltos: any[]
+  categorias_chart?: { name: string, cantidad: number }[]
+}
+
+interface PersonalAnalisis {
+  id_personal: number
+  nombre: string
+  puesto: string
+  foto_url: string | null
+  total_dietas: number
+  total_rutinas: number
+  total_reportes: number
+  total_servicios: number
+  tasa_reportes: number
 }
 
 type FrecuenciaTipo = 'dias' | 'semanas' | 'meses'
@@ -50,8 +64,10 @@ export default function TabIncidencias() {
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin]       = useState('')
   const [analisis, setAnalisis]       = useState<AnalisisData | null>(null)
+  const [analisisPersonal, setAnalisisPersonal] = useState<PersonalAnalisis[]>([])
   const [cargandoAnalisis, setCargandoAnalisis] = useState(false)
   const [errorAnalisis, setErrorAnalisis]       = useState('')
+  const [listaActiva, setListaActiva]           = useState<'ambas' | 'resueltos' | 'pendientes'>('ambas')
 
   useEffect(() => {
     const end = new Date()
@@ -69,10 +85,13 @@ export default function TabIncidencias() {
     setCargandoAnalisis(true)
     setErrorAnalisis('')
     try {
-      const res = await axiosClient.get('/reportes/analisis', {
-        params: { fecha_inicio: fechaInicio, fecha_fin: fechaFin }
-      })
-      setAnalisis(res.data)
+      const [resReportes, resPersonal] = await Promise.all([
+        axiosClient.get('/reportes/analisis', { params: { fecha_inicio: fechaInicio, fecha_fin: fechaFin } }),
+        axiosClient.get('/reportes/analisis/personal', { params: { fecha_inicio: fechaInicio, fecha_fin: fechaFin } })
+      ])
+      setAnalisis(resReportes.data)
+      setAnalisisPersonal(resPersonal.data)
+      setListaActiva('ambas')
     } catch (err: any) {
       setErrorAnalisis(err.response?.data?.message || 'Error al obtener análisis')
     } finally {
@@ -291,68 +310,398 @@ export default function TabIncidencias() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Lista Resueltos */}
-              <div className="border border-emerald-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
-                <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-3 shrink-0">
-                  <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
-                    ✅ Lista de Resueltos <span className="bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full text-xs">{analisis.resueltos_count}</span>
-                  </h4>
+            {/* ── Gráficas (Pastel y Barras) ────────────────────────────────────────── */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <div className="lg:col-span-1 bg-white border border-gray-200 p-5 rounded-xl shadow-sm flex flex-col items-center justify-center">
+                <h4 className="text-sm font-bold text-gray-800 mb-2">Estado de Reportes</h4>
+                <div className="h-48 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Resueltos', value: analisis.resueltos_count, color: '#10b981' },
+                          { name: 'Pendientes', value: analisis.pendientes_count, color: '#f59e0b' }
+                        ]}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={70}
+                        paddingAngle={5}
+                        cursor="pointer"
+                        onClick={(data) => {
+                          if (data.name === 'Resueltos') setListaActiva(prev => prev === 'resueltos' ? 'ambas' : 'resueltos')
+                          else if (data.name === 'Pendientes') setListaActiva(prev => prev === 'pendientes' ? 'ambas' : 'pendientes')
+                        }}
+                      >
+                        {[
+                          { name: 'Resueltos', value: analisis.resueltos_count, color: '#10b981' },
+                          { name: 'Pendientes', value: analisis.pendientes_count, color: '#f59e0b' }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', fontSize: '12px', fontWeight: 'bold' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="overflow-y-auto max-h-[300px] p-3 space-y-2 flex-1">
-                  {analisis.resueltos.length === 0 ? (
-                    <p className="text-sm text-gray-400 p-4 text-center italic">Ningún reporte resuelto en este periodo.</p>
-                  ) : (
-                    analisis.resueltos.map((r: any) => (
-                      <div key={r.id_reporte} className="border border-gray-100 bg-gray-50 rounded-lg p-3 hover:bg-emerald-50/30 transition-colors">
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="font-bold text-gray-800 text-sm">#{r.id_reporte} - {r.categoria}</span>
-                          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">Resuelto</span>
-                        </div>
-                        <p className="text-xs text-gray-500 mb-2 line-clamp-1">{r.descripcion}</p>
-                        <p className="text-[10px] text-emerald-600 font-bold">
-                          Resuelto el: {new Date(r.resuelto_en).toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <p className="text-xs text-gray-500 text-center mt-1">Clickea una sección para filtrar listas</p>
+                {listaActiva !== 'ambas' && (
+                  <button onClick={() => setListaActiva('ambas')} className="mt-2 text-[10px] text-blue-600 underline font-bold">
+                    Mostrar todas las listas
+                  </button>
+                )}
               </div>
 
-              {/* Lista Pendientes */}
-              <div className="border border-amber-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
-                <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 shrink-0">
-                  <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
-                    ⏳ Lista de Pendientes <span className="bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full text-xs">{analisis.pendientes_count}</span>
+              {analisis.categorias_chart && analisis.categorias_chart.length > 0 ? (
+                <div className="lg:col-span-2 bg-white border border-gray-200 p-5 rounded-xl shadow-sm">
+                  <h4 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    📊 Distribución de Reportes por Categoría
                   </h4>
+                  <div className="h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analisis.categorias_chart} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                        <Tooltip 
+                          cursor={{ fill: '#f3f4f6' }}
+                          contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 'bold' }}
+                        />
+                        <Bar dataKey="cantidad" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                          {analisis.categorias_chart.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#ea580c' : '#fb923c'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="overflow-y-auto max-h-[300px] p-3 space-y-2 flex-1">
-                  {analisis.pendientes.length === 0 ? (
-                    <p className="text-sm text-gray-400 p-4 text-center italic">No hay reportes pendientes.</p>
-                  ) : (
-                    analisis.pendientes.map((r: any) => (
-                      <div key={r.id_reporte} className="border border-gray-100 bg-gray-50 rounded-lg p-3 hover:bg-amber-50/30 transition-colors">
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="font-bold text-gray-800 text-sm">#{r.id_reporte} - {r.categoria}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${r.estado === 'Abierto' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                            {r.estado}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mb-2 line-clamp-1">{r.descripcion}</p>
-                        <div className="flex justify-between items-center">
-                          <p className="text-[10px] text-amber-600 font-bold">
-                            Strikes: {r.num_strikes}
-                          </p>
-                          <p className="text-[10px] text-gray-400">
-                            Creado: {new Date(r.creado_en).toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'})}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
+              ) : (
+                <div className="lg:col-span-2 bg-white border border-gray-200 p-5 rounded-xl shadow-sm flex items-center justify-center">
+                  <p className="text-gray-400 italic text-sm">No hay suficientes datos para la gráfica de categorías.</p>
                 </div>
+              )}
+            </div>
+
+            <div className={`grid grid-cols-1 ${listaActiva === 'ambas' ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-5`}>
+              {/* Lista Resueltos */}
+              {(listaActiva === 'ambas' || listaActiva === 'resueltos') && (
+                <div className="border border-emerald-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
+                  <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-3 shrink-0">
+                    <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                      ✅ Lista de Resueltos <span className="bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full text-xs">{analisis.resueltos_count}</span>
+                    </h4>
+                  </div>
+                  <div className="overflow-y-auto max-h-[300px] p-3 space-y-2 flex-1">
+                    {analisis.resueltos.length === 0 ? (
+                      <p className="text-sm text-gray-400 p-4 text-center italic">Ningún reporte resuelto en este periodo.</p>
+                    ) : (
+                      analisis.resueltos.map((r: any) => (
+                        <div key={r.id_reporte} className="border border-gray-100 bg-gray-50 rounded-lg p-3 hover:bg-emerald-50/30 transition-colors">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="font-bold text-gray-800 text-sm">#{r.id_reporte} - {r.categoria.replace(/_/g, ' ')}</span>
+                            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">Resuelto</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mb-2 line-clamp-1">{r.descripcion}</p>
+                          <p className="text-[10px] text-emerald-600 font-bold">
+                            Resuelto el: {new Date(r.resuelto_en).toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Lista Pendientes */}
+              {(listaActiva === 'ambas' || listaActiva === 'pendientes') && (
+                <div className="border border-amber-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
+                  <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 shrink-0">
+                    <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                      ⏳ Lista de Pendientes <span className="bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full text-xs">{analisis.pendientes_count}</span>
+                    </h4>
+                  </div>
+                  <div className="overflow-y-auto max-h-[300px] p-3 space-y-2 flex-1">
+                    {analisis.pendientes.length === 0 ? (
+                      <p className="text-sm text-gray-400 p-4 text-center italic">No hay reportes pendientes.</p>
+                    ) : (
+                      analisis.pendientes.map((r: any) => (
+                        <div key={r.id_reporte} className="border border-gray-100 bg-gray-50 rounded-lg p-3 hover:bg-amber-50/30 transition-colors">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="font-bold text-gray-800 text-sm">#{r.id_reporte} - {r.categoria.replace(/_/g, ' ')}</span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${r.estado === 'Abierto' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {r.estado}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mb-2 line-clamp-1">{r.descripcion}</p>
+                          <div className="flex justify-between items-center">
+                            <p className="text-[10px] text-amber-600 font-bold">
+                              Strikes: {r.num_strikes}
+                            </p>
+                            <p className="text-[10px] text-gray-400">
+                              Creado: {new Date(r.creado_en).toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'})}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── Lista de Prioridad (Urgentes o 3+ Strikes) ────────────────────── */}
+            {(() => {
+              const prioritarios = analisis.pendientes.filter(r => r.num_strikes >= 3 || r.categoria === 'Reporte_Personal' || r.categoria === 'Maquina_Dañada');
+              if (prioritarios.length === 0) return null;
+              return (
+                <div className="mt-8 border border-red-300 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
+                  <div className="bg-red-50 border-b border-red-200 px-4 py-3 shrink-0 flex justify-between items-center">
+                    <h4 className="text-sm font-bold text-red-800 flex items-center gap-2">
+                      🚨 Atención Inmediata (Prioridad Alta)
+                    </h4>
+                    <span className="bg-red-600 text-white px-2 py-0.5 rounded-full text-xs font-black animate-pulse">
+                      {prioritarios.length} Críticos
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {prioritarios.map((r: any) => (
+                        <div key={r.id_reporte} className="border-2 border-red-200 bg-red-50/30 rounded-lg p-3 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-10 h-10 bg-red-100 rounded-bl-full flex items-start justify-end p-2 border-l border-b border-red-200">
+                            <span className="text-xs font-black text-red-600 leading-none">!</span>
+                          </div>
+                          <p className="font-black text-red-800 text-sm mb-1">#{r.id_reporte} - {r.categoria.replace(/_/g, ' ')}</p>
+                          <p className="text-xs text-gray-600 mb-3 line-clamp-2">{r.descripcion}</p>
+                          <div className="flex justify-between items-end">
+                            <span className="bg-red-200 text-red-800 px-2 py-1 rounded text-[10px] font-bold">
+                              {r.num_strikes} Strikes
+                            </span>
+                            <span className="text-[10px] text-gray-500 font-semibold">
+                              {new Date(r.creado_en).toLocaleDateString('es-MX', {day:'2-digit', month:'short'})}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Tabla de Tiempos de Resolución ─────────────────────────────────── */}
+            <div className="mt-8 border border-purple-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
+              <div className="bg-purple-50 border-b border-purple-200 px-4 py-3 shrink-0">
+                <h4 className="text-sm font-bold text-purple-800 flex items-center gap-2">
+                  ⏱️ Tiempos de Resolución (Reportes Resueltos)
+                </h4>
+              </div>
+              <div className="overflow-x-auto p-4">
+                {analisis.resueltos.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center italic">No hay reportes resueltos en este periodo.</p>
+                ) : (
+                  <table className="w-full text-sm text-left">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="py-2 px-3 text-gray-500 font-bold">Reporte</th>
+                        <th className="py-2 px-3 text-gray-500 font-bold">Categoría</th>
+                        <th className="py-2 px-3 text-center text-gray-500 font-bold">Creado</th>
+                        <th className="py-2 px-3 text-center text-gray-500 font-bold">Resuelto</th>
+                        <th className="py-2 px-3 text-center text-gray-500 font-bold">Tiempo (h:m)</th>
+                        <th className="py-2 px-3 text-center text-gray-500 font-bold">Strikes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analisis.resueltos.map((r: any) => {
+                        const d1 = new Date(r.creado_en).getTime()
+                        const d2 = new Date(r.resuelto_en).getTime()
+                        const diffMs = Math.max(0, d2 - d1)
+                        const horas = Math.floor(diffMs / (1000 * 60 * 60))
+                        const minutos = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+                        
+                        const strikesNum = parseInt(r.num_strikes || '0')
+                        const bgStrike = strikesNum > 0 ? 'bg-red-50/50' : 'hover:bg-gray-50'
+                        
+                        return (
+                          <tr key={r.id_reporte} className={`border-b border-gray-100 transition-colors ${bgStrike}`}>
+                            <td className="py-2 px-3 font-bold text-gray-800">#{r.id_reporte}</td>
+                            <td className="py-2 px-3 text-gray-600">{r.categoria.replace(/_/g, ' ')}</td>
+                            <td className="py-2 px-3 text-center text-xs text-gray-500">
+                              {new Date(r.creado_en).toLocaleDateString('es-MX', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})}
+                            </td>
+                            <td className="py-2 px-3 text-center text-xs text-gray-500">
+                              {new Date(r.resuelto_en).toLocaleDateString('es-MX', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})}
+                            </td>
+                            <td className="py-2 px-3 text-center font-bold text-gray-700">
+                              {horas}h {minutos}m
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              {strikesNum > 0 ? (
+                                <span className="bg-red-100 text-red-700 font-bold px-2 py-1 rounded text-xs border border-red-200">
+                                  {strikesNum} Strike{strikesNum > 1 ? 's' : ''}
+                                </span>
+                              ) : (
+                                <span className="bg-green-100 text-green-700 font-bold px-2 py-1 rounded text-xs">
+                                  Limpio
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
+
+            {/* ── Análisis de Personal (Servicios vs Reportes) ──────────────────────── */}
+            <div className="mt-8 border border-blue-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
+              <div className="bg-blue-50 border-b border-blue-200 px-4 py-3 shrink-0">
+                <h4 className="text-sm font-bold text-blue-800 flex items-center gap-2">
+                  👥 Análisis de Personal (Servicios vs Reportes)
+                </h4>
+              </div>
+              <div className="overflow-x-auto p-4">
+                {analisisPersonal.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center italic">No hay personal para analizar en este periodo.</p>
+                ) : (
+                  <table className="w-full text-sm text-left">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="py-2 px-3 text-gray-500 font-bold">Personal</th>
+                        <th className="py-2 px-3 text-center text-gray-500 font-bold">Dietas</th>
+                        <th className="py-2 px-3 text-center text-gray-500 font-bold">Rutinas</th>
+                        <th className="py-2 px-3 text-center text-gray-500 font-bold">Servicios Totales</th>
+                        <th className="py-2 px-3 text-center text-red-500 font-bold">Reportes</th>
+                        <th className="py-2 px-3 text-center text-gray-500 font-bold">Tasa / Riesgo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analisisPersonal.map((p) => (
+                        <tr key={p.id_personal} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-3">
+                              {p.foto_url ? (
+                                <img 
+                                  src={p.foto_url.startsWith('http') ? p.foto_url : `http://192.168.1.20:3001${p.foto_url}`} 
+                                  alt="foto" 
+                                  className="w-8 h-8 rounded-full object-cover shadow-sm border border-gray-200" 
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs shadow-sm border border-gray-300">
+                                  👤
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-bold text-gray-800 leading-tight">{p.nombre}</p>
+                                <p className="text-[10px] text-gray-500 uppercase font-semibold">{p.puesto.replace(/_/g, ' ')}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 text-center font-semibold text-gray-600">{p.total_dietas}</td>
+                          <td className="py-2 px-3 text-center font-semibold text-gray-600">{p.total_rutinas}</td>
+                          <td className="py-2 px-3 text-center font-black text-blue-600">{p.total_servicios}</td>
+                          <td className="py-2 px-3 text-center font-black text-red-500">{p.total_reportes}</td>
+                          <td className="py-2 px-3 text-center">
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+                              p.total_reportes === 0 
+                                ? 'bg-emerald-100 text-emerald-700' 
+                                : p.tasa_reportes > 10 || p.tasa_reportes === Infinity
+                                  ? 'bg-red-100 text-red-700 shadow-sm'
+                                  : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {p.total_reportes === 0 
+                                ? '0%' 
+                                : p.tasa_reportes === Infinity 
+                                  ? '¡Riesgo Crítico!' 
+                                  : `${p.tasa_reportes}%`
+                              }
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* ── Gráficas de Pastel por Empleado ─────────────────────────────────── */}
+            {analisisPersonal.length > 0 && (
+              <div className="mt-8">
+                <h4 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  🧑‍💼 Desglose Visual por Empleado
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {analisisPersonal.map(p => {
+                    const data = [
+                      { name: 'Dietas', value: p.total_dietas, color: '#3b82f6' },
+                      { name: 'Rutinas', value: p.total_rutinas, color: '#10b981' },
+                      { name: 'Reportes', value: p.total_reportes, color: '#ef4444' }
+                    ].filter(d => d.value > 0);
+
+                    // Si no tiene nada, mostrar un gráfico vacío gris
+                    if (data.length === 0) {
+                      data.push({ name: 'Sin Actividad', value: 1, color: '#e5e7eb' });
+                    }
+
+                    return (
+                      <div key={p.id_personal} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col items-center relative overflow-hidden">
+                        {p.total_reportes > 0 && (
+                          <div className="absolute top-0 right-0 bg-red-100 text-red-600 text-[10px] font-black px-2 py-1 rounded-bl-lg">
+                            {p.total_reportes} Reportes
+                          </div>
+                        )}
+                        <div className="flex items-center gap-3 w-full border-b border-gray-100 pb-3 mb-3">
+                          {p.foto_url ? (
+                            <img src={p.foto_url.startsWith('http') ? p.foto_url : `http://192.168.1.20:3001${p.foto_url}`} alt="foto" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl">👤</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-gray-800 text-sm truncate">{p.nombre}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-semibold">{p.puesto.replace(/_/g, ' ')}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="h-32 w-full flex items-center justify-center">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={data}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={25}
+                                outerRadius={45}
+                                paddingAngle={2}
+                                dataKey="value"
+                                stroke="none"
+                              >
+                                {data.map((entry, idx) => (
+                                  <Cell key={idx} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip 
+                                formatter={(value: number, name: string) => [value, name]}
+                                contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px', padding: '4px 8px' }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex gap-3 mt-2 text-[10px] font-bold">
+                           <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#3b82f6]"></div> Dietas</div>
+                           <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#10b981]"></div> Rutinas</div>
+                           <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#ef4444]"></div> Reportes</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -21,9 +21,9 @@ type SensorEstado =
 // ── Mensajes de paso del ESP32 ───────────────────────────────────────────────
 const PASOS_LEGIBLES: Record<string, string> = {
   esperando_dispositivo: 'Esperando al dispositivo…',
-  listo_para_leer:       'Dispositivo listo. Coloca tu dedo en el sensor.',
-  acerca_tarjeta:        'Coloca tu dedo en el sensor de huella.',
-  tarjeta_detectada:     'Huella detectada, procesando…',
+  listo_para_leer:       'Dispositivo listo. Acerca la tarjeta o pulsera NFC.',
+  acerca_tarjeta:        'Acerca la tarjeta o pulsera NFC al lector.',
+  tarjeta_detectada:     'Tarjeta detectada, procesando…',
   enviando:              'Enviando datos…',
   completado:            'Lectura completada.',
   conexion_perdida:      'Conexión perdida con el sensor.',
@@ -80,8 +80,8 @@ export default function Recompensas() {
     }
   }
 
-  // ── Iniciar lectura de huella (SSE) ──────────────────────────────────────
-  async function iniciarHuella() {
+  // ── Iniciar lectura de NFC (SSE) ──────────────────────────────────────
+  async function iniciarNFC() {
     // Cerrar SSE anterior si existe
     cleanupRef.current?.()
     cleanupRef.current = null
@@ -93,11 +93,11 @@ export default function Recompensas() {
 
     let token: string
     try {
-      const sesion = await iniciarSesionHardware('huella_leer')
+      const sesion = await iniciarSesionHardware('nfc')
       token = sesion.token
     } catch {
       setSensorEstado('error')
-      setSensorError('No se pudo iniciar la sesión con el sensor de huella.')
+      setSensorError('No se pudo iniciar la sesión con el lector NFC.')
       return
     }
 
@@ -117,12 +117,12 @@ export default function Recompensas() {
         setSensorEstado('identificando')
         setSensorPaso('completado')
         try {
-          const sus = await identificarSuscriptor('huella', poll.valor)
+          const sus = await identificarSuscriptor('nfc', poll.valor)
           setSuscriptor(sus)
           setSensorEstado('ok')
         } catch {
           setSensorEstado('error')
-          setSensorError('No se encontró ningún suscriptor con esa huella.')
+          setSensorError('No se encontró ningún suscriptor con esa tarjeta NFC.')
         }
       }
 
@@ -132,12 +132,12 @@ export default function Recompensas() {
         setSensorEstado('error')
         const motivo = poll.paso ?? 'desconocido'
         setSensorError(
-          motivo === 'huella_no_encontrada'
-            ? 'Huella no registrada en el sistema.'
-            : motivo === 'timeout_dedo'
-            ? 'No se detectó ningún dedo (tiempo agotado).'
+          motivo === 'nfc_no_encontrado'
+            ? 'Tarjeta NFC no registrada en el sistema.'
+            : motivo === 'timeout_nfc'
+            ? 'No se detectó ninguna tarjeta (tiempo agotado).'
             : motivo === 'conexion_perdida'
-            ? 'Se perdió la conexión con el sensor de huella.'
+            ? 'Se perdió la conexión con el lector NFC.'
             : `Error del lector: ${motivo}`
         )
       }
@@ -188,7 +188,7 @@ export default function Recompensas() {
         <div>
           <h1 className="text-lg font-bold text-black">🏆 Módulo de Recompensas</h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Identifica al suscriptor con su huella dactilar y canjea sus puntos.
+            Identifica al suscriptor con su tarjeta o pulsera NFC y canjea sus puntos.
           </p>
         </div>
         <button
@@ -206,7 +206,7 @@ export default function Recompensas() {
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-black text-sm">1. Identificar Suscriptor</h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            Pide al suscriptor que coloque su dedo en el sensor de huella.
+            Pide al suscriptor que acerque su tarjeta o pulsera al lector NFC.
           </p>
         </div>
 
@@ -216,11 +216,11 @@ export default function Recompensas() {
           {(sensorEstado === 'idle' || sensorEstado === 'error') && (
             <div className="flex flex-col gap-3">
               <button
-                onClick={iniciarHuella}
+                onClick={iniciarNFC}
                 className="inline-flex items-center gap-2 bg-[#ea580c] hover:bg-[#c94a0a] active:scale-95 transition-all text-white font-bold px-5 py-2.5 rounded text-sm shadow-sm w-fit"
               >
-                <span>👆</span>
-                <span>Leer Huella Dactilar</span>
+                <span>💳</span>
+                <span>Leer Tarjeta NFC</span>
               </button>
 
               {sensorEstado === 'error' && sensorError && (
@@ -240,11 +240,11 @@ export default function Recompensas() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-4 border border-gray-200 rounded px-5 py-4">
                 <div className="w-10 h-10 rounded-full bg-orange-50 border border-orange-200 flex items-center justify-center text-xl flex-shrink-0">
-                  👆
+                  💳
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-bold text-black">
-                    {sensorEstado === 'identificando' ? 'Identificando suscriptor…' : 'Esperando huella dactilar…'}
+                    {sensorEstado === 'identificando' ? 'Identificando suscriptor…' : 'Esperando tarjeta NFC…'}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">{pasoLegible}</p>
                   <div className="mt-2 w-40 h-1 bg-gray-100 rounded-full overflow-hidden">
