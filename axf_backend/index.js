@@ -34,7 +34,8 @@ import hardwareRoutes         from './routes/hardware.routes.js';
 import pagosRoutes            from './routes/pagos.routes.js';
 import chatRoutes             from './routes/chat.routes.js';
 import reportesRoutes         from './routes/reportes.routes.js';
-import movilNutricionRoutes   from './routes/movil.nutricion.routes.js';  // ← NUEVO
+import movilNutricionRoutes    from './routes/movil.nutricion.routes.js';
+import movilEntrenamientoRoutes from './routes/movil.entrenamiento.routes.js';
 
 // ── Motor de strikes ─────────────────────────────────────────────────────────
 import { procesarStrikes }      from './services/strikes.service.js';
@@ -69,7 +70,8 @@ app.use('/api/hardware',          hardwareRoutes);
 app.use('/api/pagos',             pagosRoutes);
 app.use('/api/chat',              chatRoutes);
 app.use('/api/reportes',          reportesRoutes);
-app.use('/api/movil/nutricion',   movilNutricionRoutes);  // ← NUEVO
+app.use('/api/movil/nutricion',      movilNutricionRoutes);
+app.use('/api/movil/entrenamiento',  movilEntrenamientoRoutes);
 
 // ── Crear httpServer y adjuntar Socket.io ─────────────────────────────────────
 const httpServer = createServer(app);
