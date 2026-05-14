@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 
 interface AnalisisData {
   total: number
+  total_estadistico: number
   pendientes_count: number
   resueltos_count: number
   tasa_resolucion: number
@@ -296,9 +297,13 @@ export default function TabIncidencias() {
         {analisis && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl text-center">
+              <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl text-center relative overflow-hidden pb-8">
                 <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Total Periodo</p>
                 <p className="text-3xl font-black text-gray-800">{analisis.total}</p>
+                <div className="absolute bottom-0 inset-x-0 bg-gray-200 py-1 flex justify-center items-center gap-1">
+                  <span className="text-[10px] font-bold text-gray-600">Impacto Estadístico:</span>
+                  <span className="text-[10px] font-black text-gray-800 bg-white px-1.5 rounded">{analisis.total_estadistico} quejas</span>
+                </div>
               </div>
               <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center shadow-sm">
                 <p className="text-xs text-emerald-600 font-bold uppercase tracking-wider mb-1">Tasa Resolución</p>

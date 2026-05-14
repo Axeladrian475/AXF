@@ -263,6 +263,23 @@ router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
          ORDER BY re.orden ASC`,
         [rutina.id_rutina]
       );
+
+      for (const ej of ejercicios) {
+        const [historial] = await db.query(
+          `SELECT num_serie, peso_levantado, reps_realizadas
+           FROM registro_entrenamiento
+           WHERE id_rutina_ejercicio = ? AND id_suscriptor = ?
+             AND fecha = (
+               SELECT MAX(fecha)
+               FROM registro_entrenamiento
+               WHERE id_rutina_ejercicio = ? AND id_suscriptor = ?
+             )
+           ORDER BY num_serie ASC`,
+          [ej.id_rutina_ejercicio, id, ej.id_rutina_ejercicio, id]
+        );
+        ej.historial_reciente = historial;
+      }
+
       rutina.ejercicios = ejercicios;
 
       // Construir array de bloques con nombre real
@@ -712,11 +729,11 @@ router.post('/movil/entrenamiento/serie', verificarSuscriptor, async (req, res) 
       return res.status(403).json({ message: 'Ejercicio no encontrado o no pertenece a tu rutina.' });
     }
 
-    // Insertar o actualizar si ya existe esa serie (por si se re-completa)
+    // Insertar o actualizar si ya existe esa serie (por si se re-completa en el mismo día)
     await db.query(
       `INSERT INTO registro_entrenamiento
-         (id_rutina_ejercicio, id_suscriptor, num_serie, peso_levantado, reps_realizadas)
-       VALUES (?, ?, ?, ?, ?)
+         (id_rutina_ejercicio, id_suscriptor, num_serie, peso_levantado, reps_realizadas, fecha)
+       VALUES (?, ?, ?, ?, ?, CURDATE())
        ON DUPLICATE KEY UPDATE
          peso_levantado  = VALUES(peso_levantado),
          reps_realizadas = VALUES(reps_realizadas),

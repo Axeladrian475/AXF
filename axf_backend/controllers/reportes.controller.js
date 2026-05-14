@@ -365,12 +365,15 @@ export async function analisisReportes(req, res) {
          r.creado_en,
          r.resuelto_en,
          suc.nombre AS nombre_sucursal,
-         CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre_suscriptor
+         CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre_suscriptor,
+         COUNT(rs.id) AS sumados
        FROM reportes r
        JOIN sucursales suc ON suc.id_sucursal = r.id_sucursal
        JOIN suscriptores s ON s.id_suscriptor = r.id_suscriptor
+       LEFT JOIN reporte_sumados rs ON rs.id_reporte = r.id_reporte
        WHERE DATE(r.creado_en) >= ? AND DATE(r.creado_en) <= ?
        ${filtroSuc} ${excluirPersonal}
+       GROUP BY r.id_reporte
        ORDER BY r.creado_en DESC`,
       params
     );
@@ -378,13 +381,18 @@ export async function analisisReportes(req, res) {
     const pendientes = [];
     const resueltos = [];
     const categorias_conteo = {};
+    let total_estadistico = 0;
     
     reportesPeriodo.forEach(r => {
+      const peso = 1 + r.sumados;
+      total_estadistico += peso;
+
       if (r.estado === 'Resuelto') resueltos.push(r);
       else pendientes.push(r);
 
       const cat = r.categoria;
-      categorias_conteo[cat] = (categorias_conteo[cat] || 0) + 1;
+      // Visualmente las gráficas mostrarán el impacto real (cuántas quejas hubo en total por categoría)
+      categorias_conteo[cat] = (categorias_conteo[cat] || 0) + peso;
     });
 
     const categorias_chart = Object.keys(categorias_conteo).map(name => ({
@@ -392,11 +400,12 @@ export async function analisisReportes(req, res) {
       cantidad: categorias_conteo[name]
     })).sort((a, b) => b.cantidad - a.cantidad);
 
-    const total = reportesPeriodo.length;
-    const tasaResolucion = total > 0 ? ((resueltos.length / total) * 100).toFixed(2) : 0;
+    const total_visual = reportesPeriodo.length;
+    const tasaResolucion = total_visual > 0 ? ((resueltos.length / total_visual) * 100).toFixed(2) : 0;
 
     res.json({
-      total,
+      total: total_visual,
+      total_estadistico,
       pendientes_count: pendientes.length,
       resueltos_count: resueltos.length,
       tasa_resolucion: parseFloat(tasaResolucion),

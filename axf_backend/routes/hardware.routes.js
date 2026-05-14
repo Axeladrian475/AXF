@@ -532,9 +532,15 @@ router.post('/acceso/sucursal', verificarApiKey, async (req, res) => {
 
     const movimiento = (!ultimoMovimiento || ultimoMovimiento.tipo_movimiento === 'Salida') ? 'Entrada' : 'Salida';
 
-    // Actualizar racha ANTES de insertar el acceso del día
+    // Actualizar racha y puntos ANTES de insertar el acceso del día
     if (movimiento === 'Entrada') {
       await actualizarRacha(conn.query.bind(conn), suscriptor.id_suscriptor);
+
+      // Otorgar 10 puntos de recompensa por asistencia
+      await conn.query(
+        `UPDATE suscriptores SET puntos = puntos + 10 WHERE id_suscriptor = ?`,
+        [suscriptor.id_suscriptor]
+      );
     }
 
     await conn.query(
@@ -552,7 +558,7 @@ router.post('/acceso/sucursal', verificarApiKey, async (req, res) => {
     } else {
       await conn.query(
         `INSERT INTO sucursal_aforo (id_sucursal, personas_dentro) VALUES (?, 0)
-         ON DUPLICATE KEY UPDATE personas_dentro = GREATEST(0, personas_dentro - 1)`,
+         ON DUPLICATE KEY UPDATE personas_dentro = IF(personas_dentro > 0, personas_dentro - 1, 0)`,
         [id_sucursal]
       );
     }
