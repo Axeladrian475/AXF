@@ -267,15 +267,16 @@ router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
 
       for (const ej of ejercicios) {
         const [historial] = await db.query(
-          `SELECT num_serie, peso_levantado, reps_realizadas
-           FROM registro_entrenamiento
-           WHERE id_rutina_ejercicio = ? AND id_suscriptor = ?
-             AND fecha = (
-               SELECT MAX(fecha)
-               FROM registro_entrenamiento
-               WHERE id_rutina_ejercicio = ? AND id_suscriptor = ?
-             )
-           ORDER BY num_serie ASC`,
+          `SELECT t1.num_serie, t1.peso_levantado, t1.reps_realizadas
+           FROM registro_entrenamiento t1
+           INNER JOIN (
+             SELECT num_serie, MAX(registrado_en) AS max_reg
+             FROM registro_entrenamiento
+             WHERE id_rutina_ejercicio = ? AND id_suscriptor = ?
+             GROUP BY num_serie
+           ) t2 ON t1.num_serie = t2.num_serie AND t1.registrado_en = t2.max_reg
+           WHERE t1.id_rutina_ejercicio = ? AND t1.id_suscriptor = ?
+           ORDER BY t1.num_serie ASC`,
           [ej.id_rutina_ejercicio, id, ej.id_rutina_ejercicio, id]
         );
         ej.historial_reciente = historial;
@@ -738,7 +739,8 @@ router.post('/movil/entrenamiento/serie', verificarSuscriptor, async (req, res) 
        ON DUPLICATE KEY UPDATE
          peso_levantado  = VALUES(peso_levantado),
          reps_realizadas = VALUES(reps_realizadas),
-         registrado_en   = CURRENT_TIMESTAMP`,
+         registrado_en   = CURRENT_TIMESTAMP,
+         fecha           = CURDATE()`,
       [id_rutina_ejercicio, id_suscriptor, num_serie, peso_levantado ?? null, reps_realizadas ?? null]
     );
 
