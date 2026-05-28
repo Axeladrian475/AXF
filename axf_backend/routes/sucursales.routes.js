@@ -129,28 +129,9 @@ router.put('/:id', verificarToken, soloMaestro, async (req, res) => {
   }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// DELETE /api/sucursales/:id
-// Desactiva una sucursal (soft delete: activa = 0)
-// ────────────────────────────────────────────────────────────────────────────
-router.delete('/:id', verificarToken, soloMaestro, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const [result] = await db.query(
-      'DELETE FROM sucursales WHERE id_sucursal = ?',
-      [id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Sucursal no encontrada' });
-    }
-
-    res.json({ message: 'Sucursal eliminada correctamente' });
-  } catch (error) {
-    console.error('[DELETE /sucursales/:id]', error);
-    res.status(500).json({ message: 'Error al eliminar la sucursal' });
-  }
-});
+// ── ELIMINADO: DELETE /:id (causaba errores FK Constraint) ───────────────────
+// El borrado lógico transaccional se encuentra en:
+//   DELETE /api/maestro/sucursales/:id_sucursal
+// Ver: controllers/maestro.controller.js → desactivarSucursal()
 
 export default router;
