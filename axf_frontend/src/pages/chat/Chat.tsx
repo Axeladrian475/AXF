@@ -89,7 +89,7 @@ function fechaDia(iso: string): string {
   return `${year}-${month}-${day}`
 }
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3001'
+const WS_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function Chat() {
@@ -148,7 +148,7 @@ export default function Chat() {
     if (!token) return
     const socket = io(WS_URL, {
       auth: { token },
-      transports: ['websocket'],
+transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
     })

@@ -959,6 +959,8 @@ export async function eliminarSuscriptor(req, res) {
     await conn.query('DELETE FROM registro_entrenamiento WHERE id_suscriptor = ?', [id]);
 
     // ── Nivel 2: hijos directos del suscriptor ────────────────────────────────
+    // reporte_sumados también tiene id_suscriptor directo — borrar por ambas vías
+    await conn.query('DELETE FROM reporte_sumados          WHERE id_suscriptor = ?', [id]);
     await conn.query('DELETE FROM accesos                  WHERE id_suscriptor = ?', [id]);
     await conn.query('DELETE FROM canjes                   WHERE id_suscriptor = ?', [id]);
     await conn.query('DELETE FROM chat_mensajes            WHERE id_suscriptor = ?', [id]);
@@ -976,8 +978,16 @@ export async function eliminarSuscriptor(req, res) {
     res.json({ message: 'Suscriptor eliminado correctamente.' });
   } catch (error) {
     await conn.rollback();
-    console.error('[DELETE /suscriptores/:id]', error);
-    res.status(500).json({ message: 'Error al eliminar el suscriptor.' });
+    console.error('[DELETE /suscriptores/:id] ERROR:', {
+      message: error.message,
+      code: error.code,
+      sqlMessage: error.sqlMessage,
+      sql: error.sql,
+    });
+    res.status(500).json({
+      message: 'Error al eliminar el suscriptor.',
+      detalle: error.sqlMessage || error.message,
+    });
   } finally {
     conn.release();
   }

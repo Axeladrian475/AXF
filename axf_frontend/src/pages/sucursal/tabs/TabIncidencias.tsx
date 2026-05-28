@@ -375,7 +375,7 @@ export default function TabIncidencias() {
                           contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 'bold' }}
                         />
                         <Bar dataKey="cantidad" radius={[4, 4, 0, 0]} maxBarSize={50}>
-                          {analisis.categorias_chart.map((entry, index) => (
+                          {analisis.categorias_chart.map((_entry, index) => (
                             <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#ea580c' : '#fb923c'} />
                           ))}
                         </Bar>
@@ -690,7 +690,7 @@ export default function TabIncidencias() {
                                 ))}
                               </Pie>
                               <Tooltip 
-                                formatter={(value: number, name: string) => [value, name]}
+formatter={(value: number | undefined, name: string | undefined) => [value ?? 0, name ?? '']}
                                 contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px', padding: '4px 8px' }}
                               />
                             </PieChart>

@@ -1,1 +1,16 @@
+# ── Sensibles ──────────────────────────
 axf_backend/firebase-service-account.json
+axf_backend/.env
+axf_frontend/.env
+
+# ── Node ────────────────────────────────
+axf_backend/node_modules/
+axf_frontend/node_modules/
+
+# ── Build ───────────────────────────────
+axf_frontend/dist/
+
+# ── OS / Editor ─────────────────────────
+.DS_Store
+*.suo
+.idea/

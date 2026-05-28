@@ -59,14 +59,16 @@ async function enviarPushFCM({ fcm_token, titulo, cuerpo, data = {} }) {
       body: JSON.stringify({
         message: {
           token: fcm_token,
-          // Payload de notificación visible (Android background y web SW background)
-          notification: { title: titulo, body: cuerpo },
-          // Android config
+          // ── IMPORTANTE: NO incluir "notification" payload en android ─────────
+          // Si se incluye, Android lo maneja directamente cuando la app está
+          // cerrada y NUNCA llama onMessageReceived → sin deep link a ChatActivity.
+          // Con solo "data" + priority high, el servicio de la app siempre recibe.
+          // ─────────────────────────────────────────────────────────────────────
           android: {
             priority: 'high',
-            notification: { sound: 'default', click_action: 'OPEN_CHAT' },
+            ttl: '86400s',
           },
-          // Web Push config — necesario para que el navegador lo reciba
+          // Web Push: aquí SÍ necesitamos notification para que el Service Worker lo muestre
           webpush: {
             headers: {
               Urgency: 'high',
@@ -78,16 +80,17 @@ async function enviarPushFCM({ fcm_token, titulo, cuerpo, data = {} }) {
               icon:  '/axf-icon-192.png',
               badge: '/axf-badge.png',
               tag:   `chat-${data.id_suscriptor || 'msg'}`,
-              renotify: 'true',
-              requireInteraction: 'false',
+              renotify: true,
+              requireInteraction: false,
             },
             fcm_options: { link: '/chat' },
           },
-          // Data payload — llega tanto a Android como al Service Worker web
+          // Data payload — llega siempre a onMessageReceived en Android
           data: dataStr,
         },
       }),
     });
+
 
     const respJson = await resp.json().catch(() => ({}));
     if (resp.ok) {

@@ -119,7 +119,6 @@ function ModalHardware({
   const pasoKeys      = Object.keys(pasoMap)
 
   const titulo = esNFC ? 'Registro de Tarjeta NFC' : 'Registro de Huella Dactilar'
-  const icono  = esNFC ? '💳' : '👆'
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
