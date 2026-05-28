@@ -8,6 +8,8 @@ import {
   type Sucursal,
   type SucursalFormData,
 } from '../../api/sucursalesApi'
+import { validarPassword } from '../../utils/passwordValidator'
+import PasswordStrengthIndicator from '../../components/PasswordStrengthIndicator'
 
 const FORM_VACIO: SucursalFormData = {
   nombre: '',
@@ -93,6 +95,8 @@ export default function Sucursales() {
       setError('La contraseña es requerida para una nueva sucursal')
       return
     }
+    const errPass = validarPassword(formAgregar.password, formAgregar.usuario)
+    if (errPass) { setError(errPass); return }
     setLoadingAgregar(true)
     setError(null)
     try {
@@ -125,6 +129,11 @@ export default function Sucursales() {
   const handleModificar = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedSucursal) return
+    // Validar contraseña RQNF3 solo si se escribió algo
+    if (formModificar.password.trim()) {
+      const errPass = validarPassword(formModificar.password, formModificar.usuario)
+      if (errPass) { setError(errPass); return }
+    }
     setLoadingModificar(true)
     setError(null)
     try {
@@ -316,6 +325,7 @@ export default function Sucursales() {
                       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                   </div>
+                  <PasswordStrengthIndicator password={formAgregar.password} usuario={formAgregar.usuario} />
                 </div>
 
                 <div className="pt-2">
@@ -366,14 +376,13 @@ export default function Sucursales() {
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Dirección</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">C. Postal</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Usuario Admin</th>
-                        <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Contraseña</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sucursalesFiltradas.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="border border-gray-400 px-4 py-4 text-center text-gray-500 text-sm">
+                          <td colSpan={6} className="border border-gray-400 px-4 py-4 text-center text-gray-500 text-sm">
                             No se encontraron sucursales
                           </td>
                         </tr>
@@ -385,17 +394,6 @@ export default function Sucursales() {
                             <td className="border border-gray-400 px-4 py-2 text-black">{sucursal.direccion}</td>
                             <td className="border border-gray-400 px-4 py-2 text-center text-black">{sucursal.codigo_postal}</td>
                             <td className="border border-gray-400 px-4 py-2 text-black">{sucursal.usuario}</td>
-                            <td className="border border-gray-400 px-4 py-2 text-black">
-                              <div className="flex items-center justify-between">
-                                <span>{showPasswordTable[sucursal.id_sucursal] ? '(hash oculto)' : '********'}</span>
-                                <button
-                                  onClick={() => togglePasswordVisibility(sucursal.id_sucursal)}
-                                  className="text-gray-600 ml-2"
-                                >
-                                  {showPasswordTable[sucursal.id_sucursal] ? <EyeOff size={16} /> : <Eye size={16} />}
-                                </button>
-                              </div>
-                            </td>
                             <td className="border border-gray-400 px-4 py-2">
                               <div className="flex gap-2 justify-center">
                                 <button
@@ -498,6 +496,7 @@ export default function Sucursales() {
                         {showModifyPassword ? <Eye size={20} /> : <EyeOff size={20} />}
                       </button>
                     </div>
+                    <PasswordStrengthIndicator password={formModificar.password} usuario={formModificar.usuario} />
                   </div>
 
                   <div className="pt-2 flex gap-3">

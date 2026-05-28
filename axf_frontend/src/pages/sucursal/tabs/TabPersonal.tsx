@@ -7,6 +7,8 @@ import {
   eliminarPersonal,
   type Personal,
 } from '../../../api/personalApi'
+import { validarPassword } from '../../../utils/passwordValidator'
+import PasswordStrengthIndicator from '../../../components/PasswordStrengthIndicator'
 
 const PUESTOS = ['staff', 'entrenador', 'nutriologo', 'entrenador_nutriologo'] as const
 const PUESTOS_LABEL: Record<string, string> = {
@@ -99,6 +101,13 @@ export default function TabPersonal() {
     e.preventDefault()
     setLoadingAgregar(true)
     setError(null)
+    // Validar contraseña RQNF3
+    const errPass = validarPassword(form.password, form.usuario)
+    if (errPass) {
+      setError(errPass)
+      setLoadingAgregar(false)
+      return
+    }
     try {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => fd.append(k, v))
@@ -141,6 +150,14 @@ export default function TabPersonal() {
   const handleModificar = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedPersonal) return
+    // Validar contraseña RQNF3 solo si se escribió algo
+    if (formMod.password.trim()) {
+      const errPass = validarPassword(formMod.password, formMod.usuario)
+      if (errPass) {
+        setError(errPass)
+        return
+      }
+    }
     setLoadingMod(true)
     setError(null)
     try {
@@ -301,6 +318,7 @@ export default function TabPersonal() {
                       {showPasswordMod ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
+                  <PasswordStrengthIndicator password={formMod.password} usuario={formMod.usuario} />
                 </div>
                 <div>
                   <label className="block text-sm font-bold italic mb-1">
@@ -445,6 +463,7 @@ export default function TabPersonal() {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            <PasswordStrengthIndicator password={form.password} usuario={form.usuario} />
           </div>
           <div>
             <label className="block text-sm font-bold text-black italic mb-1">Fotografía:</label>

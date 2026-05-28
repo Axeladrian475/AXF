@@ -7,6 +7,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Eye, EyeOff, Loader2, CheckCircle, RefreshCw, X, Camera } from 'lucide-react'
 import axiosClient from '../../../api/axiosClient'
+import { validarPassword } from '../../../utils/passwordValidator'
+import PasswordStrengthIndicator from '../../../components/PasswordStrengthIndicator'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 interface Suscriptor {
@@ -360,6 +362,11 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
       return setAlerta({ tipo: 'error', mensaje: 'Nombres y Apellido Paterno son obligatorios.' })
     if (!form.correo.trim())
       return setAlerta({ tipo: 'error', mensaje: 'El correo es obligatorio.' })
+    // RQNF3: validar contraseña solo si se escribió algo
+    if (form.password.trim()) {
+      const errPass = validarPassword(form.password, form.correo)
+      if (errPass) return setAlerta({ tipo: 'error', mensaje: errPass })
+    }
     if (!form.fecha_nacimiento)
       return setAlerta({ tipo: 'error', mensaje: 'La fecha de nacimiento es obligatoria.' })
 
@@ -535,6 +542,7 @@ function ModalModificar({ suscriptorId, onCerrar, onGuardado }: {
                         {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
                     </div>
+                    <PasswordStrengthIndicator password={form.password} usuario={form.correo} />
                   </div>
                 </div>
 

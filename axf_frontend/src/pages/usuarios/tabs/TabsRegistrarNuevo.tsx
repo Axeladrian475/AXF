@@ -14,6 +14,8 @@ import { useState, useContext, useEffect, useRef } from 'react'
 import { Eye, EyeOff, Loader2, Wifi, RefreshCw, CheckCircle, Camera, X, Fingerprint } from 'lucide-react'
 import { AuthContext }  from '../../../context/AuthContext'
 import axiosClient      from '../../../api/axiosClient'
+import { validarPassword } from '../../../utils/passwordValidator'
+import PasswordStrengthIndicator from '../../../components/PasswordStrengthIndicator'
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 type AlertaTipo = 'exito' | 'error' | 'info'
@@ -418,8 +420,9 @@ export default function TabsRegistrarNuevo() {
       return setAlerta({ tipo: 'error', mensaje: 'Nombres y Apellido Paterno son obligatorios.' })
     if (!form.correo.trim())
       return setAlerta({ tipo: 'error', mensaje: 'El correo electrónico es obligatorio.' })
-    if (form.password.length < 6)
-      return setAlerta({ tipo: 'error', mensaje: 'La contraseña debe tener al menos 6 caracteres.' })
+    const errPass = validarPassword(form.password, form.correo)
+    if (errPass)
+      return setAlerta({ tipo: 'error', mensaje: errPass })
     if (!form.fecha_nacimiento)
       return setAlerta({ tipo: 'error', mensaje: 'La fecha de nacimiento es obligatoria.' })
     if (!foto)
@@ -559,11 +562,12 @@ export default function TabsRegistrarNuevo() {
           <div>
             <label className="block text-sm font-bold text-black mb-1">Contraseña <span className="text-red-500">*</span></label>
             <div className="relative">
-              <input type={showPass ? 'text' : 'password'} name="password" value={form.password} onChange={handleChange} disabled={enviando} placeholder="Mínimo 6 caracteres" className={`${inputCls} pr-10`} />
+              <input type={showPass ? 'text' : 'password'} name="password" value={form.password} onChange={handleChange} disabled={enviando} placeholder="Mínimo 8 caracteres" className={`${inputCls} pr-10`} />
               <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            <PasswordStrengthIndicator password={form.password} usuario={form.correo} />
           </div>
           <div>
             <label className="block text-sm font-bold text-black mb-1">Sucursal (Asignada Automáticamente)</label>
