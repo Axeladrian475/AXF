@@ -31,12 +31,12 @@ function soloMaestro(req, res, next) {
 
 // ────────────────────────────────────────────────────────────────────────────
 // GET /api/sucursales
-// Lista todas las sucursales activas
+// Lista todas las sucursales (borrado físico: no hay registros inactivos)
 // ────────────────────────────────────────────────────────────────────────────
 router.get('/', verificarToken, soloMaestro, async (req, res) => {
   try {
     const [sucursales] = await db.query(
-      'SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, activa, creado_en FROM sucursales ORDER BY id_sucursal ASC'
+      'SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, activa, creado_en FROM sucursales WHERE activa = 1 ORDER BY id_sucursal ASC'
     );
     res.json(sucursales);
   } catch (error) {
@@ -58,20 +58,36 @@ router.post('/', verificarToken, soloMaestro, async (req, res) => {
       return res.status(400).json({ message: 'Todos los campos son requeridos' });
     }
 
-    // Verificar que el usuario no exista ya
+    // Verificar si el usuario ya existe en la base de datos
     const [existe] = await db.query(
-      'SELECT id_sucursal FROM sucursales WHERE usuario = ?',
+      'SELECT id_sucursal, activa FROM sucursales WHERE usuario = ?',
       [usuario]
     );
+
     if (existe.length > 0) {
-      return res.status(409).json({ message: 'El nombre de usuario ya está en uso' });
+      const sucursalExistente = existe[0];
+      if (sucursalExistente.activa === 1) {
+        return res.status(409).json({ message: 'El nombre de usuario ya está en uso' });
+      }
+
+      // Si el usuario existe pero la sucursal está inactiva, reactivar esa fila.
+      const password_hash = await bcrypt.hash(password, 10);
+      await db.query(
+        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, password_hash = ?, activa = 1 WHERE id_sucursal = ?',
+        [nombre, direccion, codigo_postal, password_hash, sucursalExistente.id_sucursal]
+      );
+
+      return res.status(200).json({
+        message: 'Sucursal reactivada y actualizada correctamente',
+        id_sucursal: sucursalExistente.id_sucursal,
+      });
     }
 
-    // Hashear la contraseña
+    // Hashear la contraseña y crear la sucursal nueva
     const password_hash = await bcrypt.hash(password, 10);
 
     const [result] = await db.query(
-      'INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, password_hash) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, password_hash, activa) VALUES (?, ?, ?, ?, ?, 1)',
       [nombre, direccion, codigo_postal, usuario, password_hash]
     );
 
@@ -98,9 +114,9 @@ router.put('/:id', verificarToken, soloMaestro, async (req, res) => {
       return res.status(400).json({ message: 'Nombre, dirección, código postal y usuario son requeridos' });
     }
 
-    // Verificar que el usuario no esté en uso por OTRA sucursal
+    // Verificar que el usuario no esté en uso por OTRA sucursal activa
     const [existe] = await db.query(
-      'SELECT id_sucursal FROM sucursales WHERE usuario = ? AND id_sucursal != ?',
+      'SELECT id_sucursal FROM sucursales WHERE usuario = ? AND id_sucursal != ? AND activa = 1',
       [usuario, id]
     );
     if (existe.length > 0) {

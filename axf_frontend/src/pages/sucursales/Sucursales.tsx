@@ -86,6 +86,26 @@ export default function Sucursales() {
     s.codigo_postal.includes(searchTerm)
   )
 
+  const irAgregar = () => {
+    setActiveTab('agregar')
+    setFormAgregar(FORM_VACIO)
+    setSelectedSucursal(null)
+    setError(null)
+    setConfirmEliminar(null)
+  }
+
+  const irBuscar = () => {
+    setActiveTab('buscar')
+    setSelectedSucursal(null)
+    setError(null)
+    setConfirmEliminar(null)
+  }
+
+  const irModificar = () => {
+    setActiveTab('modificar')
+    setError(null)
+  }
+
   // ────────────────────────────────────────────────────────────────────────────
   // Handlers: Agregar
   // ────────────────────────────────────────────────────────────────────────────
@@ -105,7 +125,7 @@ export default function Sucursales() {
       mostrarExito('Sucursal creada correctamente')
       await cargarSucursales()
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Error al crear la sucursal')
+      setError(err?.response?.data?.message || err?.message || 'Error al crear la sucursal')
     } finally {
       setLoadingAgregar(false)
     }
@@ -215,7 +235,7 @@ export default function Sucursales() {
       <div className="bg-[#1e293b] px-4 py-3 rounded-full">
         <div className="flex gap-2">
           <button
-            onClick={() => setActiveTab('agregar')}
+            onClick={irAgregar}
             className={`px-6 py-2 rounded-full font-bold text-base transition-all border-2 ${
               activeTab === 'agregar'
                 ? 'bg-[#F26A21] text-white border-[#F26A21]'
@@ -225,7 +245,7 @@ export default function Sucursales() {
             Agregar Sucursales
           </button>
           <button
-            onClick={() => setActiveTab('buscar')}
+            onClick={irBuscar}
             className={`px-6 py-2 rounded-full font-bold text-base transition-all border-2 ${
               activeTab === 'buscar'
                 ? 'bg-[#F26A21] text-white border-[#F26A21]'
@@ -235,7 +255,7 @@ export default function Sucursales() {
             Buscar Sucursales
           </button>
           <button
-            onClick={() => setActiveTab('modificar')}
+            onClick={irModificar}
             className={`px-6 py-2 rounded-full font-bold text-base transition-all border-2 ${
               activeTab === 'modificar'
                 ? 'bg-[#F26A21] text-white border-[#F26A21]'

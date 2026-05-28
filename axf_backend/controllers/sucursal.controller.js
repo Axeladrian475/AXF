@@ -8,11 +8,12 @@
 import db from '../config/database.js';
 
 /**
- * deleteSucursal – Ejecuta un borrado lógico masivo en una transacción SQL.
+ * deleteSucursal – Ejecuta un borrado físico (hard delete) en una transacción SQL.
  *
  * Endpoint: DELETE /api/maestro/sucursales/:id_sucursal
  * Reglas:
  *  - Uso de transacción (BEGIN / COMMIT / ROLLBACK) para garantizar atomicidad.
+ *  - Elimina en cascada: personal, suscriptores, y luego sucursal.
  *  - Consultas parametrizadas para evitar inyección SQL.
  *  - Try/Catch estricto y rollback inmediato en caso de error.
  */
@@ -26,7 +27,7 @@ export async function deleteSucursal(req, res) {
 
     // Verificar existencia de la sucursal
     const [rows] = await connection.query(
-      'SELECT id_sucursal, activa FROM sucursales WHERE id_sucursal = ?',
+      'SELECT id_sucursal FROM sucursales WHERE id_sucursal = ?',
       [id_sucursal]
     );
 
@@ -38,21 +39,21 @@ export async function deleteSucursal(req, res) {
     // Iniciar transacción
     await connection.beginTransaction();
 
-    // Desactivar la sucursal
+    // Eliminar personal vinculado a la sucursal (evita FK constraint)
     await connection.query(
-      'UPDATE sucursales SET activa = 0 WHERE id_sucursal = ?',
+      'DELETE FROM personal WHERE id_sucursal = ?',
       [id_sucursal]
     );
 
-    // Desactivar personal vinculado a la sucursal
+    // Eliminar suscriptores registrados en la sucursal
     await connection.query(
-      'UPDATE personal SET activo = 0 WHERE id_sucursal = ?',
+      'DELETE FROM suscriptores WHERE id_sucursal_registro = ?',
       [id_sucursal]
     );
 
-    // Desactivar suscriptores registrados en la sucursal
+    // Eliminar la sucursal
     await connection.query(
-      'UPDATE suscriptores SET activo = 0 WHERE id_sucursal_registro = ?',
+      'DELETE FROM sucursales WHERE id_sucursal = ?',
       [id_sucursal]
     );
 
@@ -60,7 +61,7 @@ export async function deleteSucursal(req, res) {
     await connection.commit();
     connection.release();
 
-    return res.status(200).json({ success: true, message: 'Sucursal y dependencias desactivadas correctamente.' });
+    return res.status(200).json({ success: true, message: 'Sucursal y dependencias eliminadas correctamente.' });
 
   } catch (error) {
     // Si algo falla, revertir la transacción inmediatamente
@@ -70,6 +71,6 @@ export async function deleteSucursal(req, res) {
     }
 
     console.error('[DELETE /api/maestro/sucursales/:id_sucursal] Error:', error);
-    return res.status(500).json({ success: false, message: 'Error interno al desactivar la sucursal.' });
+    return res.status(500).json({ success: false, message: 'Error interno al eliminar la sucursal.' });
   }
 }
