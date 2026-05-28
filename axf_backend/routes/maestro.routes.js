@@ -6,12 +6,14 @@
 
 import express from 'express';
 import { verificarToken, soloMaestro } from '../middlewares/auth.js';
-import { desactivarSucursal } from '../controllers/maestro.controller.js';
+// Importar el controlador específico para operaciones sobre sucursales.
+import { deleteSucursal } from '../controllers/sucursal.controller.js';
 
 const router = express.Router();
 
 // ─── DELETE /api/maestro/sucursales/:id_sucursal ─────────────────────────────
 // Borrado lógico transaccional de sucursal + personal + suscriptores
-router.delete('/sucursales/:id_sucursal', verificarToken, soloMaestro, desactivarSucursal);
+// DELETE: Borrado lógico transaccional de sucursal + dependencias
+router.delete('/sucursales/:id_sucursal', verificarToken, soloMaestro, deleteSucursal);
 
 export default router;

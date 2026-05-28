@@ -36,8 +36,8 @@ export const modificarSucursal = async (id: number, data: SucursalFormData): Pro
   return response.data;
 };
 
-// Desactivar sucursal (soft delete)
+// Desactivar sucursal (soft delete) — usa la ruta del rol Maestro
 export const eliminarSucursal = async (id: number): Promise<{ message: string }> => {
-  const response = await axiosClient.delete(`/sucursales/${id}`);
+  const response = await axiosClient.delete(`/maestro/sucursales/${id}`);
   return response.data;
 };
