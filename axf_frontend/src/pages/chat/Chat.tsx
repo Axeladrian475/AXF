@@ -91,6 +91,23 @@ function fechaDia(iso: string): string {
 
 const WS_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
 
+// Sonido sutil para mensajes nuevos (data URL para evitar archivo externo)
+const playMessageSound = () => {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.frequency.value = 800
+    osc.type = 'sine'
+    gain.gain.value = 0.08
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15)
+    osc.start(ctx.currentTime)
+    osc.stop(ctx.currentTime + 0.15)
+  } catch { /* silencioso */ }
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function Chat() {
   const { token, user } = useContext(AuthContext)
@@ -107,6 +124,7 @@ export default function Chat() {
   const [enviando,         setEnviando]          = useState(false)
   const [escribiendo,      setEscribiendo]       = useState(false)
   const [wsConectado,      setWsConectado]       = useState(false)
+  const [reconectando,     setReconectando]      = useState(false)
 
   // Texto y reply
   const [texto,            setTexto]             = useState('')
@@ -148,18 +166,48 @@ export default function Chat() {
     if (!token) return
     const socket = io(WS_URL, {
       auth: { token },
-transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
+      transports: ['websocket', 'polling'],
+      // ── RECONEXIÓN INFINITA (como WhatsApp) ────────────────────────
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
+      reconnectionDelayMax: 30000,
+      randomizationFactor: 0.5,
+      timeout: 20000,
     })
 
     socket.on('connect',       () => {
       setWsConectado(true)
+      setReconectando(false)
       // Al reconectar, marcar mensajes pendientes como entregados
       socket.emit('chat:marcar_entregado', {})
+      // Recargar conversaciones para sincronizar estado
+      axiosClient.get('/chat/conversaciones')
+        .then(({ data }) => setConversaciones(data))
+        .catch(() => {})
+      // Si hay una conversación activa, recargar sus mensajes
+      if (suscActivoRef.current !== null) {
+        axiosClient.get(`/chat/mensajes/${suscActivoRef.current}?limite=50&offset=0`)
+          .then(({ data }) => {
+            setMensajes(data.mensajes ?? [])
+            setHayMasAntiguos(data.paginacion?.hay_mas ?? false)
+            offsetRef.current = data.mensajes?.length ?? 0
+            socket.emit('chat:leer', { id_suscriptor: suscActivoRef.current })
+          })
+          .catch(() => {})
+      }
     })
-    socket.on('disconnect',    () => setWsConectado(false))
-    socket.on('connect_error', () => setWsConectado(false))
+    socket.on('disconnect',    () => {
+      setWsConectado(false)
+      setReconectando(true)
+    })
+    socket.on('connect_error', () => {
+      setWsConectado(false)
+      setReconectando(true)
+    })
+    // Socket.IO emite esto al intentar reconectar
+    socket.io.on('reconnect_attempt', () => {
+      setReconectando(true)
+    })
 
     // Presencia
     socket.on('chat:online', ({ rol, id, online }: { rol: string; id: number; online: boolean }) => {
@@ -171,6 +219,9 @@ transports: ['websocket', 'polling'],
       if (suscActivoRef.current === id_suscriptor) {
         setMensajes(prev => [...prev, mensaje])
         socket.emit('chat:leer', { id_suscriptor })
+      } else {
+        // Mensaje en otra conversación → sonido sutil
+        playMessageSound()
       }
       setConversaciones(prev => {
         const existe = prev.find(c => c.id_suscriptor === id_suscriptor)
@@ -511,17 +562,25 @@ transports: ['websocket', 'polling'],
   // ─────────────────────────────────────────────────────────────────────
   return (
     <div
-      className="flex h-[calc(100vh-60px)] bg-white overflow-hidden rounded-lg shadow-md -m-5"
+      className="flex h-[calc(100vh-60px)] bg-white overflow-hidden rounded-lg shadow-md -m-5 relative"
       onClick={() => ctxMenu && setCtxMenu(null)}
     >
+      {/* ══════ BANNER DE RECONEXIÓN ══════ */}
+      {reconectando && (
+        <div className="absolute top-0 left-0 right-0 z-50 bg-yellow-500 text-white text-center py-1.5 text-xs font-semibold flex items-center justify-center gap-2 shadow-md animate-pulse">
+          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          Reconectando...
+        </div>
+      )}
+
       {/* ══════════ SIDEBAR ══════════ */}
       <div className="w-72 border-r border-gray-200 flex flex-col shrink-0">
         <div className="p-3 border-b border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <span className="font-bold text-black text-sm">Mensajes</span>
             <div className="flex items-center gap-1">
-              <div className={`w-2 h-2 rounded-full transition-colors ${wsConectado ? 'bg-green-500' : 'bg-gray-300'}`} />
-              <span className="text-[9px] text-gray-400">{wsConectado ? 'Conectado' : 'Sin conexión'}</span>
+              <div className={`w-2 h-2 rounded-full transition-colors ${wsConectado ? 'bg-green-500' : reconectando ? 'bg-yellow-400 animate-pulse' : 'bg-gray-300'}`} />
+              <span className="text-[9px] text-gray-400">{wsConectado ? 'Conectado' : reconectando ? 'Reconectando...' : 'Sin conexión'}</span>
             </div>
           </div>
           <input
