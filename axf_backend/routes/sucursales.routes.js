@@ -39,9 +39,7 @@ function soloMaestro(req, res, next) {
 router.get('/', verificarToken, soloMaestro, async (req, res) => {
   try {
     const [sucursales] = await db.query(
-      `SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, activa, creado_en,
-              (password_enc IS NOT NULL AND password_enc != '') AS password_recuperable
-       FROM sucursales WHERE activa = 1 ORDER BY id_sucursal ASC`
+      'SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, activa, creado_en FROM sucursales WHERE activa = 1 ORDER BY id_sucursal ASC'
     );
     res.json(sucursales);
   } catch (error) {
@@ -56,7 +54,11 @@ router.get('/', verificarToken, soloMaestro, async (req, res) => {
 // ────────────────────────────────────────────────────────────────────────────
 router.post('/', verificarToken, soloMaestro, async (req, res) => {
   try {
-    const { nombre, direccion, codigo_postal, usuario, password } = req.body;
+    const nombre = req.body.nombre?.trim();
+    const direccion = req.body.direccion?.trim();
+    const codigo_postal = req.body.codigo_postal?.trim();
+    const usuario = req.body.usuario?.trim();
+    const password = req.body.password;
 
     // Validar campos requeridos
     if (!nombre || !direccion || !codigo_postal || !usuario || !password) {
@@ -104,6 +106,9 @@ router.post('/', verificarToken, soloMaestro, async (req, res) => {
     });
   } catch (error) {
     console.error('[POST /sucursales]', error);
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'El nombre de usuario ya está en uso' });
+    }
     res.status(500).json({ message: 'Error al crear la sucursal' });
   }
 });

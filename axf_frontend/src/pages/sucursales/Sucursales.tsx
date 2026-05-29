@@ -166,6 +166,15 @@ export default function Sucursales() {
     setError(null)
   }
 
+  useEffect(() => {
+    if (activeTab === 'agregar') {
+      setFormAgregar(FORM_VACIO)
+      setError(null)
+      setConfirmEliminar(null)
+      setSelectedSucursal(null)
+    }
+  }, [activeTab])
+
   // ────────────────────────────────────────────────────────────────────────────
   // Handlers: Agregar
   // ────────────────────────────────────────────────────────────────────────────
@@ -185,11 +194,22 @@ export default function Sucursales() {
       mostrarExito('Sucursal creada correctamente')
       await cargarSucursales()
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Error al crear la sucursal')
+      // CORRECCIÓN: El backend ahora devuelve siempre JSON { success, message }.
+      // Axios pone ese objeto en err.response.data. La cadena de fallbacks
+      // garantiza que React siempre muestre un mensaje legible al usuario:
+      //   1. err.response.data.message  → mensaje semántico del backend (400, 409, 500)
+      //   2. err.message                → error de red o timeout
+      //   3. Texto genérico de respaldo
+      const mensajeError =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Error al crear la sucursal. Verifica tu conexión e inténtalo de nuevo.'
+      setError(mensajeError)
     } finally {
       setLoadingAgregar(false)
     }
   }
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // Handlers: Modificar

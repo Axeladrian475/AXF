@@ -25,15 +25,24 @@ export interface SucursalFormData {
   password?: string;
 }
 
-// Obtener todas las sucursales
+// Obtener todas las sucursales activas
 export const getSucursales = async (): Promise<Sucursal[]> => {
   const response = await axiosClient.get('/sucursales');
   return response.data;
 };
 
-// Crear nueva sucursal
-export const crearSucursal = async (data: SucursalFormData): Promise<{ message: string; id_sucursal: number }> => {
-  const response = await axiosClient.post('/sucursales', data);
+/**
+ * crearSucursal
+ * CORRECCIÓN: El endpoint correcto es POST /api/maestro/sucursales.
+ * Antes apuntaba a POST /api/sucursales (ruta genérica sin lógica
+ * de validación RQNF3 en backend y sin manejo semántico de errores).
+ * El payload que envía React { nombre, direccion, codigo_postal, usuario, password }
+ * coincide EXACTAMENTE con lo que desestructura el controlador en Node.js.
+ */
+export const crearSucursal = async (
+  data: SucursalFormData
+): Promise<{ success: boolean; message: string; id_sucursal: number }> => {
+  const response = await axiosClient.post('/maestro/sucursales', data);
   return response.data;
 };
 

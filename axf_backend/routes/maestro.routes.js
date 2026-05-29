@@ -6,13 +6,23 @@
 
 import express from 'express';
 import { verificarToken, soloMaestro } from '../middlewares/auth.js';
-// Importar el controlador específico para operaciones sobre sucursales.
-import { deleteSucursal } from '../controllers/sucursal.controller.js';
+
+// ─── Importar controladores del Maestro ──────────────────────────────────────
+// crearSucursal      → lógica de creación con validaciones RQNF completas
+// eliminarSucursal   → borrado FÍSICO transaccional con cascada completa
+import { crearSucursal, eliminarSucursal } from '../controllers/maestro.controller.js';
 
 const router = express.Router();
 
+// ─── POST /api/maestro/sucursales ────────────────────────────────────────────
+// Crea una nueva sucursal (o reactiva una desactivada con el mismo usuario).
+// Requiere: { nombre, direccion, codigo_postal, usuario, password }
+router.post('/sucursales', verificarToken, soloMaestro, crearSucursal);
+
 // ─── DELETE /api/maestro/sucursales/:id_sucursal ─────────────────────────────
-// Borrado físico transaccional de sucursal + dependencias (preserva multisucursal)
+// Borrado lógico transaccional de sucursal + personal + suscriptores
+// DELETE: Borrado lógico transaccional de sucursal + dependencias
 router.delete('/sucursales/:id_sucursal', verificarToken, soloMaestro, deleteSucursal);
 
 export default router;
+
