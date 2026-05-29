@@ -240,7 +240,12 @@ export default function Sucursales() {
       setConfirmEliminar(null)
       await cargarSucursales()
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Error al eliminar la sucursal')
+      const detalle = err?.response?.data?.detalle
+      setError(
+        err?.response?.data?.message
+          + (detalle ? ` (${detalle})` : '')
+          || 'Error al eliminar la sucursal'
+      )
       setConfirmEliminar(null)
     }
   }
@@ -267,11 +272,18 @@ export default function Sucursales() {
       {/* MODAL DE CONFIRMACIÓN: ELIMINAR */}
       {confirmEliminar && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold text-black mb-2">¿Eliminar sucursal?</h3>
-            <p className="text-gray-600 text-sm mb-5">
-              La sucursal <span className="font-bold text-black">{confirmEliminar.nombre}</span> será
-              eliminada permanentemente. Esta acción no se puede deshacer.
+          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold text-red-700 mb-2">¿Eliminar sucursal permanentemente?</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Se borrará la sucursal{' '}
+              <span className="font-bold text-black">{confirmEliminar.nombre}</span>{' '}
+              y en cascada todos sus datos: personal, suscriptores registrados aquí,
+              suscripciones, accesos, reportes, avisos, promociones, sensores, chat, rutinas, dietas y más.
+            </p>
+            <p className="text-xs text-gray-500 mb-5 bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <span className="font-bold text-gray-700">No se eliminan</span> suscriptores migrados a otra sucursal
+              ni recetas/ejercicios compartidos con otras sucursales.
+              Esta acción <span className="font-bold text-red-600">no se puede deshacer</span>.
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -284,7 +296,7 @@ export default function Sucursales() {
                 onClick={handleConfirmarEliminar}
                 className="px-4 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700"
               >
-                Sí, eliminar
+                Sí, eliminar todo
               </button>
             </div>
           </div>

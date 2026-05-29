@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1:3306
--- Tiempo de generación: 29-05-2026 a las 03:50:34
+-- Tiempo de generación: 29-05-2026 a las 04:27:09
 -- Versión del servidor: 11.8.6-MariaDB-log
 -- Versión de PHP: 7.2.34
 
@@ -239,10 +239,7 @@ CREATE TABLE `hardware_sesiones` (
 --
 
 INSERT INTO `hardware_sesiones` (`id`, `token`, `tipo`, `valor`, `usado`, `estado`, `paso`, `creado_en`, `template_b64`, `sensor_id`) VALUES
-(296, '4CB065EB', 'nfc', '04:3C:35:12:A9:77:80', 1, 'done', 'completado', '2026-05-14 13:54:45', NULL, NULL),
-(297, '21F9DF5E', 'nfc', '04:3C:35:12:A9:77:80', 1, 'done', 'completado', '2026-05-14 13:56:11', NULL, NULL),
-(298, '4FDAFD63', 'nfc', 'A3:55:62:4E', 1, 'done', 'completado', '2026-05-14 13:56:57', NULL, NULL),
-(299, 'A1385F0E', 'nfc', '04:3C:35:12:A9:77:80', 1, 'done', 'completado', '2026-05-14 13:57:31', NULL, NULL);
+(300, '9D332800', 'nfc', '', 0, 'pending', 'esperando_dispositivo', '2026-05-29 04:22:18', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -290,7 +287,8 @@ CREATE TABLE `personal` (
 --
 
 INSERT INTO `personal` (`id_personal`, `id_sucursal`, `nombres`, `apellido_paterno`, `apellido_materno`, `edad`, `sexo`, `puesto`, `usuario`, `password_hash`, `foto_url`, `activo`, `creado_en`, `fcm_token`) VALUES
-(11, 1, 'Cristian Alfonso', 'Amezcua', 'Trejo', 20, 'M', 'entrenador_nutriologo', 'Cristian', '$2b$10$mjRGxV55VEZiT9ioqtyxguecY86QokDEo/vOghn.vWZlrfcHRl31q', '/uploads/personal/personal_1780025616507.jpeg', 1, '2026-05-29 03:33:36', NULL);
+(11, 1, 'Cristian Alfonso', 'Amezcua', 'Trejo', 20, 'M', 'entrenador_nutriologo', 'Cristian', '$2b$10$mjRGxV55VEZiT9ioqtyxguecY86QokDEo/vOghn.vWZlrfcHRl31q', '/uploads/personal/personal_1780025616507.jpeg', 1, '2026-05-29 03:33:36', NULL),
+(12, 1, 'Axel Adrian', 'Aguirre', 'Casas', 19, 'M', 'entrenador_nutriologo', 'Axel', '$2b$10$xcPo7uJOQhNuivGdo8rIMOII.qKkKAOXEszsCQvT0Lr7/v8r7VDTG', '/uploads/personal/personal_1780028487733.jpeg', 1, '2026-05-29 04:21:28', 'fr_ChE0yxTVLvPb1vwV1KB:APA91bGfROIDa7UasAihq2Sa3GmZI_fF3VwHsf0D9bGnLplKnfrtTncJc9IXUONcSwibiOVA69-66zJbp5p4AJWzpMsPZhLKLW5JybzfVMKWsej1X-jQF-4');
 
 -- --------------------------------------------------------
 
@@ -545,7 +543,8 @@ CREATE TABLE `sucursales` (
 --
 
 INSERT INTO `sucursales` (`id_sucursal`, `nombre`, `direccion`, `codigo_postal`, `usuario`, `password_hash`, `activa`, `creado_en`, `capacidad_maxima`, `password_enc`) VALUES
-(1, 'Sucursal Central AXF', 'zenith norte', '45157', 'admin', '$2b$10$ky.gXUR7ClF6sNJaa0d08..fSV/ipI9dce1nnhejF.XseAx5l6gHS', 1, '2026-03-02 20:09:37', 80, NULL);
+(1, 'Sucursal Central AXF', 'zenith norte', '45157', 'admin', '$2b$10$4JvT7CqDeZRBiIihsntUX.oulFzPfAyXR71pkVRqrkZNLmN4u.rS6', 1, '2026-03-02 20:09:37', 80, 'rNkwJHmtdpjNPNw3ykGJPcRuY/LiVK8clLqyzjuSBbnNFGzJ6g=='),
+(15, 'Pruebas AXF', 'Andador 17 poniente', '45157', 'Prueba', '$2b$10$sAbRahcMf5zpEOoxuqxdKem.SDA.iSUeHVmosBJc4C/LaGn9Bv/9u', 1, '2026-05-29 04:21:43', 50, NULL);
 
 -- --------------------------------------------------------
 
@@ -1012,7 +1011,7 @@ ALTER TABLE `ejercicios`
 -- AUTO_INCREMENT de la tabla `hardware_sesiones`
 --
 ALTER TABLE `hardware_sesiones`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=300;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=301;
 
 --
 -- AUTO_INCREMENT de la tabla `ingredientes`
@@ -1024,7 +1023,7 @@ ALTER TABLE `ingredientes`
 -- AUTO_INCREMENT de la tabla `personal`
 --
 ALTER TABLE `personal`
-  MODIFY `id_personal` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id_personal` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT de la tabla `promociones`
@@ -1102,7 +1101,7 @@ ALTER TABLE `strikes_reporte`
 -- AUTO_INCREMENT de la tabla `sucursales`
 --
 ALTER TABLE `sucursales`
-  MODIFY `id_sucursal` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id_sucursal` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT de la tabla `suscripciones`

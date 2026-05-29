@@ -12,8 +12,7 @@ import { deleteSucursal } from '../controllers/sucursal.controller.js';
 const router = express.Router();
 
 // ─── DELETE /api/maestro/sucursales/:id_sucursal ─────────────────────────────
-// Borrado lógico transaccional de sucursal + personal + suscriptores
-// DELETE: Borrado lógico transaccional de sucursal + dependencias
+// Borrado físico transaccional de sucursal + dependencias (preserva multisucursal)
 router.delete('/sucursales/:id_sucursal', verificarToken, soloMaestro, deleteSucursal);
 
 export default router;
