@@ -190,7 +190,12 @@ export default function TabPersonal() {
       setConfirmEliminar(null)
       await cargarPersonal()
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Error al eliminar empleado')
+      const detalle = err?.response?.data?.detalle
+      setError(
+        err?.response?.data?.message
+          + (detalle ? ` (${detalle})` : '')
+          || 'Error al eliminar empleado'
+      )
       setConfirmEliminar(null)
     }
   }
@@ -216,12 +221,20 @@ export default function TabPersonal() {
       {/* MODAL ELIMINAR */}
       {confirmEliminar && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold text-black mb-2">¿Eliminar empleado?</h3>
-            <p className="text-gray-600 text-sm mb-5">
+          <div className="bg-white rounded-xl p-6 shadow-2xl max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold text-red-700 mb-2">¿Eliminar empleado permanentemente?</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Se borrará{' '}
               <span className="font-bold text-black">
                 {confirmEliminar.nombres} {confirmEliminar.apellido_paterno}
-              </span> será eliminado permanentemente.
+              </span>{' '}
+              y en cascada solo lo vinculado a esta persona: rutinas, dietas, chat,
+              canjes, avisos, registros físicos y catálogo propio (recetas, ingredientes, ejercicios).
+            </p>
+            <p className="text-xs text-gray-500 mb-5 bg-gray-50 border border-gray-200 rounded-lg p-3">
+              No se eliminan suscriptores ni datos de otros empleados.
+              Recetas/ejercicios compartidos con el resto de la sucursal se conservan.
+              <span className="font-bold text-red-600"> No se puede deshacer.</span>
             </p>
             <div className="flex gap-3 justify-end">
               <button onClick={() => setConfirmEliminar(null)}
@@ -230,7 +243,7 @@ export default function TabPersonal() {
               </button>
               <button onClick={handleEliminar}
                 className="px-4 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700">
-                Sí, eliminar
+                Sí, eliminar todo
               </button>
             </div>
           </div>

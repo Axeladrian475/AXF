@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import db from '../config/database.js';
+import { deletePersonal } from '../controllers/personal.controller.js';
 
 const router = express.Router();
 
@@ -194,28 +195,7 @@ router.put('/:id', verificarToken, soloSucursalOMaestro, upload.single('foto'), 
   }
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// DELETE /api/personal/:id
-// Elimina un empleado y su foto del disco
-// ────────────────────────────────────────────────────────────────────────────
-router.delete('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const id_sucursal = req.usuario.id;
-
-    const [[empleado]] = await db.query(
-      'SELECT foto_url FROM personal WHERE id_personal = ? AND id_sucursal = ?',
-      [id, id_sucursal]
-    );
-    if (!empleado) return res.status(404).json({ message: 'Empleado no encontrado' });
-
-    borrarFoto(empleado.foto_url);
-    await db.query('DELETE FROM personal WHERE id_personal = ? AND id_sucursal = ?', [id, id_sucursal]);
-    res.json({ message: 'Empleado eliminado correctamente' });
-  } catch (error) {
-    console.error('[DELETE /personal/:id]', error);
-    res.status(500).json({ message: 'Error al eliminar empleado' });
-  }
-});
+// DELETE /api/personal/:id — borrado en cascada de datos del empleado
+router.delete('/:id', verificarToken, soloSucursalOMaestro, deletePersonal);
 
 export default router;

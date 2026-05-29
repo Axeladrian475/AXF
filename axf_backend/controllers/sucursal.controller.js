@@ -5,12 +5,8 @@
 // ============================================================================
 
 import db from '../config/database.js';
-
-/** Ejecuta DELETE solo si hay IDs; evita IN () vacío. */
-async function deleteIfAny(connection, sql, ids, extraParams = []) {
-  if (!ids?.length) return;
-  await connection.query(sql, [...extraParams, ids]);
-}
+import { deleteIfAny } from '../utils/dbCascade.js';
+import { eliminarDatosDePersonal } from './personal.controller.js';
 
 /**
  * deleteSucursal – DELETE /api/maestro/sucursales/:id_sucursal
@@ -102,16 +98,15 @@ export async function deleteSucursal(req, res) {
     );
     await connection.query('DELETE FROM avisos WHERE id_sucursal = ?', [id_sucursal]);
 
-    // ── Chat (pares locales; suscriptores eliminados pierden todo su chat) ──
-    if (personalIds.length && suscriptorIds.length) {
-      await connection.query(
-        'DELETE FROM chat_mensajes WHERE id_personal IN (?) AND id_suscriptor IN (?)',
-        [personalIds, suscriptorIds]
-      );
+    // ── Por empleado: rutinas, dietas, chat, catálogo propio, etc. ───────────
+    for (const idPersonal of personalIds) {
+      await eliminarDatosDePersonal(connection, idPersonal, {
+        suscriptorIdsLimite: suscriptorIds,
+      });
     }
-    await deleteIfAny(connection, 'DELETE FROM chat_mensajes WHERE id_suscriptor IN (?)', suscriptorIds);
 
-    // ── Entrenamiento ───────────────────────────────────────────────────────
+    // ── Datos de suscriptores locales (antes de borrar suscriptores) ─────────
+    await deleteIfAny(connection, 'DELETE FROM suscripciones WHERE id_suscriptor IN (?)', suscriptorIds);
     await deleteIfAny(connection, 'DELETE FROM registro_entrenamiento WHERE id_suscriptor IN (?)', suscriptorIds);
     await deleteIfAny(
       connection,
@@ -121,8 +116,6 @@ export async function deleteSucursal(req, res) {
       suscriptorIds
     );
     await deleteIfAny(connection, 'DELETE FROM rutinas WHERE id_suscriptor IN (?)', suscriptorIds);
-
-    // ── Nutrición (solo dietas de suscriptores locales) ─────────────────────
     await deleteIfAny(
       connection,
       `DELETE dc FROM dieta_comidas dc
@@ -132,21 +125,14 @@ export async function deleteSucursal(req, res) {
     );
     await deleteIfAny(connection, 'DELETE FROM dietas WHERE id_suscriptor IN (?)', suscriptorIds);
     await deleteIfAny(connection, 'DELETE FROM registros_fisicos WHERE id_suscriptor IN (?)', suscriptorIds);
-
-    // ── Canjes (personal de la sucursal o suscriptores locales) ─────────────
+    await deleteIfAny(connection, 'DELETE FROM chat_mensajes WHERE id_suscriptor IN (?)', suscriptorIds);
     await connection.query(
       `DELETE c FROM canjes c
        INNER JOIN recompensas rec ON rec.id_recompensa = c.id_recompensa
        WHERE rec.id_sucursal = ?`,
       [id_sucursal]
     );
-    await deleteIfAny(connection, 'DELETE FROM canjes WHERE id_personal IN (?)', personalIds);
     await deleteIfAny(connection, 'DELETE FROM canjes WHERE id_suscriptor IN (?)', suscriptorIds);
-
-    // ── Suscripciones solo de suscriptores locales ──────────────────────────
-    await deleteIfAny(connection, 'DELETE FROM suscripciones WHERE id_suscriptor IN (?)', suscriptorIds);
-
-    // ── Huellas en sensores ─────────────────────────────────────────────────
     await deleteIfAny(connection, 'DELETE FROM sensor_huella_posiciones WHERE id_suscriptor IN (?)', suscriptorIds);
     await connection.query(
       `DELETE shp FROM sensor_huella_posiciones shp
