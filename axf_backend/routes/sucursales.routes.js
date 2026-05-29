@@ -2,6 +2,9 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db from '../config/database.js';
+import { encryptPassword, decryptPassword } from '../utils/passwordVault.js';
+
+const REVEAL_SECONDS = 8;
 
 const router = express.Router();
 
@@ -36,7 +39,9 @@ function soloMaestro(req, res, next) {
 router.get('/', verificarToken, soloMaestro, async (req, res) => {
   try {
     const [sucursales] = await db.query(
-      'SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, activa, creado_en FROM sucursales WHERE activa = 1 ORDER BY id_sucursal ASC'
+      `SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, activa, creado_en,
+              (password_enc IS NOT NULL AND password_enc != '') AS password_recuperable
+       FROM sucursales WHERE activa = 1 ORDER BY id_sucursal ASC`
     );
     res.json(sucursales);
   } catch (error) {
@@ -72,9 +77,10 @@ router.post('/', verificarToken, soloMaestro, async (req, res) => {
 
       // Si el usuario existe pero la sucursal está inactiva, reactivar esa fila.
       const password_hash = await bcrypt.hash(password, 10);
+      const password_enc = encryptPassword(password);
       await db.query(
-        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, password_hash = ?, activa = 1 WHERE id_sucursal = ?',
-        [nombre, direccion, codigo_postal, password_hash, sucursalExistente.id_sucursal]
+        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, password_hash = ?, password_enc = ?, activa = 1 WHERE id_sucursal = ?',
+        [nombre, direccion, codigo_postal, password_hash, password_enc, sucursalExistente.id_sucursal]
       );
 
       return res.status(200).json({
@@ -85,10 +91,11 @@ router.post('/', verificarToken, soloMaestro, async (req, res) => {
 
     // Hashear la contraseña y crear la sucursal nueva
     const password_hash = await bcrypt.hash(password, 10);
+    const password_enc = encryptPassword(password);
 
     const [result] = await db.query(
-      'INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, password_hash, activa) VALUES (?, ?, ?, ?, ?, 1)',
-      [nombre, direccion, codigo_postal, usuario, password_hash]
+      'INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, password_hash, password_enc, activa) VALUES (?, ?, ?, ?, ?, ?, 1)',
+      [nombre, direccion, codigo_postal, usuario, password_hash, password_enc]
     );
 
     res.status(201).json({
@@ -124,11 +131,11 @@ router.put('/:id', verificarToken, soloMaestro, async (req, res) => {
     }
 
     if (password && password.trim() !== '') {
-      // Si se proporcionó nueva contraseña, actualizar todo
       const password_hash = await bcrypt.hash(password, 10);
+      const password_enc = encryptPassword(password);
       await db.query(
-        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, usuario = ?, password_hash = ? WHERE id_sucursal = ?',
-        [nombre, direccion, codigo_postal, usuario, password_hash, id]
+        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, usuario = ?, password_hash = ?, password_enc = ? WHERE id_sucursal = ?',
+        [nombre, direccion, codigo_postal, usuario, password_hash, password_enc, id]
       );
     } else {
       // Sin nueva contraseña
@@ -142,6 +149,45 @@ router.put('/:id', verificarToken, soloMaestro, async (req, res) => {
   } catch (error) {
     console.error('[PUT /sucursales/:id]', error);
     res.status(500).json({ message: 'Error al actualizar la sucursal' });
+  }
+});
+
+// GET /api/sucursales/:id/revelar-password
+// Solo maestro: devuelve la contraseña descifrada (la UI la oculta tras unos segundos)
+router.get('/:id/revelar-password', verificarToken, soloMaestro, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [[sucursal]] = await db.query(
+      'SELECT id_sucursal, nombre, password_enc FROM sucursales WHERE id_sucursal = ? AND activa = 1',
+      [id]
+    );
+
+    if (!sucursal) {
+      return res.status(404).json({ message: 'Sucursal no encontrada.' });
+    }
+
+    if (!sucursal.password_enc) {
+      return res.status(404).json({
+        message: 'No hay contraseña recuperable. Asigne una nueva en Modificar para habilitar esta función.',
+      });
+    }
+
+    let password;
+    try {
+      password = decryptPassword(sucursal.password_enc);
+    } catch {
+      console.error('[GET /sucursales/:id/revelar-password] Error al descifrar');
+      return res.status(500).json({ message: 'No se pudo descifrar la contraseña. Verifique PASSWORD_VAULT_SECRET.' });
+    }
+
+    res.json({
+      password,
+      segundos: REVEAL_SECONDS,
+      sucursal: sucursal.nombre,
+    });
+  } catch (error) {
+    console.error('[GET /sucursales/:id/revelar-password]', error);
+    res.status(500).json({ message: 'Error al revelar la contraseña.' });
   }
 });
 

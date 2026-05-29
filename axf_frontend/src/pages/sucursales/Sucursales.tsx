@@ -5,11 +5,17 @@ import {
   crearSucursal,
   modificarSucursal,
   eliminarSucursal,
+  revelarPasswordSucursal,
   type Sucursal,
   type SucursalFormData,
 } from '../../api/sucursalesApi'
 import { validarPassword } from '../../utils/passwordValidator'
 import PasswordStrengthIndicator from '../../components/PasswordStrengthIndicator'
+
+function puedeRecuperarPassword(s: Sucursal): boolean {
+  const v = s.password_recuperable
+  return v === true || v === 1 || v === '1'
+}
 
 const FORM_VACIO: SucursalFormData = {
   nombre: '',
@@ -42,8 +48,11 @@ export default function Sucursales() {
   const [showModifyPassword, setShowModifyPassword] = useState(false)
   const [loadingModificar, setLoadingModificar] = useState(false)
 
-  // ── Tabla: visibilidad de contraseñas ─────────────────────────────────────
-  const [showPasswordTable, setShowPasswordTable] = useState<Record<number, boolean>>({})
+  // ── Revelación temporal de contraseñas en tabla ───────────────────────────
+  const REVEAL_MS = 8000
+  const [revealedById, setRevealedById] = useState<Record<number, { password: string; expiresAt: number }>>({})
+  const [revealLoadingId, setRevealLoadingId] = useState<number | null>(null)
+  const [revealCountdown, setRevealCountdown] = useState<Record<number, number>>({})
 
   // ── Confirmación de eliminación ────────────────────────────────────────────
   const [confirmEliminar, setConfirmEliminar] = useState<Sucursal | null>(null)
@@ -76,9 +85,60 @@ export default function Sucursales() {
     setTimeout(() => setSuccessMsg(null), 3000)
   }
 
-  const togglePasswordVisibility = (id: number) => {
-    setShowPasswordTable(prev => ({ ...prev, [id]: !prev[id] }))
+  const ocultarPassword = (id: number) => {
+    setRevealedById(prev => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    setRevealCountdown(prev => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
   }
+
+  const revelarPassword = async (sucursal: Sucursal) => {
+    const id = sucursal.id_sucursal
+    if (revealedById[id]) {
+      ocultarPassword(id)
+      return
+    }
+    setRevealLoadingId(id)
+    setError(null)
+    try {
+      const { password, segundos } = await revelarPasswordSucursal(id)
+      const durationMs = (segundos ?? REVEAL_MS / 1000) * 1000
+      const expiresAt = Date.now() + durationMs
+      setRevealedById(prev => ({ ...prev, [id]: { password, expiresAt } }))
+      setRevealCountdown(prev => ({ ...prev, [id]: Math.ceil(durationMs / 1000) }))
+      window.setTimeout(() => ocultarPassword(id), durationMs)
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'No se pudo revelar la contraseña')
+    } finally {
+      setRevealLoadingId(null)
+    }
+  }
+
+  useEffect(() => {
+    const ids = Object.keys(revealedById).map(Number)
+    if (ids.length === 0) return
+    const tick = window.setInterval(() => {
+      const now = Date.now()
+      setRevealCountdown(prev => {
+        const next = { ...prev }
+        ids.forEach(id => {
+          const exp = revealedById[id]?.expiresAt
+          if (!exp) return
+          const left = Math.max(0, Math.ceil((exp - now) / 1000))
+          if (left === 0) delete next[id]
+          else next[id] = left
+        })
+        return next
+      })
+    }, 250)
+    return () => clearInterval(tick)
+  }, [revealedById])
 
   const sucursalesFiltradas = sucursales.filter(s =>
     s.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -365,6 +425,10 @@ export default function Sucursales() {
           {activeTab === 'buscar' && (
             <div>
               <h2 className="text-xl font-bold text-black mb-1">Buscar y Administrar Sucursales</h2>
+              <p className="text-xs text-gray-600 mb-3">
+                Use <span className="font-bold">Ver</span> para mostrar la contraseña unos segundos (solo maestro).
+                Sucursales antiguas: actualice la contraseña en Modificar una vez para habilitar la recuperación.
+              </p>
               <hr className="border-gray-300 mb-4" />
 
               <div className="flex gap-4 mb-6">
@@ -396,13 +460,14 @@ export default function Sucursales() {
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Dirección</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">C. Postal</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Usuario Admin</th>
+                        <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Contraseña</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sucursalesFiltradas.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="border border-gray-400 px-4 py-4 text-center text-gray-500 text-sm">
+                          <td colSpan={7} className="border border-gray-400 px-4 py-4 text-center text-gray-500 text-sm">
                             No se encontraron sucursales
                           </td>
                         </tr>
@@ -414,8 +479,60 @@ export default function Sucursales() {
                             <td className="border border-gray-400 px-4 py-2 text-black">{sucursal.direccion}</td>
                             <td className="border border-gray-400 px-4 py-2 text-center text-black">{sucursal.codigo_postal}</td>
                             <td className="border border-gray-400 px-4 py-2 text-black">{sucursal.usuario}</td>
+                            <td className="border border-gray-400 px-4 py-2 min-w-[200px]">
+                              {revealedById[sucursal.id_sucursal] ? (
+                                <div className="flex flex-col gap-1">
+                                  <code className="text-sm font-mono text-gray-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded select-all">
+                                    {revealedById[sucursal.id_sucursal].password}
+                                  </code>
+                                  <span className="text-[10px] text-amber-700 font-semibold">
+                                    Visible {revealCountdown[sucursal.id_sucursal] ?? 0}s — se ocultará sola
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-gray-400 text-sm tracking-widest">••••••••</span>
+                                  {!puedeRecuperarPassword(sucursal) && (
+                                    <span className="text-[10px] text-orange-700 font-semibold">
+                                      Guarde contraseña en Modificar
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
                             <td className="border border-gray-400 px-4 py-2">
-                              <div className="flex gap-2 justify-center">
+                              <div className="flex gap-2 justify-center flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => revelarPassword(sucursal)}
+                                  disabled={revealLoadingId === sucursal.id_sucursal}
+                                  title={
+                                    revealedById[sucursal.id_sucursal]
+                                      ? 'Ocultar contraseña'
+                                      : puedeRecuperarPassword(sucursal)
+                                        ? `Mostrar contraseña ${REVEAL_MS / 1000} segundos`
+                                        : 'Sin respaldo en BD: guarde una contraseña en Modificar'
+                                  }
+                                  className={`inline-flex items-center gap-1 border text-xs px-3 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                    revealedById[sucursal.id_sucursal]
+                                      ? 'bg-amber-100 border-amber-300 text-amber-900 hover:bg-amber-200'
+                                      : 'bg-white border-gray-400 text-black hover:bg-gray-100'
+                                  }`}
+                                >
+                                  {revealLoadingId === sucursal.id_sucursal ? (
+                                    '...'
+                                  ) : revealedById[sucursal.id_sucursal] ? (
+                                    <>
+                                      <EyeOff size={14} />
+                                      Ocultar
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Eye size={14} />
+                                      Ver
+                                    </>
+                                  )}
+                                </button>
                                 <button
                                   onClick={() => handleModify(sucursal)}
                                   className="bg-white border border-gray-400 text-black text-xs px-3 py-1 rounded hover:bg-gray-100 transition-colors"

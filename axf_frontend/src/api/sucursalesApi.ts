@@ -8,6 +8,13 @@ export interface Sucursal {
   usuario: string;
   activa: number;
   creado_en: string;
+  password_recuperable?: boolean | number;
+}
+
+export interface RevelarPasswordResponse {
+  password: string;
+  segundos: number;
+  sucursal: string;
 }
 
 export interface SucursalFormData {
@@ -39,5 +46,11 @@ export const modificarSucursal = async (id: number, data: SucursalFormData): Pro
 // Desactivar sucursal (soft delete) — usa la ruta del rol Maestro
 export const eliminarSucursal = async (id: number): Promise<{ message: string }> => {
   const response = await axiosClient.delete(`/maestro/sucursales/${id}`);
+  return response.data;
+};
+
+/** Revela la contraseña de acceso (solo maestro; la UI debe ocultarla tras unos segundos). */
+export const revelarPasswordSucursal = async (id: number): Promise<RevelarPasswordResponse> => {
+  const response = await axiosClient.get(`/sucursales/${id}/revelar-password`);
   return response.data;
 };
