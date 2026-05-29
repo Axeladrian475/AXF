@@ -36,7 +36,6 @@ interface Config {
   proximo_envio: string
 }
 
-// Mensaje de alerta reutilizable
 function Alerta({ tipo, mensaje, onClose }: { tipo: 'exito' | 'error'; mensaje: string; onClose: () => void }) {
   return (
     <div
@@ -45,24 +44,21 @@ function Alerta({ tipo, mensaje, onClose }: { tipo: 'exito' | 'error'; mensaje: 
           ? 'bg-green-50 border-green-400 text-green-800'
           : 'bg-red-50 border-red-400 text-red-800'}`}
     >
-      <span>{tipo === 'exito' ? 'âœ…' : 'âŒ'} {mensaje}</span>
-      <button onClick={onClose} className="text-lg leading-none opacity-60 hover:opacity-100">Ã—</button>
+      <span>{tipo === 'exito' ? '✅' : '❌'} {mensaje}</span>
+      <button onClick={onClose} className="text-lg leading-none opacity-60 hover:opacity-100">×</button>
     </div>
   )
 }
 
 export default function TabIncidencias() {
-  // â”€â”€ Estado del formulario â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [frecuenciaTipo, setFrecuenciaTipo] = useState<FrecuenciaTipo | ''>('')
   const [valor, setValor]                   = useState('')
 
-  // â”€â”€ Estado de UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [cargando,   setCargando]   = useState(true)
   const [guardando,  setGuardando]  = useState(false)
   const [alerta,     setAlerta]     = useState<{ tipo: 'exito' | 'error'; mensaje: string } | null>(null)
   const [configActual, setConfigActual] = useState<Config | null>(null)
 
-  // â”€â”€ Estado de AnÃ¡lisis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin]       = useState('')
   const [analisis, setAnalisis]       = useState<AnalisisData | null>(null)
@@ -95,13 +91,12 @@ export default function TabIncidencias() {
       setAnalisisPersonal(resPersonal.data)
       setListaActiva('ambas')
     } catch (err: any) {
-      setErrorAnalisis(err.response?.data?.message || 'Error al obtener anÃ¡lisis')
+      setErrorAnalisis(err.response?.data?.message || 'Error al obtener análisis')
     } finally {
       setCargandoAnalisis(false)
     }
   }
 
-  // â”€â”€ Cargar config existente al montar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const cargarConfig = async () => {
       try {
@@ -112,7 +107,7 @@ export default function TabIncidencias() {
           setValor(String(data.valor))
         }
       } catch {
-        // Si no hay config aÃºn, el form simplemente queda vacÃ­o
+        // Si no hay config aún, el form simplemente queda vacío
       } finally {
         setCargando(false)
       }
@@ -120,19 +115,17 @@ export default function TabIncidencias() {
     cargarConfig()
   }, [])
 
-  // â”€â”€ Guardar configuraciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleGuardar = async (e: React.FormEvent) => {
     e.preventDefault()
     setAlerta(null)
 
-    // ValidaciÃ³n local antes de llamar al backend
     if (!frecuenciaTipo) {
       setAlerta({ tipo: 'error', mensaje: 'Selecciona una frecuencia.' })
       return
     }
     const valorNum = parseInt(valor, 10)
     if (!valorNum || valorNum <= 0) {
-      setAlerta({ tipo: 'error', mensaje: 'El valor debe ser un nÃºmero mayor a 0.' })
+      setAlerta({ tipo: 'error', mensaje: 'El valor debe ser un número mayor a 0.' })
       return
     }
 
@@ -145,14 +138,13 @@ export default function TabIncidencias() {
       setConfigActual(data.config)
       setAlerta({ tipo: 'exito', mensaje: data.message })
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Error al guardar la configuraciÃ³n.'
+      const msg = err?.response?.data?.message ?? 'Error al guardar la configuración.'
       setAlerta({ tipo: 'error', mensaje: msg })
     } finally {
       setGuardando(false)
     }
   }
 
-  // â”€â”€ Helpers de formato â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const formatearFecha = (iso: string) =>
     new Date(iso).toLocaleDateString('es-MX', {
       day: '2-digit', month: 'long', year: 'numeric',
@@ -160,17 +152,16 @@ export default function TabIncidencias() {
     })
 
   const etiquetas: Record<FrecuenciaTipo, string> = {
-    dias:    'dÃ­a(s)',
+    dias:    'día(s)',
     semanas: 'semana(s)',
     meses:   'mes(es)',
   }
 
-  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (cargando) {
     return (
       <div className="flex items-center justify-center py-10">
         <div className="w-6 h-6 border-4 border-[#ea580c] border-t-transparent rounded-full animate-spin" />
-        <span className="ml-3 text-sm text-gray-500 font-bold">Cargando configuraciÃ³n...</span>
+        <span className="ml-3 text-sm text-gray-500 font-bold">Cargando configuración...</span>
       </div>
     )
   }
@@ -178,15 +169,14 @@ export default function TabIncidencias() {
   return (
     <div>
       <h2 className="text-xl font-bold text-black mb-1">
-        Acceso y ConfiguraciÃ³n del MÃ³dulo AnÃ¡lisis de Incidencias
+        Acceso y Configuración del Módulo Análisis de Incidencias
       </h2>
       <hr className="border-gray-300 mb-4" />
 
       <p className="text-sm text-black mb-4">
-        AquÃ­ se visualizarÃ¡n los informes automatizados generados por el sistema sobre los reportes de los suscriptores.
+        Aquí se visualizarán los informes automatizados generados por el sistema sobre los reportes de los suscriptores.
       </p>
 
-      {/* Alerta de Ã©xito / error */}
       {alerta && (
         <Alerta
           tipo={alerta.tipo}
@@ -195,10 +185,9 @@ export default function TabIncidencias() {
         />
       )}
 
-      {/* ConfiguraciÃ³n actual guardada */}
       {configActual && (
         <div className="bg-[#1e293b] text-white rounded-lg px-5 py-4 mb-5 max-w-md">
-          <p className="text-xs uppercase tracking-widest text-gray-400 mb-2 font-bold">ConfiguraciÃ³n activa</p>
+          <p className="text-xs uppercase tracking-widest text-gray-400 mb-2 font-bold">Configuración activa</p>
           <p className="font-bold text-white text-base">
             Cada{' '}
             <span className="text-[#ea580c]">
@@ -206,14 +195,13 @@ export default function TabIncidencias() {
             </span>
           </p>
           <div className="mt-2 space-y-1 text-xs text-gray-400">
-            <p>Ãšltimo guardado: <span className="text-gray-200">{formatearFecha(configActual.ultimo_envio)}</span></p>
-            <p>PrÃ³ximo reporte: <span className="text-green-400 font-bold">{formatearFecha(configActual.proximo_envio)}</span></p>
+            <p>Último guardado: <span className="text-gray-200">{formatearFecha(configActual.ultimo_envio)}</span></p>
+            <p>Próximo reporte: <span className="text-green-400 font-bold">{formatearFecha(configActual.proximo_envio)}</span></p>
           </div>
         </div>
       )}
 
-      {/* Formulario */}
-      <p className="text-sm font-bold text-black mb-3">ConfiguraciÃ³n de Frecuencia de Reportes</p>
+      <p className="text-sm font-bold text-black mb-3">Configuración de Frecuencia de Reportes</p>
       <form className="space-y-3" onSubmit={handleGuardar}>
         <div className="max-w-xs">
           <label className="block text-sm font-bold text-black italic mb-1">
@@ -226,7 +214,7 @@ export default function TabIncidencias() {
             disabled={guardando}
           >
             <option value="">Seleccionar</option>
-            <option value="dias">Cada X dÃ­as</option>
+            <option value="dias">Cada X días</option>
             <option value="semanas">Cada X semanas</option>
             <option value="meses">Cada X meses</option>
           </select>
@@ -253,15 +241,14 @@ export default function TabIncidencias() {
           {guardando && (
             <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
           )}
-          {guardando ? 'Guardando...' : 'Guardar ConfiguraciÃ³n'}
+          {guardando ? 'Guardando...' : 'Guardar Configuración'}
         </button>
       </form>
 
-      {/* â”€â”€ MÃ³dulo de AnÃ¡lisis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <hr className="border-gray-300 my-8" />
-      <h3 className="text-lg font-bold text-black mb-1">ðŸ“Š AnÃ¡lisis de Tasa de ResoluciÃ³n</h3>
+      <h3 className="text-lg font-bold text-black mb-1">📊 Análisis de Tasa de Resolución</h3>
       <p className="text-sm text-gray-500 mb-5">
-        Genera un anÃ¡lisis en tiempo real de los reportes en el rango de fechas seleccionado.
+        Genera un análisis en tiempo real de los reportes en el rango de fechas seleccionado.
       </p>
 
       <div className="bg-white border border-gray-200 rounded-xl p-5 w-full">
@@ -289,7 +276,7 @@ export default function TabIncidencias() {
             disabled={cargandoAnalisis}
             className="bg-[#ea580c] text-white font-bold px-5 py-2 text-sm rounded hover:bg-[#c94a0a] transition-colors flex items-center h-[38px]"
           >
-            {cargandoAnalisis ? 'Cargando...' : 'Obtener anÃ¡lisis ahora'}
+            {cargandoAnalisis ? 'Cargando...' : 'Obtener análisis ahora'}
           </button>
         </div>
 
@@ -302,12 +289,12 @@ export default function TabIncidencias() {
                 <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Total Periodo</p>
                 <p className="text-3xl font-black text-gray-800">{analisis.total}</p>
                 <div className="absolute bottom-0 inset-x-0 bg-gray-200 py-1 flex justify-center items-center gap-1">
-                  <span className="text-[10px] font-bold text-gray-600">Impacto EstadÃ­stico:</span>
+                  <span className="text-[10px] font-bold text-gray-600">Impacto Estadístico:</span>
                   <span className="text-[10px] font-black text-gray-800 bg-white px-1.5 rounded">{analisis.total_estadistico} quejas</span>
                 </div>
               </div>
               <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center shadow-sm">
-                <p className="text-xs text-emerald-600 font-bold uppercase tracking-wider mb-1">Tasa ResoluciÃ³n</p>
+                <p className="text-xs text-emerald-600 font-bold uppercase tracking-wider mb-1">Tasa Resolución</p>
                 <p className="text-3xl font-black text-emerald-600">{analisis.tasa_resolucion}%</p>
               </div>
               <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-center">
@@ -316,7 +303,6 @@ export default function TabIncidencias() {
               </div>
             </div>
 
-            {/* â”€â”€ GrÃ¡ficas (Pastel y Barras) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               <div className="lg:col-span-1 bg-white border border-gray-200 p-5 rounded-xl shadow-sm flex flex-col items-center justify-center">
                 <h4 className="text-sm font-bold text-gray-800 mb-2">Estado de Reportes</h4>
@@ -352,7 +338,7 @@ export default function TabIncidencias() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <p className="text-xs text-gray-500 text-center mt-1">Clickea una secciÃ³n para filtrar listas</p>
+                <p className="text-xs text-gray-500 text-center mt-1">Clickea una sección para filtrar listas</p>
                 {listaActiva !== 'ambas' && (
                   <button onClick={() => setListaActiva('ambas')} className="mt-2 text-[10px] text-blue-600 underline font-bold">
                     Mostrar todas las listas
@@ -363,7 +349,7 @@ export default function TabIncidencias() {
               {analisis.categorias_chart && analisis.categorias_chart.length > 0 ? (
                 <div className="lg:col-span-2 bg-white border border-gray-200 p-5 rounded-xl shadow-sm">
                   <h4 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    ðŸ“Š DistribuciÃ³n de Reportes por CategorÃ­a
+                    📊 Distribución de Reportes por Categoría
                   </h4>
                   <div className="h-48 w-full">
                     <ResponsiveContainer width="100%" height="100%">
@@ -386,23 +372,22 @@ export default function TabIncidencias() {
                 </div>
               ) : (
                 <div className="lg:col-span-2 bg-white border border-gray-200 p-5 rounded-xl shadow-sm flex items-center justify-center">
-                  <p className="text-gray-400 italic text-sm">No hay suficientes datos para la grÃ¡fica de categorÃ­as.</p>
+                  <p className="text-gray-400 italic text-sm">No hay suficientes datos para la gráfica de categorías.</p>
                 </div>
               )}
             </div>
 
             <div className={`grid grid-cols-1 ${listaActiva === 'ambas' ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-5`}>
-              {/* Lista Resueltos */}
               {(listaActiva === 'ambas' || listaActiva === 'resueltos') && (
                 <div className="border border-emerald-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
                   <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-3 shrink-0">
                     <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
-                      âœ… Lista de Resueltos <span className="bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full text-xs">{analisis.resueltos_count}</span>
+                      ✅ Lista de Resueltos <span className="bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full text-xs">{analisis.resueltos_count}</span>
                     </h4>
                   </div>
                   <div className="overflow-y-auto max-h-[300px] p-3 space-y-2 flex-1">
                     {analisis.resueltos.length === 0 ? (
-                      <p className="text-sm text-gray-400 p-4 text-center italic">NingÃºn reporte resuelto en este periodo.</p>
+                      <p className="text-sm text-gray-400 p-4 text-center italic">Ningún reporte resuelto en este periodo.</p>
                     ) : (
                       analisis.resueltos.map((r: any) => (
                         <div key={r.id_reporte} className="border border-gray-100 bg-gray-50 rounded-lg p-3 hover:bg-emerald-50/30 transition-colors">
@@ -421,12 +406,11 @@ export default function TabIncidencias() {
                 </div>
               )}
 
-              {/* Lista Pendientes */}
               {(listaActiva === 'ambas' || listaActiva === 'pendientes') && (
                 <div className="border border-amber-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
                   <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 shrink-0">
                     <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
-                      â³ Lista de Pendientes <span className="bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full text-xs">{analisis.pendientes_count}</span>
+                      ⏳ Lista de Pendientes <span className="bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full text-xs">{analisis.pendientes_count}</span>
                     </h4>
                   </div>
                   <div className="overflow-y-auto max-h-[300px] p-3 space-y-2 flex-1">
@@ -458,18 +442,17 @@ export default function TabIncidencias() {
               )}
             </div>
 
-            {/* â”€â”€ Lista de Prioridad (Urgentes o 3+ Strikes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             {(() => {
-              const prioritarios = analisis.pendientes.filter(r => r.num_strikes >= 3 || r.categoria === 'Reporte_Personal' || r.categoria === 'Maquina_DaÃ±ada');
+              const prioritarios = analisis.pendientes.filter(r => r.num_strikes >= 3 || r.categoria === 'Reporte_Personal' || r.categoria === 'Maquina_Dañada');
               if (prioritarios.length === 0) return null;
               return (
                 <div className="mt-8 border border-red-300 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
                   <div className="bg-red-50 border-b border-red-200 px-4 py-3 shrink-0 flex justify-between items-center">
                     <h4 className="text-sm font-bold text-red-800 flex items-center gap-2">
-                      ðŸš¨ AtenciÃ³n Inmediata (Prioridad Alta)
+                      🚨 Atención Inmediata (Prioridad Alta)
                     </h4>
                     <span className="bg-red-600 text-white px-2 py-0.5 rounded-full text-xs font-black animate-pulse">
-                      {prioritarios.length} CrÃ­ticos
+                      {prioritarios.length} Críticos
                     </span>
                   </div>
                   <div className="overflow-x-auto p-4">
@@ -497,11 +480,10 @@ export default function TabIncidencias() {
               );
             })()}
 
-            {/* â”€â”€ Tabla de Tiempos de ResoluciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div className="mt-8 border border-purple-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
               <div className="bg-purple-50 border-b border-purple-200 px-4 py-3 shrink-0">
                 <h4 className="text-sm font-bold text-purple-800 flex items-center gap-2">
-                  â±ï¸ Tiempos de ResoluciÃ³n (Reportes Resueltos)
+                  ⏱️ Tiempos de Resolución (Reportes Resueltos)
                 </h4>
               </div>
               <div className="overflow-x-auto p-4">
@@ -512,7 +494,7 @@ export default function TabIncidencias() {
                     <thead>
                       <tr className="border-b border-gray-200">
                         <th className="py-2 px-3 text-gray-500 font-bold">Reporte</th>
-                        <th className="py-2 px-3 text-gray-500 font-bold">CategorÃ­a</th>
+                        <th className="py-2 px-3 text-gray-500 font-bold">Categoría</th>
                         <th className="py-2 px-3 text-center text-gray-500 font-bold">Creado</th>
                         <th className="py-2 px-3 text-center text-gray-500 font-bold">Resuelto</th>
                         <th className="py-2 px-3 text-center text-gray-500 font-bold">Tiempo (h:m)</th>
@@ -563,11 +545,10 @@ export default function TabIncidencias() {
               </div>
             </div>
 
-            {/* â”€â”€ AnÃ¡lisis de Personal (Servicios vs Reportes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div className="mt-8 border border-blue-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
               <div className="bg-blue-50 border-b border-blue-200 px-4 py-3 shrink-0">
                 <h4 className="text-sm font-bold text-blue-800 flex items-center gap-2">
-                  ðŸ‘¥ AnÃ¡lisis de Personal (Servicios vs Reportes)
+                  👥 Análisis de Personal (Servicios vs Reportes)
                 </h4>
               </div>
               <div className="overflow-x-auto p-4">
@@ -598,7 +579,7 @@ export default function TabIncidencias() {
                                 />
                               ) : (
                                 <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs shadow-sm border border-gray-300">
-                                  ðŸ‘¤
+                                  👤
                                 </div>
                               )}
                               <div>
@@ -622,7 +603,7 @@ export default function TabIncidencias() {
                               {p.total_reportes === 0 
                                 ? '0%' 
                                 : p.tasa_reportes === Infinity 
-                                  ? 'Â¡Riesgo CrÃ­tico!' 
+                                  ? '¡Riesgo Crítico!' 
                                   : `${p.tasa_reportes}%`
                               }
                             </span>
@@ -635,11 +616,10 @@ export default function TabIncidencias() {
               </div>
             </div>
 
-            {/* â”€â”€ GrÃ¡ficas de Pastel por Empleado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             {analisisPersonal.length > 0 && (
               <div className="mt-8">
                 <h4 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  ðŸ§‘â€ðŸ’¼ Desglose Visual por Empleado
+                  🧑‍💼 Desglose Visual por Empleado
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   {analisisPersonal.map(p => {
@@ -649,7 +629,6 @@ export default function TabIncidencias() {
                       { name: 'Reportes', value: p.total_reportes, color: '#ef4444' }
                     ].filter(d => d.value > 0);
 
-                    // Si no tiene nada, mostrar un grÃ¡fico vacÃ­o gris
                     if (data.length === 0) {
                       data.push({ name: 'Sin Actividad', value: 1, color: '#e5e7eb' });
                     }
@@ -665,7 +644,7 @@ export default function TabIncidencias() {
                           {p.foto_url ? (
                             <img src={imageUrl(p.foto_url)!} alt="foto" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
                           ) : (
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl">ðŸ‘¤</div>
+                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl">👤</div>
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="font-bold text-gray-800 text-sm truncate">{p.nombre}</p>
@@ -691,7 +670,7 @@ export default function TabIncidencias() {
                                 ))}
                               </Pie>
                               <Tooltip 
-formatter={(value: number | undefined, name: string | undefined) => [value ?? 0, name ?? '']}
+                                formatter={(value: number | undefined, name: string | undefined) => [value ?? 0, name ?? '']}
                                 contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px', padding: '4px 8px' }}
                               />
                             </PieChart>
