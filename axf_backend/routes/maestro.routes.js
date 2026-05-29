@@ -22,7 +22,7 @@ router.post('/sucursales', verificarToken, soloMaestro, crearSucursal);
 // ─── DELETE /api/maestro/sucursales/:id_sucursal ─────────────────────────────
 // Borrado lógico transaccional de sucursal + personal + suscriptores
 // DELETE: Borrado lógico transaccional de sucursal + dependencias
-router.delete('/sucursales/:id_sucursal', verificarToken, soloMaestro, deleteSucursal);
+router.delete('/sucursales/:id_sucursal', verificarToken, soloMaestro, eliminarSucursal);
 
 export default router;
 
