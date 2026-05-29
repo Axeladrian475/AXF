@@ -60,42 +60,93 @@ function construirFiltroDestinatarios(destinatarios) {
 // ────────────────────────────────────────────────────────────────────────────
 // POST /api/avisos
 // ────────────────────────────────────────────────────────────────────────────
+async function resolverPersonalDestino(id_sucursal, { destinatarios, ids_personal }) {
+  const idsUnicos = Array.isArray(ids_personal)
+    ? [...new Set(ids_personal.map(Number).filter(n => Number.isInteger(n) && n > 0))]
+    : [];
+
+  if (idsUnicos.length > 0) {
+    const [rows] = await db.query(
+      `SELECT id_personal, nombres, puesto
+       FROM personal
+       WHERE id_sucursal = ? AND activo = 1 AND id_personal IN (?)`,
+      [id_sucursal, idsUnicos]
+    );
+    if (rows.length !== idsUnicos.length) {
+      const encontrados = new Set(rows.map(r => r.id_personal));
+      const faltantes = idsUnicos.filter(id => !encontrados.has(id));
+      const err = new Error('PERSONAL_INVALIDO');
+      err.faltantes = faltantes;
+      throw err;
+    }
+    return rows;
+  }
+
+  if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
+    const err = new Error('SIN_DESTINATARIOS');
+    throw err;
+  }
+
+  const opcionesValidas = ['todos', 'staff', 'entrenadores', 'nutriologos'];
+  const invalidas = destinatarios.filter(d => !opcionesValidas.includes(d));
+  if (invalidas.length > 0) {
+    const err = new Error('GRUPOS_INVALIDOS');
+    err.invalidas = invalidas;
+    throw err;
+  }
+
+  const filtroPuesto = construirFiltroDestinatarios(destinatarios);
+  if (!filtroPuesto) {
+    const [rows] = await db.query(
+      `SELECT id_personal, nombres, puesto FROM personal WHERE id_sucursal = ? AND activo = 1`,
+      [id_sucursal]
+    );
+    return rows;
+  }
+
+  const [rows] = await db.query(
+    `SELECT id_personal, nombres, puesto
+     FROM personal WHERE id_sucursal = ? AND activo = 1 AND (${filtroPuesto})`,
+    [id_sucursal]
+  );
+  return rows;
+}
+
 router.post('/', verificarToken, soloSucursalOMaestro, async (req, res) => {
   const conn = await db.getConnection();
   try {
     const id_sucursal = req.usuario.id;
-    const { mensaje, destinatarios } = req.body;
+    const { mensaje, destinatarios, ids_personal } = req.body;
 
     if (!mensaje || !mensaje.trim()) {
       return res.status(400).json({ message: 'El mensaje no puede estar vacío.' });
     }
-    if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
-      return res.status(400).json({ message: 'Selecciona al menos un grupo de destinatarios.' });
-    }
-    const opcionesValidas = ['todos', 'staff', 'entrenadores', 'nutriologos'];
-    const invalidas = destinatarios.filter(d => !opcionesValidas.includes(d));
-    if (invalidas.length > 0) {
-      return res.status(400).json({ message: `Destinatarios inválidos: ${invalidas.join(', ')}` });
-    }
 
-    const filtroPuesto = construirFiltroDestinatarios(destinatarios);
     let personal;
-
-    if (!filtroPuesto) {
-      [personal] = await db.query(
-        `SELECT id_personal, nombres, puesto FROM personal WHERE id_sucursal = ? AND activo = 1`,
-        [id_sucursal]
-      );
-    } else {
-      [personal] = await db.query(
-        `SELECT id_personal, nombres, puesto FROM personal WHERE id_sucursal = ? AND activo = 1 AND (${filtroPuesto})`,
-        [id_sucursal]
-      );
+    try {
+      personal = await resolverPersonalDestino(id_sucursal, { destinatarios, ids_personal });
+    } catch (e) {
+      if (e.message === 'SIN_DESTINATARIOS') {
+        return res.status(400).json({
+          message: 'Selecciona al menos un grupo o una persona del personal.',
+        });
+      }
+      if (e.message === 'GRUPOS_INVALIDOS') {
+        return res.status(400).json({
+          message: `Destinatarios inválidos: ${e.invalidas.join(', ')}`,
+        });
+      }
+      if (e.message === 'PERSONAL_INVALIDO') {
+        return res.status(400).json({
+          message: 'Uno o más empleados seleccionados no pertenecen a esta sucursal o no están activos.',
+        });
+      }
+      throw e;
     }
 
     if (personal.length === 0) {
       return res.status(404).json({
-        message: 'No hay personal activo registrado para los destinatarios seleccionados.',
+        message: 'No hay personal activo para los destinatarios seleccionados.',
       });
     }
 
