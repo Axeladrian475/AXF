@@ -41,6 +41,8 @@ import {
   resumenReportes,
   analisisReportes,
   analisisPersonal,
+  listarPrioritarios,
+  marcarReenviado,
 } from '../controllers/reportes.controller.js';
 import {
   getConfigStrikes,
@@ -359,6 +361,7 @@ router.use(verificarToken);
 router.get('/resumen',           personalOSucursal, resumenReportes);
 router.get('/analisis',          personalOSucursal, analisisReportes);
 router.get('/analisis/personal', personalOSucursal, analisisPersonal);
+router.get('/prioritarios',      personalOSucursal, listarPrioritarios);
 router.get('/strikes/config',    personalOSucursal, getConfigStrikes);
 router.put('/strikes/config',    soloMaestro,       setConfigStrikes);  // ← Solo maestro
 router.post('/strikes/procesar', soloMaestro,       procesarManual);    // ← Solo maestro
@@ -367,6 +370,7 @@ router.post('/strikes/procesar', soloMaestro,       procesarManual);    // ← S
 router.get('/',              personalOSucursal, listarReportes);
 router.get('/:id',           personalOSucursal, obtenerReporte);
 router.put('/:id/estado',    personalOSucursal, actualizarEstado);
+router.put('/:id/reenviar',  personalOSucursal, marcarReenviado);
 router.post('/:id/resolver', personalOSucursal, resolverReporte);
 router.get('/:id/strikes',   personalOSucursal, historialStrikes);
 

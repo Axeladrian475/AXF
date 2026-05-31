@@ -4,25 +4,28 @@
 
 import { useState, useContext } from 'react'
 import { AuthContext } from '../../context/AuthContext'
-import TabsBuscarReportes    from './tabs/TabsBuscarReportes'
-import TabsConfiguracion     from './tabs/TabsConfiguracion'
-import TabsReportesPersonal  from './tabs/TabsReportesPersonal'
+import TabsBuscarReportes        from './tabs/TabsBuscarReportes'
+import TabsConfiguracion         from './tabs/TabsConfiguracion'
+import TabsReportesPersonal      from './tabs/TabsReportesPersonal'
+import TabsReportesPrioritarios  from './tabs/TabsReportesPrioritarios'
 
-type Tab = 'buscar' | 'personal' | 'config'
+type Tab = 'buscar' | 'personal' | 'config' | 'prioritarios'
 
 export default function Reportes() {
   const { user } = useContext(AuthContext)
   const esMaestro  = user?.rol === 'maestro'
   const esSucursal = user?.rol === 'sucursal'
 
-  const [tab, setTab] = useState<Tab>(esSucursal ? 'personal' : 'buscar')
+  const [tab, setTab] = useState<Tab>(esSucursal ? 'prioritarios' : 'buscar')
 
   const btnClass = (t: Tab) =>
     `px-6 py-2 rounded-full font-bold text-sm border-2 transition-all ${
       tab === t
         ? t === 'personal'
           ? 'bg-red-700 text-white border-red-700'
-          : 'bg-[#ea580c] text-white border-[#ea580c]'
+          : t === 'prioritarios'
+            ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white border-red-600'
+            : 'bg-[#ea580c] text-white border-[#ea580c]'
         : 'bg-white text-black border-black hover:bg-gray-100'
     }`
 
@@ -33,10 +36,17 @@ export default function Reportes() {
         {/* TABS */}
         <div className="flex flex-wrap gap-2 mb-6">
 
+          {/* Tab de Reportes Prioritarios — solo sucursal */}
+          {esSucursal && (
+            <button onClick={() => setTab('prioritarios')} className={btnClass('prioritarios')}>
+              Reportes Prioritarios
+            </button>
+          )}
+
           {/* Tab de Reportes de Personal — solo sucursal */}
           {esSucursal && (
             <button onClick={() => setTab('personal')} className={btnClass('personal')}>
-              🚨 Reportes de Personal
+              Reportes de Personal
             </button>
           )}
 
@@ -51,11 +61,13 @@ export default function Reportes() {
           )}
         </div>
 
-        {tab === 'personal' && esSucursal && <TabsReportesPersonal />}
-        {tab === 'buscar'   && <TabsBuscarReportes />}
-        {tab === 'config'   && esMaestro && <TabsConfiguracion />}
+        {tab === 'prioritarios' && esSucursal && <TabsReportesPrioritarios />}
+        {tab === 'personal'     && esSucursal && <TabsReportesPersonal />}
+        {tab === 'buscar'       && <TabsBuscarReportes />}
+        {tab === 'config'       && esMaestro  && <TabsConfiguracion />}
 
       </div>
     </div>
   )
-}
+}
+

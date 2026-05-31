@@ -479,3 +479,148 @@ export async function analisisPersonal(req, res) {
     res.status(500).json({ message: 'Error al obtener análisis de personal.' });
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/reportes/prioritarios
+// Reportes con 3+ strikes que NO están resueltos.
+// Exclusivo para la sucursal — le permite dar seguimiento directo.
+//
+// Query params:
+//   q           → buscar por ID, nombre suscriptor
+//   estado      → Abierto | En_Proceso
+//   categoria   → filtrar por categoría
+//   limite      → default 50
+//   offset      → default 0
+// ════════════════════════════════════════════════════════════════════════════
+export async function listarPrioritarios(req, res) {
+  try {
+    const { q = '', estado, categoria, limite = 50, offset = 0 } = req.query;
+    const lim = Math.min(parseInt(limite) || 50, 200);
+    const off = parseInt(offset) || 0;
+
+    // Determinar sucursal del usuario
+    let id_sucursal = null;
+    if (req.usuario.rol === 'sucursal') {
+      id_sucursal = req.usuario.id;
+    } else if (req.usuario.rol === 'personal') {
+      const [[emp]] = await db.query(
+        `SELECT id_sucursal FROM personal WHERE id_personal = ? AND activo = 1`,
+        [req.usuario.id]
+      );
+      id_sucursal = emp?.id_sucursal ?? null;
+    }
+
+    // WHERE dinámico
+    const conditions = [
+      `r.num_strikes >= 3`,
+      `r.estado != 'Resuelto'`,
+      `r.categoria != 'Reporte_Personal'`,
+    ];
+    const params = [];
+
+    if (id_sucursal) {
+      conditions.push('r.id_sucursal = ?');
+      params.push(id_sucursal);
+    }
+    if (estado && ['Abierto', 'En_Proceso'].includes(estado)) {
+      conditions.push('r.estado = ?');
+      params.push(estado);
+    }
+    if (categoria && categoria.trim()) {
+      conditions.push('r.categoria = ?');
+      params.push(categoria.trim());
+    }
+    if (q.trim()) {
+      conditions.push(`(
+        CAST(r.id_reporte AS CHAR) LIKE ? OR
+        CONCAT(s.nombres, ' ', s.apellido_paterno) LIKE ? OR
+        suc.nombre LIKE ?
+      )`);
+      const like = `%${q.trim()}%`;
+      params.push(like, like, like);
+    }
+
+    const WHERE = `WHERE ${conditions.join(' AND ')}`;
+
+    const [reportes] = await db.query(
+      `SELECT
+         r.id_reporte,
+         r.categoria,
+         r.descripcion,
+         r.foto_url,
+         r.es_privado,
+         r.estado,
+         r.num_strikes,
+         r.reenviado_sucursal,
+         r.creado_en,
+         r.resuelto_en,
+         CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre_suscriptor,
+         s.correo                                   AS correo_suscriptor,
+         suc.nombre                                 AS nombre_sucursal,
+         suc.id_sucursal,
+         CONCAT(p.nombres, ' ', p.apellido_paterno) AS nombre_personal_reportado,
+         p.puesto                                   AS puesto_personal_reportado,
+         p.foto_url                                 AS foto_personal_reportado,
+         (SELECT sr.generado_en
+          FROM strikes_reporte sr
+          WHERE sr.id_reporte = r.id_reporte
+          ORDER BY sr.nivel DESC LIMIT 1)           AS ultimo_strike_en,
+         TIMESTAMPDIFF(HOUR, r.creado_en, NOW())    AS horas_desde_creacion
+       FROM reportes r
+       INNER JOIN suscriptores s   ON s.id_suscriptor = r.id_suscriptor
+       INNER JOIN sucursales suc   ON suc.id_sucursal  = r.id_sucursal
+       LEFT  JOIN personal p       ON p.id_personal   = r.id_personal_reportado
+       ${WHERE}
+       ORDER BY r.creado_en ASC
+       LIMIT ? OFFSET ?`,
+      [...params, lim, off]
+    );
+
+    const [[{ total }]] = await db.query(
+      `SELECT COUNT(*) AS total
+       FROM reportes r
+       INNER JOIN suscriptores s  ON s.id_suscriptor = r.id_suscriptor
+       INNER JOIN sucursales suc  ON suc.id_sucursal  = r.id_sucursal
+       ${WHERE}`,
+      params
+    );
+
+    res.json({ reportes, total, limite: lim, offset: off });
+  } catch (error) {
+    console.error('[GET /reportes/prioritarios]', error);
+    res.status(500).json({ message: 'Error al obtener reportes prioritarios.' });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PUT /api/reportes/:id/reenviar
+// Marca el reporte como reenviado a sucursal (reenviado_sucursal = 1).
+// Indica que la sucursal ya tomó conocimiento y está dándole seguimiento.
+// ════════════════════════════════════════════════════════════════════════════
+export async function marcarReenviado(req, res) {
+  try {
+    const { id } = req.params;
+
+    const [[reporte]] = await db.query(
+      `SELECT id_reporte, reenviado_sucursal, estado FROM reportes WHERE id_reporte = ?`,
+      [id]
+    );
+    if (!reporte) {
+      return res.status(404).json({ message: 'Reporte no encontrado.' });
+    }
+
+    if (reporte.reenviado_sucursal === 1) {
+      return res.json({ message: 'Este reporte ya fue marcado como reenviado.', id_reporte: reporte.id_reporte });
+    }
+
+    await db.query(
+      `UPDATE reportes SET reenviado_sucursal = 1 WHERE id_reporte = ?`,
+      [id]
+    );
+
+    res.json({ message: 'Reporte marcado como reenviado a sucursal.', id_reporte: reporte.id_reporte });
+  } catch (error) {
+    console.error('[PUT /reportes/:id/reenviar]', error);
+    res.status(500).json({ message: 'Error al marcar como reenviado.' });
+  }
+}
