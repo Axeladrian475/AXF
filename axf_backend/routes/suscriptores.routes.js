@@ -37,6 +37,7 @@ import jwt          from 'jsonwebtoken';
 import express      from 'express';
 import PDFDocument  from 'pdfkit';
 import db           from '../config/database.js';
+import { notificarReporteInmediatoGerencia } from '../services/mailer.service.js';
 
 // Fuentes para PDFs (rutinas y futuros documentos)
 const __filenameR = fileURLToPath(import.meta.url);
@@ -786,6 +787,14 @@ router.post('/movil/reportes/crear', verificarSuscriptor, async (req, res) => {
         });
 
         console.log(`[REPORTE_PERSONAL] Notificado a sucursal:${id_sucursal} → Reporte #${id_reporte}`);
+
+        // ── Notificar a Gerencia por correo ──
+        const [[sucursalData]] = await db.query(`SELECT nombre FROM sucursales WHERE id_sucursal = ?`, [id_sucursal]);
+        const nombreSucursal = sucursalData?.nombre || `Sucursal ${id_sucursal}`;
+        notificarReporteInmediatoGerencia(id_reporte, nombreSucursal, descripcion, nombrePersonalReportado).catch(err => 
+          console.error('[MAILER] Error al enviar reporte inmediato a gerencia:', err.message)
+        );
+
       } catch (socketErr) {
         // Socket.io no disponible en dev sin WS, no bloquear la respuesta
         console.warn('[REPORTE_PERSONAL] Socket.io no disponible:', socketErr.message);

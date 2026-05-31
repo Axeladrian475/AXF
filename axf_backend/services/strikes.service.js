@@ -16,6 +16,7 @@
 // ============================================================================
 
 import db from '../config/database.js';
+import { notificarTercerStrikeSucursal } from './mailer.service.js';
 
 // ─── Constantes default (si la sucursal no tiene config personalizada) ────────
 const DEFAULT_HORAS = { strike1: 24, strike2: 24, strike3: 24 };
@@ -131,7 +132,7 @@ async function aplicarStrike(reporte, nivel) {
 
   // ── 2. Obtener datos de la sucursal ───────────────────────────────────────
   const [[sucursal]] = await db.query(
-    `SELECT id_sucursal, nombre FROM sucursales WHERE id_sucursal = ?`,
+    `SELECT id_sucursal, nombre, usuario FROM sucursales WHERE id_sucursal = ?`,
     [id_sucursal]
   );
 
@@ -184,7 +185,15 @@ async function aplicarStrike(reporte, nivel) {
   // ── 7. Notificaciones internas (Socket.io) ────────────────────────────────
   await emitirNotificaciones(id_reporte, nivel, notificados, id_sucursal, suscriptor);
 
-  // ── 8. Log detallado para depuración ─────────────────────────────────────
+  // ── 8. Enviar correo de alta prioridad (Solo Strike 3) ────────────────────
+  if (nivel === 3) {
+    const emailSucursal = sucursal.usuario.includes('@') ? sucursal.usuario : 'gerencia@axfgymnet.com';
+    notificarTercerStrikeSucursal(emailSucursal, id_reporte, sucursal.nombre).catch(err => 
+      console.error('[STRIKES] Error enviando correo de tercer strike a sucursal:', err)
+    );
+  }
+
+  // ── 9. Log detallado para depuración ─────────────────────────────────────
   const msg = {
     1: `1er Strike: Notificados ${personal.length} personal`,
     2: `2do Strike: Notificados ${personal.length} personal + sucursal`,

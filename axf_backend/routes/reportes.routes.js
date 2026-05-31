@@ -49,6 +49,7 @@ import {
   setConfigStrikes,
   procesarManual,
 } from '../services/strikes.service.js';
+import { notificarReporteInmediatoGerencia } from '../services/mailer.service.js';
 
 const router = express.Router();
 
@@ -242,6 +243,14 @@ router.post('/crear', verificarSuscriptor, uploadReporte.single('foto'), async (
         });
 
         console.log(`[REPORTE_PERSONAL] Notificado a sucursal:${id_sucursal} → Reporte #${id_reporte}`);
+
+        // 3. Notificar a Gerencia por correo
+        const [[sucursalData]] = await db.query(`SELECT nombre FROM sucursales WHERE id_sucursal = ?`, [id_sucursal]);
+        const nombreSucursal = sucursalData?.nombre || `Sucursal ${id_sucursal}`;
+        notificarReporteInmediatoGerencia(id_reporte, nombreSucursal, descripcion, nombrePersonalReportado).catch(err => 
+          console.error('[MAILER] Error al enviar reporte inmediato a gerencia:', err.message)
+        );
+
       } catch (err) {
         console.warn('[REPORTE_PERSONAL] Error al notificar/guardar:', err.message);
       }

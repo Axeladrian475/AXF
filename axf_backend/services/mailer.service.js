@@ -160,3 +160,75 @@ export async function notificarNuevaDieta(to, nombre, pdfBuffer = null) {
 
   return await enviarCorreo(to, subject, html, attachments);
 }
+
+/**
+ * Envía un correo de alta prioridad a la sucursal cuando un reporte alcanza el tercer strike.
+ */
+export async function notificarTercerStrikeSucursal(to, id_reporte, nombreSucursal) {
+  const subject = `🚨 URGENTE: Tercer Strike Alcanzado - Reporte #${id_reporte}`;
+  const html = `
+    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #dc2626; border-radius: 12px; overflow: hidden; background-color: #fef2f2; color: #1e293b;">
+      
+      <!-- Cabecera -->
+      <div style="background-color: #dc2626; padding: 24px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px; text-transform: uppercase;">ALERTA DE TERCER STRIKE</h1>
+      </div>
+
+      <!-- Cuerpo -->
+      <div style="padding: 32px 24px;">
+        <h2 style="color: #991b1b; margin-top: 0;">Atención Sucursal: ${nombreSucursal}</h2>
+        <p style="color: #475569; font-size: 16px; line-height: 1.5;">
+          El <strong>Reporte #${id_reporte}</strong> ha alcanzado el <strong>Tercer Strike</strong>. Esto significa que lleva más de 72 horas sin resolución.
+        </p>
+        <p style="color: #475569; font-size: 16px; line-height: 1.5; font-weight: bold;">
+          Se requiere su intervención inmediata para resolver este problema y evitar penalizaciones o escaladas adicionales.
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background-color: #fee2e2; padding: 20px; text-align: center; border-top: 1px solid #fca5a5;">
+        <p style="color: #991b1b; font-size: 12px; margin: 0;">Este es un mensaje automático de máxima prioridad de AXF Gymnet. Por favor, atienda el reporte de inmediato.</p>
+        <p style="color: #b91c1c; font-size: 12px; margin: 5px 0 0 0;">© ${new Date().getFullYear()} AXF Solutions.</p>
+      </div>
+    </div>
+  `;
+  
+  return await enviarCorreo(to, subject, html);
+}
+
+/**
+ * Envía un correo a gerencia cuando se crea un reporte inmediato (al personal).
+ */
+export async function notificarReporteInmediatoGerencia(id_reporte, nombreSucursal, descripcion, nombrePersonalReportado) {
+  const to = 'gerencia@axfgymnet.com';
+  const subject = `⚠️ ALERTA INMEDIATA: Reporte de Personal en ${nombreSucursal} (Reporte #${id_reporte})`;
+  const html = `
+    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #f59e0b; border-radius: 12px; overflow: hidden; background-color: #fffbeb; color: #1e293b;">
+      
+      <!-- Cabecera -->
+      <div style="background-color: #f59e0b; padding: 24px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px; text-transform: uppercase;">REPORTE INMEDIATO</h1>
+      </div>
+
+      <!-- Cuerpo -->
+      <div style="padding: 32px 24px;">
+        <h2 style="color: #b45309; margin-top: 0;">Atención Gerencia</h2>
+        <p style="color: #475569; font-size: 16px; line-height: 1.5;">
+          Se ha recibido un nuevo reporte categorizado como <strong>Reporte de Personal</strong> en la sucursal <strong>${nombreSucursal}</strong>.
+        </p>
+        <div style="background-color: #fef3c7; padding: 16px; border-left: 4px solid #f59e0b; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0; color: #92400e;"><strong>Personal Reportado:</strong> ${nombrePersonalReportado || 'No especificado'}</p>
+          <p style="margin: 0; color: #92400e;"><strong>Descripción:</strong><br/>${descripcion}</p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="background-color: #fef3c7; padding: 20px; text-align: center; border-top: 1px solid #fde68a;">
+        <p style="color: #92400e; font-size: 12px; margin: 0;">Este es un mensaje automático de alerta de AXF Gymnet para Gerencia.</p>
+        <p style="color: #b45309; font-size: 12px; margin: 5px 0 0 0;">© ${new Date().getFullYear()} AXF Solutions.</p>
+      </div>
+    </div>
+  `;
+  
+  return await enviarCorreo(to, subject, html);
+}
