@@ -106,8 +106,10 @@ async function enviarPushFCM({ fcm_token, titulo, cuerpo, data = {} }) {
 export function initSocket(httpServer) {
   io = new Server(httpServer, {
     cors: { origin: '*', credentials: false },
-    pingTimeout: 60000,
-    pingInterval: 25000,
+    pingTimeout: 30000,
+    pingInterval: 15000,
+    // Forzar websocket primero, luego polling como fallback
+    transports: ['websocket', 'polling'],
   });
 
   // ─── Auth middleware ──────────────────────────────────────────────────────
@@ -133,6 +135,11 @@ export function initSocket(httpServer) {
     console.log(`[WS] ✅ Conectado → ${sala}`);
 
     io.emit(`chat:online`, { rol, id, online: true });
+
+    // ── HEARTBEAT — el cliente puede emitir un ping y recibir pong ───────
+    socket.on('chat:ping', (_, cb) => {
+      cb?.({ ok: true, ts: Date.now() });
+    });
 
     // ── ENVIAR MENSAJE ────────────────────────────────────────────────────
     socket.on('chat:enviar', async (data, callback) => {
@@ -243,43 +250,53 @@ export function initSocket(httpServer) {
           );
           msg.entregado = 1;
           socket.emit('chat:entregado', { id_mensaje: msg.id_mensaje });
-        } else {
-          // Offline → enviar push FCM
-          try {
-            const tabla  = rol === 'personal' ? 'suscriptores' : 'personal';
-            const campo  = rol === 'personal' ? 'id_suscriptor' : 'id_personal';
-            const destId = rol === 'personal' ? id_suscriptor : id_personal;
+        }
 
-            const [[destUser]] = await db.query(
-              `SELECT fcm_token FROM ${tabla} WHERE ${campo} = ?`,
-              [destId]
-            );
+        // ── SIEMPRE intentar enviar FCM push como backup ────────────────
+        // Incluso si el socket parece online, el cliente puede tener
+        // una conexión zombi (especialmente en Android con doze mode).
+        // FCM data-only siempre llega a onMessageReceived.
+        // Si el destinatario ya tiene el mensaje por socket, FCM se ignora.
+        try {
+          const tabla  = rol === 'personal' ? 'suscriptores' : 'personal';
+          const campo  = rol === 'personal' ? 'id_suscriptor' : 'id_personal';
+          const destId = rol === 'personal' ? id_suscriptor : id_personal;
 
-            // Obtener nombre del emisor (las tablas usan nombres + apellido_paterno)
-            const tablaEmisor  = rol === 'personal' ? 'personal' : 'suscriptores';
-            const campoEmisor  = rol === 'personal' ? 'id_personal' : 'id_suscriptor';
-            const [[emisor]]   = await db.query(
-              `SELECT CONCAT(nombres, ' ', apellido_paterno) AS nombre
-               FROM ${tablaEmisor} WHERE ${campoEmisor} = ?`,
-              [id]
-            );
+          const [[destUser]] = await db.query(
+            `SELECT fcm_token FROM ${tabla} WHERE ${campo} = ?`,
+            [destId]
+          );
 
-            if (destUser?.fcm_token) {
+          // Obtener nombre del emisor
+          const tablaEmisor  = rol === 'personal' ? 'personal' : 'suscriptores';
+          const campoEmisor  = rol === 'personal' ? 'id_personal' : 'id_suscriptor';
+          const [[emisor]]   = await db.query(
+            `SELECT CONCAT(nombres, ' ', apellido_paterno) AS nombre
+             FROM ${tablaEmisor} WHERE ${campoEmisor} = ?`,
+            [id]
+          );
+
+          if (destUser?.fcm_token) {
+            // Solo enviar FCM si el destinatario NO tiene sockets activos
+            // o si es un dispositivo Android (siempre enviar para máxima fiabilidad)
+            const enviarPush = socketsDestino.length === 0;
+            if (enviarPush) {
               await enviarPushFCM({
                 fcm_token: destUser.fcm_token,
                 titulo:    emisor?.nombre ?? 'Nuevo mensaje',
                 cuerpo:    contenido.trim().substring(0, 100),
                 data: {
-                  tipo:          'chat',
-                  id_personal:   String(id_personal),
-                  id_suscriptor: String(id_suscriptor),
+                  tipo:            'chat',
+                  id_personal:     String(id_personal),
+                  id_suscriptor:   String(id_suscriptor),
                   nombre_personal: emisor?.nombre ?? '',
+                  id_mensaje:      String(msg.id_mensaje),
                 },
               });
             }
-          } catch (errPush) {
-            console.error('[FCM push]', errPush.message);
           }
+        } catch (errPush) {
+          console.error('[FCM push]', errPush.message);
         }
 
         callback?.({ ok: true, mensaje: msg });
