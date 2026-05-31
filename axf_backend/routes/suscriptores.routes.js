@@ -1004,20 +1004,22 @@ router.post('/movil/entrenamiento/serie', verificarSuscriptor, requiereSuscripci
 });
 
 // ── GET /api/suscriptores/movil/aforo ─────────────────────────────────────────
-// Devuelve el aforo actual de la sucursal del suscriptor logueado.
+// Devuelve el aforo actual de la sucursal del suscriptor logueado o de una sucursal específica.
 // Incluye capacidad máxima para mostrar porcentaje en la app móvil.
 router.get('/movil/aforo', verificarSuscriptor, async (req, res) => {
   try {
     const id_suscriptor = req.usuario.id;
+    let id_sucursal = req.query.id_sucursal;
 
-    // Obtener la sucursal del suscriptor (el JWT solo guarda id y rol)
-    const [[sus]] = await db.query(
-      `SELECT id_sucursal_registro FROM suscriptores WHERE id_suscriptor = ?`,
-      [id_suscriptor]
-    );
-    if (!sus) return res.status(404).json({ message: 'Suscriptor no encontrado.' });
-
-    const id_sucursal = sus.id_sucursal_registro;
+    if (!id_sucursal) {
+      // Obtener la sucursal del suscriptor (el JWT solo guarda id y rol)
+      const [[sus]] = await db.query(
+        `SELECT id_sucursal_registro FROM suscriptores WHERE id_suscriptor = ?`,
+        [id_suscriptor]
+      );
+      if (!sus) return res.status(404).json({ message: 'Suscriptor no encontrado.' });
+      id_sucursal = sus.id_sucursal_registro;
+    }
 
     const [[aforo]] = await db.query(
       `SELECT
