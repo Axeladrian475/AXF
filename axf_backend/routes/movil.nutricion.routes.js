@@ -16,6 +16,7 @@ import db      from '../config/database.js';
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { requiereSuscripcionActiva } from '../middlewares/auth.js';
 
 // Fuentes empaquetadas dentro del proyecto → funcionan en Windows, Linux y Mac.
 // Copia los dos .ttf en la carpeta  axf_backend/fonts/
@@ -138,7 +139,7 @@ async function cargarDietaDetalle(id_dieta, id_suscriptor) {
 // ════════════════════════════════════════════════════════════════════════════
 //  GET /api/movil/nutricion/dietas
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/dietas', verificarSuscriptor, async (req, res) => {
+router.get('/dietas', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
   try {
     const id_suscriptor = req.usuario.id;
     const [dietas] = await db.query(
@@ -163,7 +164,7 @@ router.get('/dietas', verificarSuscriptor, async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 //  GET /api/movil/nutricion/dietas/:id
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/dietas/:id', verificarSuscriptor, async (req, res) => {
+router.get('/dietas/:id', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
   try {
     const id_suscriptor = req.usuario.id;
     const id_dieta      = parseInt(req.params.id, 10);
@@ -184,7 +185,7 @@ router.get('/dietas/:id', verificarSuscriptor, async (req, res) => {
 //  Se abre directamente en el navegador del dispositivo, por eso el token
 //  va en la query string en lugar del header Authorization.
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/dietas/:id/pdf', verificarSuscriptorQuery, async (req, res) => {
+router.get('/dietas/:id/pdf', verificarSuscriptorQuery, requiereSuscripcionActiva, async (req, res) => {
   try {
     const id_suscriptor = req.usuario.id;
     const id_dieta      = parseInt(req.params.id, 10);

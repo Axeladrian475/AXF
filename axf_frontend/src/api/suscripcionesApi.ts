@@ -117,7 +117,7 @@ export const suscribirSuscriptor = async (
 export const aplicarPromocion = async (
   id: number,
   data: { id_promocion: number; paypal_order_id?: string | null }
-): Promise<{ message: string; id_suscripcion: number; fecha_inicio: string; fecha_fin: string; acumulada: boolean }> => {
+): Promise<{ message: string; id_suscripcion: number; fecha_inicio: string; fecha_fin: string; acumulada: boolean; solo_sesiones?: boolean }> => {
   const response = await axiosClient.post(`/suscriptores/${id}/aplicar-promo`, data);
   return response.data;
 };

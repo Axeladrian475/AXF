@@ -150,20 +150,43 @@ router.put('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
 // DELETE /api/promociones/:id  — solo sucursal/maestro
 // ────────────────────────────────────────────────────────────────────────────
 router.delete('/:id', verificarToken, soloSucursalOMaestro, async (req, res) => {
+  const conn = await db.getConnection();
   try {
     const { id } = req.params;
     const id_sucursal = req.usuario.id;
 
-    const [result] = await db.query(
-      'DELETE FROM promociones WHERE id_promocion = ? AND id_sucursal = ?',
+    // Verificar que la promoción pertenece a esta sucursal
+    const [[promo]] = await conn.query(
+      'SELECT id_promocion FROM promociones WHERE id_promocion = ? AND id_sucursal = ?',
       [id, id_sucursal]
     );
+    if (!promo) {
+      conn.release();
+      return res.status(404).json({ message: 'Promoción no encontrada' });
+    }
 
-    if (result.affectedRows === 0) return res.status(404).json({ message: 'Promoción no encontrada' });
+    await conn.beginTransaction();
+
+    // Desenlazar suscripciones que referencian esta promoción (FK sin CASCADE)
+    await conn.query(
+      'UPDATE suscripciones SET id_promocion = NULL WHERE id_promocion = ?',
+      [id]
+    );
+
+    // Ahora sí borrar la promoción
+    await conn.query(
+      'DELETE FROM promociones WHERE id_promocion = ?',
+      [id]
+    );
+
+    await conn.commit();
     res.json({ message: 'Promoción eliminada correctamente' });
   } catch (error) {
+    await conn.rollback();
     console.error('[DELETE /promociones/:id]', error);
     res.status(500).json({ message: 'Error al eliminar promoción' });
+  } finally {
+    conn.release();
   }
 });
 

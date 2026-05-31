@@ -314,11 +314,15 @@ export default function TabsAdministrarSuscripcion({ suscriptorId, suscriptorNom
         ? await aplicarPromocion(Number(suscriptorId), { id_promocion: planSeleccionado.id_tipo })
         : await suscribirSuscriptor(Number(suscriptorId), { id_tipo: planSeleccionado.id_tipo })
       setModalPago(false)
-      mostrarToast('ok',
-        res.acumulada
-          ? `✅ Plan acumulado hasta ${fmtFecha(res.fecha_fin)}.`
-          : `✅ Suscripción activa hasta ${fmtFecha(res.fecha_fin)}.`
-      )
+      if (res.solo_sesiones) {
+        mostrarToast('ok', `✅ Promoción aplicada: sesiones agregadas a la suscripción activa.`)
+      } else {
+        mostrarToast('ok',
+          res.acumulada
+            ? `✅ Plan acumulado hasta ${fmtFecha(res.fecha_fin)}.`
+            : `✅ Suscripción activa hasta ${fmtFecha(res.fecha_fin)}.`
+        )
+      }
       cargarDatos()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message

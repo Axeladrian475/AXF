@@ -47,6 +47,7 @@ const FONT_BLD    = path.join(__dirnameR, '..', 'fonts', 'DejaVuSans-Bold.ttf');
 import {
   verificarToken,
   personalOSucursal,
+  requiereSuscripcionActiva,
 } from '../middlewares/auth.js';
 import {
   registrarSuscriptor,
@@ -280,7 +281,7 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
 });
 
 // ── GET /api/suscriptores/movil/rutinas ──────────────────────────────────────
-router.get('/movil/rutinas', verificarSuscriptor, async (req, res) => {
+router.get('/movil/rutinas', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
   try {
     const id = req.usuario.id;
 
@@ -367,6 +368,15 @@ router.get('/movil/rutinas/:id/pdf', async (req, res) => {
     const id_suscriptor = payload.id;
     const id_rutina     = parseInt(req.params.id, 10);
     if (isNaN(id_rutina)) return res.status(400).send('ID de rutina inválido');
+
+    // Verificar suscripción activa
+    const [[subActiva]] = await db.query(
+      `SELECT id_suscripcion FROM suscripciones
+       WHERE id_suscriptor = ? AND estado = 'Activa' AND fecha_fin >= CURDATE()
+       LIMIT 1`,
+      [id_suscriptor]
+    );
+    if (!subActiva) return res.status(403).send('Necesitas una suscripción activa para acceder a este servicio.');
 
     // Cargar rutina + ejercicios
     const [[rutina]] = await db.query(
@@ -488,7 +498,7 @@ router.get('/movil/rutinas/:id/pdf', async (req, res) => {
 });
 
 // ── GET /api/suscriptores/movil/dietas ───────────────────────────────────────
-router.get('/movil/dietas', verificarSuscriptor, async (req, res) => {
+router.get('/movil/dietas', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
   try {
     const id = req.usuario.id;
 
@@ -526,7 +536,7 @@ router.get('/movil/dietas', verificarSuscriptor, async (req, res) => {
 });
 
 // ── GET /api/suscriptores/movil/registros ────────────────────────────────────
-router.get('/movil/registros', verificarSuscriptor, async (req, res) => {
+router.get('/movil/registros', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
   try {
     const id = req.usuario.id;
 
@@ -892,7 +902,7 @@ router.get('/movil/reportes/mis-reportes', verificarSuscriptor, async (req, res)
 // A partir de aquí todos los endpoints usan verificarToken + personalOSucursal
 // ════════════════════════════════════════════════════════════════════════════
 
-router.post('/movil/entrenamiento/serie', verificarSuscriptor, async (req, res) => {
+router.post('/movil/entrenamiento/serie', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
   try {
     const id_suscriptor = req.usuario.id;
     const { id_rutina_ejercicio, num_serie, peso_levantado, reps_realizadas } = req.body;

@@ -14,6 +14,7 @@ import db          from '../config/database.js';
 import PDFDocument from 'pdfkit';
 import path        from 'path';
 import { fileURLToPath } from 'url';
+import { requiereSuscripcionActiva } from '../middlewares/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -60,7 +61,7 @@ function verificarSuscriptorQuery(req, res, next) {
 //  Devuelve el historial completo de un ejercicio para el suscriptor logueado.
 //  Incluye: todas las sesiones (agrupadas por fecha), PR de peso, PR de volumen.
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/historial/:id_rutina_ejercicio', verificarSuscriptor, async (req, res) => {
+router.get('/historial/:id_rutina_ejercicio', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
   try {
     const id_suscriptor       = req.usuario.id;
     const id_rutina_ejercicio = parseInt(req.params.id_rutina_ejercicio, 10);
@@ -142,7 +143,7 @@ router.get('/historial/:id_rutina_ejercicio', verificarSuscriptor, async (req, r
 //  GET /api/movil/entrenamiento/rutinas/:id/pdf?token=<jwt>
 //  Se abre directamente en el navegador del dispositivo (igual que dietas).
 // ════════════════════════════════════════════════════════════════════════════
-router.get('/rutinas/:id/pdf', verificarSuscriptorQuery, async (req, res) => {
+router.get('/rutinas/:id/pdf', verificarSuscriptorQuery, requiereSuscripcionActiva, async (req, res) => {
   try {
     const id_suscriptor = req.usuario.id;
     const id_rutina     = parseInt(req.params.id, 10);

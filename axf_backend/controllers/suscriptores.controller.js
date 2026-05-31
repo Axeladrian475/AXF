@@ -744,28 +744,54 @@ export async function aplicarPromocion(req, res) {
     const fmtDate = (d) => d.toISOString().split('T')[0];
 
     const [[activa]] = await db.query(
-      `SELECT fecha_fin FROM suscripciones
+      `SELECT id_suscripcion, fecha_fin FROM suscripciones
        WHERE id_suscriptor = ? AND estado = 'Activa' AND fecha_fin >= CURDATE()
        ORDER BY fecha_fin DESC LIMIT 1`,
       [id]
     );
 
-    let inicio, fin;
-    if (promo.duracion_dias > 0) {
-      if (activa) {
-        const d = new Date(activa.fecha_fin);
-        d.setDate(d.getDate() + 1);
-        inicio = d;
-      } else {
-        inicio = new Date();
+    // ── Promoción sin días: solo agregar sesiones a la suscripción activa ────
+    if (!promo.duracion_dias || promo.duracion_dias <= 0) {
+      if (!activa) {
+        return res.status(400).json({
+          message: 'El suscriptor no tiene una suscripción activa. Esta promoción solo agrega sesiones y requiere una suscripción vigente.',
+        });
       }
-      fin = new Date(inicio);
-      fin.setDate(fin.getDate() + promo.duracion_dias - 1);
-    } else {
-      // Solo sesiones, sin días
-      inicio = new Date();
-      fin    = new Date();
+
+      // Sumar sesiones directamente a la suscripción activa existente
+      await db.query(
+        `UPDATE suscripciones
+         SET sesiones_nutriologo_restantes = sesiones_nutriologo_restantes + ?,
+             sesiones_entrenador_restantes = sesiones_entrenador_restantes + ?
+         WHERE id_suscripcion = ?`,
+        [promo.sesiones_nutriologo || 0, promo.sesiones_entrenador || 0, activa.id_suscripcion]
+      );
+
+      return res.status(200).json({
+        message: `Promoción "${promo.nombre}" aplicada: sesiones agregadas a la suscripción activa.`,
+        id_suscripcion:       activa.id_suscripcion,
+        fecha_inicio:         fmtDate(new Date(activa.fecha_fin)),
+        fecha_fin:            fmtDate(new Date(activa.fecha_fin)),
+        acumulada:            false,
+        solo_sesiones:        true,
+        sesiones_agregadas: {
+          nutriologo:  promo.sesiones_nutriologo || 0,
+          entrenador:  promo.sesiones_entrenador || 0,
+        },
+      });
     }
+
+    // ── Promoción con días: crear nueva suscripción (acumular si ya hay activa) ──
+    let inicio;
+    if (activa) {
+      const d = new Date(activa.fecha_fin);
+      d.setDate(d.getDate() + 1);
+      inicio = d;
+    } else {
+      inicio = new Date();
+    }
+    const fin = new Date(inicio);
+    fin.setDate(fin.getDate() + promo.duracion_dias - 1);
 
     const [result] = await db.query(
       `INSERT INTO suscripciones
@@ -782,7 +808,7 @@ export async function aplicarPromocion(req, res) {
       id_suscripcion: result.insertId,
       fecha_inicio:   fmtDate(inicio),
       fecha_fin:      fmtDate(fin),
-      acumulada:      !!(activa && promo.duracion_dias > 0),
+      acumulada:      !!activa,
     });
   } catch (error) {
     console.error('[POST /suscriptores/:id/aplicar-promo]', error);
