@@ -14,13 +14,13 @@ interface Aviso {
   leido:     number;
 }
 
-interface AlertaPersonal {
-  id_reporte:                 number;
-  mensaje:                    string;
-  nombre_suscriptor:          string;
-  nombre_personal_reportado?: string;
-  generado_en:                string;
-  leida:                      boolean;
+interface NotificacionSucursal {
+  id_notificacion: number;
+  tipo:            'reporte_personal' | 'strike_3';
+  id_reporte:      number;
+  mensaje:         string;
+  creado_en:       string;
+  leida:           number;
 }
 
 // ─── Formateador corregido ────────────────────────────────────────────────────
@@ -57,11 +57,12 @@ export default function Header() {
   const esPersonal  = user?.rol === 'personal';
   const esSucursal  = user?.rol === 'sucursal';
 
-  // ── Alertas urgentes de reportes de personal (solo sucursal) ───────────
-  const [alertasPersonal, setAlertasPersonal] = useState<AlertaPersonal[]>([]);
-  const [abiertoAlertas,  setAbiertoAlertas]  = useState(false);
-  const panelAlertasRef                       = useRef<HTMLDivElement>(null);
-  const socketSucursalRef                     = useRef<Socket | null>(null);
+  // ── Notificaciones Persistentes (solo sucursal) ────────────────────────
+  const [notifSucursal, setNotifSucursal] = useState<NotificacionSucursal[]>([]);
+  const [noLeidasSuc,   setNoLeidasSuc]   = useState(0);
+  const [abiertoNotif,  setAbiertoNotif]  = useState(false);
+  const panelNotifRef                     = useRef<HTMLDivElement>(null);
+  const socketSucursalRef                 = useRef<Socket | null>(null);
 
   const cargarAvisos = useCallback(async () => {
     if (!esPersonal) return;
@@ -69,18 +70,29 @@ export default function Header() {
       const { data } = await axiosClient.get<{ avisos: Aviso[]; no_leidos: number }>('/avisos/mis-avisos');
       setAvisos(data.avisos);
       setNoLeidos(data.no_leidos);
-    } catch {
-      // silencioso
-    }
+    } catch { /* silencioso */ }
   }, [esPersonal]);
 
-  // Cargar al montar y cada 60 segundos
+  const cargarNotificacionesSucursal = useCallback(async () => {
+    if (!esSucursal) return;
+    try {
+      const { data } = await axiosClient.get<{ notificaciones: NotificacionSucursal[]; no_leidas: number }>('/notificaciones-sucursal');
+      setNotifSucursal(data.notificaciones);
+      setNoLeidasSuc(data.no_leidas);
+    } catch { /* silencioso */ }
+  }, [esSucursal]);
+
+  // Cargar al montar y periódicamente
   useEffect(() => {
     cargarAvisos();
-    if (!esPersonal) return;
-    const interval = setInterval(cargarAvisos, 60_000);
+    cargarNotificacionesSucursal();
+
+    const interval = setInterval(() => {
+      cargarAvisos();
+      cargarNotificacionesSucursal();
+    }, 60_000);
     return () => clearInterval(interval);
-  }, [cargarAvisos, esPersonal]);
+  }, [cargarAvisos, cargarNotificacionesSucursal]);
 
   // ── Socket para avisos en tiempo real ────────────────────────────────────
   useEffect(() => {
@@ -105,7 +117,7 @@ export default function Header() {
     };
   }, [esPersonal, token]);
 
-  // ── Socket para alertas de reportes de personal (solo sucursal) ──────────
+  // ── Socket para notificaciones persistentes (solo sucursal) ──────────
   useEffect(() => {
     if (!esSucursal || !token) return;
 
@@ -116,27 +128,34 @@ export default function Header() {
     });
     socketSucursalRef.current = socket;
 
-    socket.on('reporte:personal_nuevo', (data: Omit<AlertaPersonal, 'leida'>) => {
-      setAlertasPersonal(prev => [{ ...data, leida: false }, ...prev]);
+    // Cuando llega un evento, recargamos la lista desde BD para tener los IDs reales
+    socket.on('reporte:personal_nuevo', () => {
+      cargarNotificacionesSucursal();
+    });
+
+    socket.on('alerta:strike', (data: { nivel: number }) => {
+      if (data.nivel === 3) {
+        cargarNotificacionesSucursal();
+      }
     });
 
     return () => {
       socket.disconnect();
       socketSucursalRef.current = null;
     };
-  }, [esSucursal, token]);
+  }, [esSucursal, token, cargarNotificacionesSucursal]);
 
   // Cerrar panel alertas al clic fuera
   useEffect(() => {
-    if (!abiertoAlertas) return;
+    if (!abiertoNotif) return;
     const handler = (e: MouseEvent) => {
-      if (panelAlertasRef.current && !panelAlertasRef.current.contains(e.target as Node)) {
-        setAbiertoAlertas(false);
+      if (panelNotifRef.current && !panelNotifRef.current.contains(e.target as Node)) {
+        setAbiertoNotif(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [abiertoAlertas]);
+  }, [abiertoNotif]);
 
   // Cerrar panel al hacer clic fuera
   useEffect(() => {
@@ -173,6 +192,24 @@ export default function Header() {
     }
   };
 
+  const marcarTodasNotifSucursalLeidas = async () => {
+    setMarcando(true);
+    try {
+      await axiosClient.put('/notificaciones-sucursal/leer-todas');
+      setNotifSucursal(prev => prev.map(n => ({ ...n, leida: 1 })));
+      setNoLeidasSuc(0);
+    } catch { /* silencioso */ }
+    finally { setMarcando(false); }
+  };
+
+  const marcarNotifSucursalLeida = async (id: number) => {
+    try {
+      await axiosClient.put(`/notificaciones-sucursal/${id}/leer`);
+      setNotifSucursal(prev => prev.map(n => n.id_notificacion === id ? { ...n, leida: 1 } : n));
+      setNoLeidasSuc(prev => Math.max(0, prev - 1));
+    } catch { /* silencioso */ }
+  };
+
   const fotoSrc = user?.foto_url && !imgError
     ? `${BACKEND_URL}${user.foto_url}`
     : null;
@@ -187,81 +224,68 @@ export default function Header() {
 
         {/* ── Campanita urgente (solo sucursal) ────────────────────────── */}
         {esSucursal && (
-          <div className="relative" ref={panelAlertasRef}>
+          <div className="relative" ref={panelNotifRef}>
             <button
-              onClick={() => setAbiertoAlertas(prev => !prev)}
+              onClick={() => setAbiertoNotif(prev => !prev)}
               className="relative p-1.5 rounded-full hover:bg-white/10 transition-colors"
-              title="Reportes de personal"
+              title="Notificaciones de Sucursal"
             >
               <svg
                 className={`w-6 h-6 transition-colors ${
-                  alertasPersonal.some(a => !a.leida) ? 'text-red-500 animate-pulse' : 'text-gray-400'
+                  noLeidasSuc > 0 ? 'text-red-500 animate-pulse' : 'text-gray-400'
                 }`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
               >
                 <path strokeLinecap="round" strokeLinejoin="round"
                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              {alertasPersonal.some(a => !a.leida) && (
+              {noLeidasSuc > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-pulse">
-                  {alertasPersonal.filter(a => !a.leida).length > 9
-                    ? '9+'
-                    : alertasPersonal.filter(a => !a.leida).length}
+                  {noLeidasSuc > 9 ? '9+' : noLeidasSuc}
                 </span>
               )}
             </button>
 
-            {abiertoAlertas && (
+            {abiertoNotif && (
               <div className="absolute right-0 top-11 w-96 bg-[#0f172a] border border-red-800 rounded-xl shadow-2xl z-50 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-red-900 bg-red-950/50">
                   <span className="text-red-400 font-bold text-sm flex items-center gap-1.5">
-                    🚨 Reportes de Personal
+                    🚨 Notificaciones
                   </span>
-                  {alertasPersonal.some(a => !a.leida) && (
+                  {noLeidasSuc > 0 && (
                     <button
-                      onClick={() =>
-                        setAlertasPersonal(prev => prev.map(a => ({ ...a, leida: true })))
-                      }
-                      className="text-xs text-red-400 hover:text-red-200 font-bold transition-colors"
+                      onClick={marcarTodasNotifSucursalLeidas}
+                      disabled={marcando}
+                      className="text-xs text-red-400 hover:text-red-200 font-bold transition-colors disabled:opacity-50"
                     >
-                      Marcar todos leídos
+                      Marcar todas leídas
                     </button>
                   )}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
-                  {alertasPersonal.length === 0 ? (
-                    <p className="text-gray-400 text-sm text-center py-8">Sin alertas de personal</p>
+                  {notifSucursal.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-8">Sin notificaciones</p>
                   ) : (
-                    alertasPersonal.map((a, idx) => (
+                    notifSucursal.map((n) => (
                       <div
-                        key={`${a.id_reporte}-${idx}`}
+                        key={n.id_notificacion}
                         onClick={() => {
-                          setAlertasPersonal(prev =>
-                            prev.map((x, i) => i === idx ? { ...x, leida: true } : x)
-                          );
-                          setAbiertoAlertas(false);
-                          navigate('/reportes');
+                          if (!n.leida) marcarNotifSucursalLeida(n.id_notificacion);
+                          setAbiertoNotif(false);
+                          navigate('/reportes'); // La página principal de reportes (tienen tabs)
                         }}
                         className={`px-4 py-3 border-b border-gray-800 cursor-pointer transition-colors ${
-                          a.leida ? 'opacity-60 hover:bg-white/5' : 'bg-red-950/30 hover:bg-red-950/50'
+                          n.leida ? 'opacity-60 hover:bg-white/5' : 'bg-red-950/30 hover:bg-red-950/50'
                         }`}
                       >
                         <div className="flex items-start gap-2">
-                          {!a.leida && (
+                          {!n.leida && (
                             <span className="mt-1.5 w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse" />
                           )}
-                          <div className={!a.leida ? '' : 'ml-4'}>
-                            <p className="text-white text-xs leading-snug font-semibold">{a.mensaje}</p>
-                            {a.nombre_personal_reportado && (
-                              <p className="text-red-400 text-[10px] mt-0.5">
-                                Personal: {a.nombre_personal_reportado}
-                              </p>
-                            )}
-                            <p className="text-gray-400 text-[10px] mt-0.5">
-                              Reportado por: {a.nombre_suscriptor}
-                            </p>
+                          <div className={!n.leida ? '' : 'ml-4'}>
+                            <p className="text-white text-xs leading-snug font-semibold">{n.mensaje}</p>
                             <p className="text-[#F26A21] text-[10px] mt-0.5 font-semibold">Ver reporte →</p>
-                            <p className="text-gray-500 text-[10px] mt-1">{fmtFecha(a.generado_en)}</p>
+                            <p className="text-gray-500 text-[10px] mt-1">{fmtFecha(n.creado_en)}</p>
                           </div>
                         </div>
                       </div>

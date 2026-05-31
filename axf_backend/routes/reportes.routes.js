@@ -219,7 +219,16 @@ router.post('/crear', verificarSuscriptor, uploadReporte.single('foto'), async (
           [req.usuario.id]
         );
 
-        // Emitir SOLO al encargado de la sucursal (sala sucursal:{id_sucursal})
+        const mensajeAlerta = `🚨 Nuevo reporte de personal recibido. Requiere tu atención inmediata.`;
+
+        // 1. Guardar notificación persistente en BD
+        await db.query(
+          `INSERT INTO notificaciones_sucursal (id_sucursal, tipo, id_reporte, mensaje)
+           VALUES (?, 'reporte_personal', ?, ?)`,
+          [id_sucursal, id_reporte, mensajeAlerta]
+        );
+
+        // 2. Emitir SOLO al encargado de la sucursal (sala sucursal:{id_sucursal})
         io.to(`sucursal:${id_sucursal}`).emit('reporte:personal_nuevo', {
           id_reporte,
           categoria,
@@ -229,12 +238,12 @@ router.post('/crear', verificarSuscriptor, uploadReporte.single('foto'), async (
           nombre_personal_reportado: nombrePersonalReportado,
           foto_url,
           generado_en:               new Date().toISOString(),
-          mensaje: `🚨 Nuevo reporte de personal recibido. Requiere tu atención inmediata.`,
+          mensaje:                   mensajeAlerta,
         });
 
         console.log(`[REPORTE_PERSONAL] Notificado a sucursal:${id_sucursal} → Reporte #${id_reporte}`);
-      } catch (socketErr) {
-        console.warn('[REPORTE_PERSONAL] Socket.io no disponible:', socketErr.message);
+      } catch (err) {
+        console.warn('[REPORTE_PERSONAL] Error al notificar/guardar:', err.message);
       }
     }
 

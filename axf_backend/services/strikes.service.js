@@ -234,8 +234,21 @@ async function emitirNotificaciones(id_reporte, nivel, notificados, id_sucursal,
         puede_reenviar: true, // Habilita el botón "Reenviar a Sucursal" en la app móvil
       });
     }
-  } catch {
-    // Socket.io no disponible (desarrollo sin WS), ignorar silenciosamente
+
+    // ── Guardar notificación persistente en BD para la sucursal (solo Strike 3)
+    if (nivel === 3) {
+      try {
+        await db.query(
+          `INSERT INTO notificaciones_sucursal (id_sucursal, tipo, id_reporte, mensaje)
+           VALUES (?, 'strike_3', ?, ?)`,
+          [id_sucursal, id_reporte, payload.mensaje]
+        );
+      } catch (dbErr) {
+        console.error('[STRIKES] Error al guardar notificación persistente:', dbErr.message);
+      }
+    }
+  } catch (err) {
+    // Socket.io no disponible (desarrollo sin WS), o error general
   }
 }
 
