@@ -37,6 +37,7 @@ import reportesRoutes         from './routes/reportes.routes.js';
 import movilNutricionRoutes    from './routes/movil.nutricion.routes.js';
 import movilEntrenamientoRoutes from './routes/movil.entrenamiento.routes.js';
 import maestroRoutes             from './routes/maestro.routes.js';
+import notificacionesSucursalRoutes from './routes/notificaciones_sucursal.routes.js';
 
 // ── Motor de strikes ─────────────────────────────────────────────────────────
 import { procesarStrikes }      from './services/strikes.service.js';
@@ -74,6 +75,7 @@ app.use('/api/reportes',          reportesRoutes);
 app.use('/api/movil/nutricion',      movilNutricionRoutes);
 app.use('/api/movil/entrenamiento',  movilEntrenamientoRoutes);
 app.use('/api/maestro',              maestroRoutes);
+app.use('/api/notificaciones-sucursal', notificacionesSucursalRoutes);
 
 // ── Crear httpServer y adjuntar Socket.io ─────────────────────────────────────
 const httpServer = createServer(app);
