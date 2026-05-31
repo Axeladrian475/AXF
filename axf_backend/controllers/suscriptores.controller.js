@@ -580,17 +580,40 @@ export async function obtenerSuscripcionActiva(req, res) {
     );
 
     if (suscripciones.length === 0) {
-      return res.json({ activa: false, suscripciones: [], totales: { sesiones_nutriologo: 0, sesiones_entrenador: 0 } });
+      // Incluso si no hay membresía vigente, podría tener sesiones activas
+      const [[totalesSesiones]] = await db.query(
+        `SELECT
+           SUM(sesiones_nutriologo_restantes) AS sesiones_nutriologo,
+           SUM(sesiones_entrenador_restantes) AS sesiones_entrenador
+         FROM suscripciones
+         WHERE id_suscriptor = ? AND estado = 'Activa'`,
+        [id]
+      );
+      
+      return res.json({ 
+        activa: false, 
+        suscripciones: [], 
+        totales: { 
+          sesiones_nutriologo: totalesSesiones?.sesiones_nutriologo || 0, 
+          sesiones_entrenador: totalesSesiones?.sesiones_entrenador || 0 
+        } 
+      });
     }
 
-    // Sumar sesiones restantes de TODAS las suscripciones vigentes
-    const totales = suscripciones.reduce(
-      (acc, s) => ({
-        sesiones_nutriologo: acc.sesiones_nutriologo + (s.sesiones_nutriologo_restantes || 0),
-        sesiones_entrenador: acc.sesiones_entrenador + (s.sesiones_entrenador_restantes || 0),
-      }),
-      { sesiones_nutriologo: 0, sesiones_entrenador: 0 }
+    // Sumar sesiones restantes de TODAS las suscripciones Activas (incluso sin días vigentes)
+    const [[totalesSesiones]] = await db.query(
+      `SELECT
+         SUM(sesiones_nutriologo_restantes) AS sesiones_nutriologo,
+         SUM(sesiones_entrenador_restantes) AS sesiones_entrenador
+       FROM suscripciones
+       WHERE id_suscriptor = ? AND estado = 'Activa'`,
+      [id]
     );
+
+    const totales = {
+      sesiones_nutriologo: totalesSesiones?.sesiones_nutriologo || 0,
+      sesiones_entrenador: totalesSesiones?.sesiones_entrenador || 0,
+    };
 
     res.json({
       activa: true,

@@ -240,18 +240,27 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
       [id]
     );
 
-    // 2) Vencimiento FINAL = MAX(fecha_fin) de todas las suscripciones activas
-    const [[totales]] = await db.query(
+    // 2) Vencimiento FINAL = MAX(fecha_fin) de todas las suscripciones activas (vigentes)
+    const [[totalesVencimiento]] = await db.query(
       `SELECT
          DATE_FORMAT(MAX(s.fecha_fin), '%Y-%m-%d')          AS vencimiento_final,
          GREATEST(DATEDIFF(MAX(s.fecha_fin), CURDATE()), 0) AS dias_restantes,
-         SUM(s.sesiones_nutriologo_restantes)               AS sesiones_nutriologo,
-         SUM(s.sesiones_entrenador_restantes)               AS sesiones_entrenador,
          CURDATE() AS hoy
        FROM suscripciones s
        WHERE s.id_suscriptor = ?
          AND s.estado = 'Activa'
          AND s.fecha_fin >= CURDATE()`,
+      [id]
+    );
+
+    // Totales de sesiones: "no caducan", se suman de todas las suscripciones Activas
+    const [[totalesSesiones]] = await db.query(
+      `SELECT
+         SUM(s.sesiones_nutriologo_restantes)               AS sesiones_nutriologo,
+         SUM(s.sesiones_entrenador_restantes)               AS sesiones_entrenador
+       FROM suscripciones s
+       WHERE s.id_suscriptor = ?
+         AND s.estado = 'Activa'`,
       [id]
     );
 
@@ -265,19 +274,19 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
     console.log(`[SUB /movil/suscripcion]`,
       `id=${id}`,
       `subActiva=${JSON.stringify(subActiva)}`,
-      `totales=${JSON.stringify(totales)}`);
+      `totalesVencimiento=${JSON.stringify(totalesVencimiento)}`);
 
     res.json({
       activa:               !!subActiva,
-      vencimiento_final:    totales?.vencimiento_final    ?? null,
-      dias_restantes:       totales?.dias_restantes       ?? 0,
+      vencimiento_final:    totalesVencimiento?.vencimiento_final    ?? null,
+      dias_restantes:       totalesVencimiento?.dias_restantes       ?? 0,
       nombre_plan:          subActiva?.nombre_plan        ?? null,
       racha_dias:           sus?.racha_dias               ?? 0,
       dias_descanso_semana: sus?.dias_descanso_semana     ?? 0,
       puntos:               sus?.puntos                  ?? 0,
       totales: {
-        sesiones_nutriologo: totales?.sesiones_nutriologo ?? 0,
-        sesiones_entrenador: totales?.sesiones_entrenador ?? 0
+        sesiones_nutriologo: totalesSesiones?.sesiones_nutriologo ?? 0,
+        sesiones_entrenador: totalesSesiones?.sesiones_entrenador ?? 0
       }
     });
   } catch (err) {
