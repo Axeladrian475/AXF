@@ -1599,7 +1599,7 @@ CREATE TABLE `rutina_ejercicios` (
   `id` int(10) UNSIGNED NOT NULL,
   `id_rutina` int(10) UNSIGNED NOT NULL,
   `id_ejercicio` int(10) UNSIGNED NOT NULL,
-  `orden` tinyint(3) UNSIGNED NOT NULL,
+  `orden` smallint(5) UNSIGNED NOT NULL,
   `series` tinyint(3) UNSIGNED NOT NULL,
   `repeticiones` tinyint(3) UNSIGNED NOT NULL,
   `descanso_seg` int(10) UNSIGNED DEFAULT NULL,
