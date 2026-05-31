@@ -64,6 +64,7 @@ import {
   cancelarSuscripcion,
   obtenerHistorialAccesos,
 } from '../controllers/suscriptores.controller.js';
+import { calcularEstadisticasSemana } from '../services/racha.semanal.service.js';
 
 const router = express.Router();
 
@@ -271,11 +272,8 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
       [id]
     );
 
-    // LOG DE DIAGNÓSTICO — ver en consola del servidor
-    console.log(`[SUB /movil/suscripcion]`,
-      `id=${id}`,
-      `subActiva=${JSON.stringify(subActiva)}`,
-      `totalesVencimiento=${JSON.stringify(totalesVencimiento)}`);
+    const diasDescanso = sus?.dias_descanso_semana ?? 0;
+    const statsSemana  = await calcularEstadisticasSemana(db, id, diasDescanso);
 
     res.json({
       activa:               !!subActiva,
@@ -283,13 +281,15 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
       dias_restantes:       totalesVencimiento?.dias_restantes       ?? 0,
       nombre_plan:          subActiva?.nombre_plan        ?? null,
       racha_dias:           sus?.racha_dias               ?? 0,
-      dias_descanso_semana: sus?.dias_descanso_semana     ?? 0,
+      dias_descanso_semana: diasDescanso,
       puntos:               sus?.puntos                  ?? 0,
+      ...statsSemana,
       totales: {
         sesiones_nutriologo: totalesSesiones?.sesiones_nutriologo ?? 0,
         sesiones_entrenador: totalesSesiones?.sesiones_entrenador ?? 0
       }
     });
+
   } catch (err) {
     console.error('[GET /suscriptores/movil/suscripcion]', err);
     res.status(500).json({ message: 'Error al obtener suscripción' });
