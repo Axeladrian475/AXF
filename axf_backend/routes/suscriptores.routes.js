@@ -296,6 +296,31 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
   }
 });
 
+// ── DELETE /api/suscriptores/movil/rutinas/:id ─────────────────────────────────
+router.delete('/movil/rutinas/:id', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
+  try {
+    const idUsuario = req.usuario.id;
+    const idRutina = req.params.id;
+
+    // Verificar que la rutina pertenece al suscriptor
+    const [[rutina]] = await db.query(
+      `SELECT id_rutina FROM rutinas WHERE id_rutina = ? AND id_suscriptor = ?`,
+      [idRutina, idUsuario]
+    );
+
+    if (!rutina) {
+      return res.status(404).json({ message: 'Rutina no encontrada o no pertenece al suscriptor' });
+    }
+
+    await db.query(`DELETE FROM rutinas WHERE id_rutina = ?`, [idRutina]);
+    res.json({ message: 'Rutina eliminada correctamente' });
+
+  } catch (err) {
+    console.error('[DELETE /suscriptores/movil/rutinas/:id]', err);
+    res.status(500).json({ message: 'Error al eliminar rutina' });
+  }
+});
+
 // ── GET /api/suscriptores/movil/rutinas ──────────────────────────────────────
 router.get('/movil/rutinas', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
   try {

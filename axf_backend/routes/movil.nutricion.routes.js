@@ -137,6 +137,33 @@ async function cargarDietaDetalle(id_dieta, id_suscriptor) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  DELETE /api/movil/nutricion/dietas/:id
+// ════════════════════════════════════════════════════════════════════════════
+router.delete('/dietas/:id', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
+  try {
+    const idUsuario = req.usuario.id;
+    const idDieta = req.params.id;
+
+    // Verificar que la dieta pertenece al suscriptor
+    const [[dieta]] = await db.query(
+      `SELECT id_dieta FROM dietas WHERE id_dieta = ? AND id_suscriptor = ?`,
+      [idDieta, idUsuario]
+    );
+
+    if (!dieta) {
+      return res.status(404).json({ message: 'Dieta no encontrada o no pertenece al suscriptor' });
+    }
+
+    await db.query(`DELETE FROM dietas WHERE id_dieta = ?`, [idDieta]);
+    res.json({ message: 'Dieta eliminada correctamente' });
+
+  } catch (err) {
+    console.error('[DELETE /movil/nutricion/dietas/:id]', err);
+    res.status(500).json({ message: 'Error al eliminar dieta' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 //  GET /api/movil/nutricion/dietas
 // ════════════════════════════════════════════════════════════════════════════
 router.get('/dietas', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
