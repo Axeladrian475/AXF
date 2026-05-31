@@ -6,6 +6,7 @@
 // ============================================================================
 
 import db from '../config/database.js';
+import { notificarReporteResuelto } from '../services/mailer.service.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // GET /api/reportes
@@ -240,13 +241,25 @@ export async function resolverReporte(req, res) {
     const { id } = req.params;
 
     const [[reporte]] = await db.query(
-      `SELECT id_reporte, estado FROM reportes WHERE id_reporte = ?`, [id]
+      `SELECT r.id_reporte, r.estado, s.correo 
+       FROM reportes r
+       JOIN suscriptores s ON r.id_suscriptor = s.id_suscriptor
+       WHERE r.id_reporte = ?`, 
+      [id]
     );
+
     // Marcar como resuelto en lugar de eliminar, para conservar historial y análisis
     await db.query(
       `UPDATE reportes SET estado = 'Resuelto', resuelto_en = NOW() WHERE id_reporte = ?`, 
       [id]
     );
+
+    // Enviar correo de notificación al suscriptor (sin detener la respuesta si falla)
+    if (reporte?.correo) {
+      notificarReporteResuelto(reporte.correo, id).catch(err => 
+        console.error('[MAILER] Error no crítico al enviar correo de reporte:', err.message)
+      );
+    }
 
     res.json({ message: 'Reporte resuelto y archivado correctamente.', id_reporte: parseInt(id) });
   } catch (error) {

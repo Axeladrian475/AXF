@@ -10,6 +10,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import db from '../config/database.js';
 import { verificarToken, soloPersonal, getSucursalId } from '../middlewares/auth.js';
+import { notificarNuevaRutina } from '../services/mailer.service.js';
 
 const router = express.Router();
 
@@ -264,6 +265,22 @@ router.post('/rutinas', verificarToken, soloPersonal, soloEntrenador, async (req
     }
 
     await conn.commit();
+
+    // ── Enviar notificación por correo ───────────────────────────────────────
+    try {
+      const [[user]] = await db.query(
+        'SELECT nombres, correo FROM suscriptores WHERE id_suscriptor = ?',
+        [id_suscriptor]
+      );
+      if (user?.correo) {
+        notificarNuevaRutina(user.correo, user.nombres).catch(err => 
+          console.error('[MAILER] Error no crítico al enviar correo de rutina:', err.message)
+        );
+      }
+    } catch (errCorreo) {
+      console.error('[MAILER] Error al obtener datos para correo:', errCorreo.message);
+    }
+
     res.status(201).json({ message: 'Rutina creada y sesión descontada', id_rutina });
   } catch (err) {
     await conn.rollback();

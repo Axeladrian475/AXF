@@ -14,6 +14,7 @@
 import express from 'express';
 import db from '../config/database.js';
 import { verificarToken, soloPersonal, getSucursalId } from '../middlewares/auth.js';
+import { notificarNuevaDieta } from '../services/mailer.service.js';
 
 const router = express.Router();
 
@@ -458,6 +459,22 @@ router.post('/dietas', verificarToken, soloPersonal, soloNutriologo, async (req,
       );
     }
     await conn.commit();
+
+    // ── Enviar notificación por correo ───────────────────────────────────────
+    try {
+      const [[user]] = await db.query(
+        'SELECT nombres, correo FROM suscriptores WHERE id_suscriptor = ?',
+        [id_suscriptor]
+      );
+      if (user?.correo) {
+        notificarNuevaDieta(user.correo, user.nombres).catch(err => 
+          console.error('[MAILER] Error no crítico al enviar correo de dieta:', err.message)
+        );
+      }
+    } catch (errCorreo) {
+      console.error('[MAILER] Error al obtener datos para correo:', errCorreo.message);
+    }
+
     res.status(201).json({ message: 'Dieta creada y sesión descontada', id_dieta: result.insertId });
   } catch (err) {
     await conn.rollback();
