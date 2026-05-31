@@ -245,6 +245,8 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
       `SELECT
          DATE_FORMAT(MAX(s.fecha_fin), '%Y-%m-%d')          AS vencimiento_final,
          GREATEST(DATEDIFF(MAX(s.fecha_fin), CURDATE()), 0) AS dias_restantes,
+         SUM(s.sesiones_nutriologo_restantes)               AS sesiones_nutriologo,
+         SUM(s.sesiones_entrenador_restantes)               AS sesiones_entrenador,
          CURDATE() AS hoy
        FROM suscripciones s
        WHERE s.id_suscriptor = ?
@@ -273,6 +275,10 @@ router.get('/movil/suscripcion', verificarSuscriptor, async (req, res) => {
       racha_dias:           sus?.racha_dias               ?? 0,
       dias_descanso_semana: sus?.dias_descanso_semana     ?? 0,
       puntos:               sus?.puntos                  ?? 0,
+      totales: {
+        sesiones_nutriologo: totales?.sesiones_nutriologo ?? 0,
+        sesiones_entrenador: totales?.sesiones_entrenador ?? 0
+      }
     });
   } catch (err) {
     console.error('[GET /suscriptores/movil/suscripcion]', err);
