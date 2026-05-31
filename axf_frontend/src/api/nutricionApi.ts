@@ -141,6 +141,7 @@ export const getDieta = (id_suscriptor: number) =>
 
 export const crearDieta = (data: {
   id_suscriptor: number;
+  correo_destino?: string;
   comidas: {
     dia:          number;
     orden_comida: number;

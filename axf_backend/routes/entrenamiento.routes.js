@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import db from '../config/database.js';
 import { verificarToken, soloPersonal, getSucursalId } from '../middlewares/auth.js';
 import { notificarNuevaRutina } from '../services/mailer.service.js';
+import { generarRutinaPDFBuffer } from '../services/pdf.service.js';
 
 const router = express.Router();
 
@@ -201,7 +202,7 @@ router.get('/suscriptores', verificarToken, soloPersonal, soloEntrenador, async 
 router.post('/rutinas', verificarToken, soloPersonal, soloEntrenador, async (req, res) => {
   const conn = await db.getConnection();
   try {
-    const { id_suscriptor, notas_pdf, ejercicios } = req.body;
+    const { id_suscriptor, notas_pdf, ejercicios, correo_destino } = req.body;
 
     if (!id_suscriptor || !Array.isArray(ejercicios) || ejercicios.length === 0) {
       return res.status(400).json({ message: 'Suscriptor y al menos un ejercicio son obligatorios' });
@@ -272,13 +273,19 @@ router.post('/rutinas', verificarToken, soloPersonal, soloEntrenador, async (req
         'SELECT nombres, correo FROM suscriptores WHERE id_suscriptor = ?',
         [id_suscriptor]
       );
-      if (user?.correo) {
-        notificarNuevaRutina(user.correo, user.nombres).catch(err => 
+      
+      const emailTarget = correo_destino?.trim() || user?.correo;
+      
+      if (emailTarget) {
+        // Generar buffer del PDF
+        const pdfBuffer = await generarRutinaPDFBuffer(id_rutina, id_suscriptor);
+        
+        notificarNuevaRutina(emailTarget, user?.nombres || 'Suscriptor', pdfBuffer).catch(err => 
           console.error('[MAILER] Error no crítico al enviar correo de rutina:', err.message)
         );
       }
     } catch (errCorreo) {
-      console.error('[MAILER] Error al obtener datos para correo:', errCorreo.message);
+      console.error('[MAILER] Error al obtener datos o generar PDF para correo:', errCorreo.message);
     }
 
     res.status(201).json({ message: 'Rutina creada y sesión descontada', id_rutina });

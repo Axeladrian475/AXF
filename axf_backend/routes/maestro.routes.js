@@ -20,10 +20,7 @@ const router = express.Router();
 router.post('/sucursales', verificarToken, soloMaestro, crearSucursal);
 
 // ─── DELETE /api/maestro/sucursales/:id_sucursal ─────────────────────────────
-<<<<<<< Updated upstream
-=======
 // Borrado FÍSICO transaccional de sucursal + todas sus dependencias
->>>>>>> Stashed changes
 router.delete('/sucursales/:id_sucursal', verificarToken, soloMaestro, eliminarSucursal);
 
 export default router;

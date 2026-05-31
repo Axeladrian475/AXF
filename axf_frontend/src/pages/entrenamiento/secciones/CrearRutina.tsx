@@ -57,6 +57,8 @@ export default function CrearRutina({ onBack }: Props) {
   const [guardando, setGuardando]       = useState(false)
   const [exito, setExito]               = useState('')
   const [errorGuardar, setErrorGuardar] = useState('')
+  const [mostrarModalCorreo, setMostrarModalCorreo] = useState(false)
+  const [correoDestino, setCorreoDestino] = useState('')
 
   // ── Cargar datos ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -136,7 +138,6 @@ export default function CrearRutina({ onBack }: Props) {
     setErrorGuardar('')
 
     try {
-      // Flatten all exercises from all routines into a single list with order
       const todosEjercicios = rutinas.flatMap((r, rIdx) =>
         r.ejercicios.map((ej, ejIdx) => ({
           id_ejercicio: ej.id_ejercicio,
@@ -159,11 +160,13 @@ export default function CrearRutina({ onBack }: Props) {
 
       await crearRutina({
         id_suscriptor: susSel.id_suscriptor,
+        correo_destino: correoDestino.trim() || undefined,
         notas_pdf: notasGlobal || undefined,
         ejercicios: todosEjercicios,
       })
 
-      setExito('✅ Rutina guardada. Generando PDF...')
+      setExito('✅ Rutina guardada. Enviando correo con PDF...')
+      setMostrarModalCorreo(false)
 
       // — Generar PDF profesional automáticamente —
       const fecha = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -204,6 +207,14 @@ export default function CrearRutina({ onBack }: Props) {
     }
   }
 
+  const prepararGuardado = () => {
+    if (rutinas.every(r => r.ejercicios.length === 0)) {
+      setErrorGuardar('Agrega al menos un ejercicio.')
+      return
+    }
+    setErrorGuardar('')
+    setMostrarModalCorreo(true)
+  }
 
   // ── MODAL VERIFICACIÓN ─────────────────────────────────────────────────
   if (verificando) {
@@ -534,14 +545,48 @@ export default function CrearRutina({ onBack }: Props) {
 
             {/* Guardar */}
             <div className="flex justify-end">
-              <button onClick={guardarPlan} disabled={guardando}
-                className="bg-[#ea580c] text-white font-bold px-6 py-2 rounded hover:bg-[#c94a0a] transition-colors text-sm disabled:opacity-50">
-                {guardando ? 'Guardando...' : `💾 Guardar Plan (${rutinas.length} rutina${rutinas.length !== 1 ? 's' : ''})`}
+              <button onClick={prepararGuardado} disabled={guardando}
+                className="bg-[#ea580c] text-white font-bold px-6 py-2 rounded hover:bg-[#c94a0a] transition-colors text-sm disabled:opacity-50 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                {guardando ? 'Guardando...' : `Guardar y Enviar Correo (${rutinas.length} rutina${rutinas.length !== 1 ? 's' : ''})`}
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Modal de Correo */}
+      {mostrarModalCorreo && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="font-bold text-black text-lg mb-2 text-center">Enviar Rutina por Correo</h3>
+            <p className="text-sm text-gray-500 mb-4 text-center">
+              Se enviará la notificación y el PDF al correo registrado del suscriptor. Si deseas usar otro correo, escríbelo aquí:
+            </p>
+            <input 
+              type="email" 
+              placeholder="Correo alternativo (opcional)" 
+              value={correoDestino}
+              onChange={e => setCorreoDestino(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black mb-4 focus:outline-none focus:border-[#ea580c]" 
+            />
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setMostrarModalCorreo(false)}
+                className="flex-1 border border-gray-300 text-black font-bold py-2 rounded text-sm hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button 
+                onClick={guardarPlan} disabled={guardando}
+                className="flex-1 bg-[#ea580c] hover:bg-[#c94a0a] font-bold py-2 rounded text-sm text-white transition-colors">
+                {guardando ? 'Enviando...' : 'Confirmar Envío'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

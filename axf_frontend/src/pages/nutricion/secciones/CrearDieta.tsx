@@ -56,6 +56,8 @@ export default function CrearDieta({ onBack }: Props) {
   const [guardando, setGuardando] = useState(false)
   const [exito, setExito]         = useState('')
   const [errorGuardar, setErrorGuardar] = useState('')
+  const [mostrarModalCorreo, setMostrarModalCorreo] = useState(false)
+  const [correoDestino, setCorreoDestino] = useState('')
 
   // ── Cargar datos ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -221,10 +223,12 @@ export default function CrearDieta({ onBack }: Props) {
 
       await crearDieta({
         id_suscriptor: susSel.id_suscriptor,
+        correo_destino: correoDestino.trim() || undefined,
         comidas: comidasPayload,
       })
 
-      setExito('✅ Dieta guardada. Generando PDF...')
+      setExito('✅ Dieta guardada. Enviando correo con PDF...')
+      setMostrarModalCorreo(false)
 
       const fecha = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
       const usuario = JSON.parse(localStorage.getItem('usuario') ?? '{}')
@@ -249,6 +253,15 @@ export default function CrearDieta({ onBack }: Props) {
     }
   }
 
+  const prepararGuardado = () => {
+    const hayComidas = Object.values(plan).some(coms => coms.length > 0)
+    if (!hayComidas) {
+      setErrorGuardar('Agrega al menos una comida a la dieta.')
+      return
+    }
+    setErrorGuardar('')
+    setMostrarModalCorreo(true)
+  }
 
   // ── MODAL VERIFICACIÓN ────────────────────────────────────────────────────
   if (verificando) {
@@ -551,15 +564,49 @@ export default function CrearDieta({ onBack }: Props) {
 
             {comidas.length > 0 && (
               <div className="flex justify-end mt-5">
-                <button onClick={guardarDieta} disabled={guardando}
-                  className="bg-[#1e293b] text-white font-bold px-8 py-2.5 rounded-lg hover:bg-[#0f172a] transition-colors text-sm disabled:opacity-50 shadow-md">
-                  {guardando ? 'Guardando...' : '💾 Guardar Dieta Completa'}
+                <button onClick={prepararGuardado} disabled={guardando}
+                  className="bg-[#1e293b] text-white font-bold px-8 py-2.5 rounded-lg hover:bg-[#0f172a] transition-colors text-sm disabled:opacity-50 shadow-md flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  {guardando ? 'Guardando...' : 'Guardar y Enviar Correo'}
                 </button>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Modal de Correo */}
+      {mostrarModalCorreo && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="font-bold text-black text-lg mb-2 text-center">Enviar Dieta por Correo</h3>
+            <p className="text-sm text-gray-500 mb-4 text-center">
+              Se enviará la notificación y el PDF al correo registrado del suscriptor. Si deseas usar otro correo, escríbelo aquí:
+            </p>
+            <input 
+              type="email" 
+              placeholder="Correo alternativo (opcional)" 
+              value={correoDestino}
+              onChange={e => setCorreoDestino(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black mb-4 focus:outline-none focus:border-[#ea580c]" 
+            />
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setMostrarModalCorreo(false)}
+                className="flex-1 border border-gray-300 text-black font-bold py-2 rounded text-sm hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button 
+                onClick={guardarDieta} disabled={guardando}
+                className="flex-1 bg-[#1e293b] hover:bg-[#0f172a] font-bold py-2 rounded text-sm text-white transition-colors">
+                {guardando ? 'Enviando...' : 'Confirmar Envío'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

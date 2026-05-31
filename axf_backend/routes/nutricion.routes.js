@@ -15,6 +15,7 @@ import express from 'express';
 import db from '../config/database.js';
 import { verificarToken, soloPersonal, getSucursalId } from '../middlewares/auth.js';
 import { notificarNuevaDieta } from '../services/mailer.service.js';
+import { generarDietaPDFBuffer } from '../services/pdf.service.js';
 
 const router = express.Router();
 
@@ -422,7 +423,7 @@ router.get('/dietas/:id_suscriptor', verificarToken, soloPersonal, soloNutriolog
 router.post('/dietas', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
   const conn = await db.getConnection();
   try {
-    const { id_suscriptor, comidas } = req.body;
+    const { id_suscriptor, comidas, correo_destino } = req.body;
     if (!id_suscriptor || !Array.isArray(comidas) || comidas.length === 0) {
       return res.status(400).json({ message: 'Suscriptor y comidas son obligatorios' });
     }
@@ -466,13 +467,19 @@ router.post('/dietas', verificarToken, soloPersonal, soloNutriologo, async (req,
         'SELECT nombres, correo FROM suscriptores WHERE id_suscriptor = ?',
         [id_suscriptor]
       );
-      if (user?.correo) {
-        notificarNuevaDieta(user.correo, user.nombres).catch(err => 
+      
+      const emailTarget = correo_destino?.trim() || user?.correo;
+      
+      if (emailTarget) {
+        // Generar buffer del PDF
+        const pdfBuffer = await generarDietaPDFBuffer(result.insertId, id_suscriptor);
+        
+        notificarNuevaDieta(emailTarget, user?.nombres || 'Suscriptor', pdfBuffer).catch(err => 
           console.error('[MAILER] Error no crítico al enviar correo de dieta:', err.message)
         );
       }
     } catch (errCorreo) {
-      console.error('[MAILER] Error al obtener datos para correo:', errCorreo.message);
+      console.error('[MAILER] Error al obtener datos o generar PDF para correo:', errCorreo.message);
     }
 
     res.status(201).json({ message: 'Dieta creada y sesión descontada', id_dieta: result.insertId });

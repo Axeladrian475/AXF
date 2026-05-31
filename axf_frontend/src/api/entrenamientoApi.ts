@@ -58,6 +58,7 @@ export interface EjercicioRutina {
 
 export const crearRutina = (data: {
   id_suscriptor: number;
+  correo_destino?: string;
   notas_pdf?: string;
   ejercicios: EjercicioRutina[];
 }) =>
