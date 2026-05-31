@@ -36,6 +36,7 @@ import chatRoutes             from './routes/chat.routes.js';
 import reportesRoutes         from './routes/reportes.routes.js';
 import movilNutricionRoutes    from './routes/movil.nutricion.routes.js';
 import movilEntrenamientoRoutes from './routes/movil.entrenamiento.routes.js';
+import movilTiendaRoutes        from './routes/movil.tienda.routes.js';
 import maestroRoutes             from './routes/maestro.routes.js';
 
 // ── Motor de strikes ─────────────────────────────────────────────────────────
@@ -73,6 +74,7 @@ app.use('/api/chat',              chatRoutes);
 app.use('/api/reportes',          reportesRoutes);
 app.use('/api/movil/nutricion',      movilNutricionRoutes);
 app.use('/api/movil/entrenamiento',  movilEntrenamientoRoutes);
+app.use('/api/movil/tienda',         movilTiendaRoutes);
 app.use('/api/maestro',              maestroRoutes);
 
 // ── Crear httpServer y adjuntar Socket.io ─────────────────────────────────────
