@@ -792,6 +792,7 @@ CREATE TABLE `sucursales` (
   `direccion` varchar(255) NOT NULL,
   `codigo_postal` varchar(10) NOT NULL,
   `usuario` varchar(50) NOT NULL,
+  `correo` varchar(150) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
   `activa` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),

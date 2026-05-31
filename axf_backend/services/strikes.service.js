@@ -132,7 +132,7 @@ async function aplicarStrike(reporte, nivel) {
 
   // ── 2. Obtener datos de la sucursal ───────────────────────────────────────
   const [[sucursal]] = await db.query(
-    `SELECT id_sucursal, nombre, usuario FROM sucursales WHERE id_sucursal = ?`,
+    `SELECT id_sucursal, nombre, usuario, correo FROM sucursales WHERE id_sucursal = ?`,
     [id_sucursal]
   );
 
@@ -187,10 +187,14 @@ async function aplicarStrike(reporte, nivel) {
 
   // ── 8. Enviar correo de alta prioridad (Solo Strike 3) ────────────────────
   if (nivel === 3) {
-    const emailSucursal = sucursal.usuario.includes('@') ? sucursal.usuario : 'gerencia@axfgymnet.com';
-    notificarTercerStrikeSucursal(emailSucursal, id_reporte, sucursal.nombre).catch(err => 
-      console.error('[STRIKES] Error enviando correo de tercer strike a sucursal:', err)
-    );
+    const emailSucursal = sucursal.correo?.trim() || null;
+    if (emailSucursal) {
+      notificarTercerStrikeSucursal(emailSucursal, id_reporte, sucursal.nombre).catch(err =>
+        console.error('[STRIKES] Error enviando correo de tercer strike a sucursal:', err)
+      );
+    } else {
+      console.warn(`[STRIKES] Sucursal ${id_sucursal} sin correo configurado; no se envió alerta de 3er strike por email.`);
+    }
   }
 
   // ── 9. Log detallado para depuración ─────────────────────────────────────

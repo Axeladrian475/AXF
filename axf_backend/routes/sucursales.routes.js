@@ -5,6 +5,14 @@ import db from '../config/database.js';
 import { encryptPassword, decryptPassword } from '../utils/passwordVault.js';
 
 const REVEAL_SECONDS = 8;
+const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validarCorreo(correo) {
+  const c = correo?.trim();
+  if (!c) return 'El correo electrónico es requerido.';
+  if (!REGEX_EMAIL.test(c)) return 'El correo electrónico no es válido.';
+  return null;
+}
 
 const router = express.Router();
 
@@ -39,7 +47,7 @@ function soloMaestro(req, res, next) {
 router.get('/', verificarToken, soloMaestro, async (req, res) => {
   try {
     const [sucursales] = await db.query(
-      'SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, activa, creado_en FROM sucursales WHERE activa = 1 ORDER BY id_sucursal ASC'
+      'SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, correo, activa, creado_en FROM sucursales WHERE activa = 1 ORDER BY id_sucursal ASC'
     );
     res.json(sucursales);
   } catch (error) {
@@ -58,12 +66,16 @@ router.post('/', verificarToken, soloMaestro, async (req, res) => {
     const direccion = req.body.direccion?.trim();
     const codigo_postal = req.body.codigo_postal?.trim();
     const usuario = req.body.usuario?.trim();
+    const correo = req.body.correo?.trim().toLowerCase();
     const password = req.body.password;
 
     // Validar campos requeridos
-    if (!nombre || !direccion || !codigo_postal || !usuario || !password) {
+    if (!nombre || !direccion || !codigo_postal || !usuario || !correo || !password) {
       return res.status(400).json({ message: 'Todos los campos son requeridos' });
     }
+
+    const errCorreo = validarCorreo(correo);
+    if (errCorreo) return res.status(400).json({ message: errCorreo });
 
     // Verificar si el usuario ya existe en la base de datos
     const [existe] = await db.query(
@@ -81,8 +93,8 @@ router.post('/', verificarToken, soloMaestro, async (req, res) => {
       const password_hash = await bcrypt.hash(password, 10);
       const password_enc = encryptPassword(password);
       await db.query(
-        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, password_hash = ?, password_enc = ?, activa = 1 WHERE id_sucursal = ?',
-        [nombre, direccion, codigo_postal, password_hash, password_enc, sucursalExistente.id_sucursal]
+        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, correo = ?, password_hash = ?, password_enc = ?, activa = 1 WHERE id_sucursal = ?',
+        [nombre, direccion, codigo_postal, correo, password_hash, password_enc, sucursalExistente.id_sucursal]
       );
 
       return res.status(200).json({
@@ -96,8 +108,8 @@ router.post('/', verificarToken, soloMaestro, async (req, res) => {
     const password_enc = encryptPassword(password);
 
     const [result] = await db.query(
-      'INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, password_hash, password_enc, activa) VALUES (?, ?, ?, ?, ?, ?, 1)',
-      [nombre, direccion, codigo_postal, usuario, password_hash, password_enc]
+      'INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, correo, password_hash, password_enc, activa) VALUES (?, ?, ?, ?, ?, ?, ?, 1)',
+      [nombre, direccion, codigo_postal, usuario, correo, password_hash, password_enc]
     );
 
     res.status(201).json({
@@ -120,11 +132,15 @@ router.post('/', verificarToken, soloMaestro, async (req, res) => {
 router.put('/:id', verificarToken, soloMaestro, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, direccion, codigo_postal, usuario, password } = req.body;
+    const { nombre, direccion, codigo_postal, usuario, correo, password } = req.body;
 
-    if (!nombre || !direccion || !codigo_postal || !usuario) {
-      return res.status(400).json({ message: 'Nombre, dirección, código postal y usuario son requeridos' });
+    if (!nombre || !direccion || !codigo_postal || !usuario || !correo) {
+      return res.status(400).json({ message: 'Nombre, dirección, código postal, usuario y correo son requeridos' });
     }
+
+    const errCorreo = validarCorreo(correo);
+    if (errCorreo) return res.status(400).json({ message: errCorreo });
+    const correoNorm = correo.trim().toLowerCase();
 
     // Verificar que el usuario no esté en uso por OTRA sucursal activa
     const [existe] = await db.query(
@@ -139,14 +155,14 @@ router.put('/:id', verificarToken, soloMaestro, async (req, res) => {
       const password_hash = await bcrypt.hash(password, 10);
       const password_enc = encryptPassword(password);
       await db.query(
-        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, usuario = ?, password_hash = ?, password_enc = ? WHERE id_sucursal = ?',
-        [nombre, direccion, codigo_postal, usuario, password_hash, password_enc, id]
+        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, usuario = ?, correo = ?, password_hash = ?, password_enc = ? WHERE id_sucursal = ?',
+        [nombre, direccion, codigo_postal, usuario, correoNorm, password_hash, password_enc, id]
       );
     } else {
       // Sin nueva contraseña
       await db.query(
-        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, usuario = ? WHERE id_sucursal = ?',
-        [nombre, direccion, codigo_postal, usuario, id]
+        'UPDATE sucursales SET nombre = ?, direccion = ?, codigo_postal = ?, usuario = ?, correo = ? WHERE id_sucursal = ?',
+        [nombre, direccion, codigo_postal, usuario, correoNorm, id]
       );
     }
 

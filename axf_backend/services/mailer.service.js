@@ -197,10 +197,13 @@ export async function notificarTercerStrikeSucursal(to, id_reporte, nombreSucurs
 }
 
 /**
- * Envía un correo a gerencia cuando se crea un reporte inmediato (al personal).
+ * Envía un correo a la sucursal cuando se crea un reporte inmediato (al personal).
  */
-export async function notificarReporteInmediatoGerencia(id_reporte, nombreSucursal, descripcion, nombrePersonalReportado) {
-  const to = 'gerencia@axfgymnet.com';
+export async function notificarReporteInmediatoGerencia(to, id_reporte, nombreSucursal, descripcion, nombrePersonalReportado) {
+  if (!to) {
+    console.warn('[MAILER] Reporte inmediato sin correo de sucursal configurado.');
+    return false;
+  }
   const subject = `⚠️ ALERTA INMEDIATA: Reporte de Personal en ${nombreSucursal} (Reporte #${id_reporte})`;
   const html = `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #f59e0b; border-radius: 12px; overflow: hidden; background-color: #fffbeb; color: #1e293b;">
@@ -212,7 +215,7 @@ export async function notificarReporteInmediatoGerencia(id_reporte, nombreSucurs
 
       <!-- Cuerpo -->
       <div style="padding: 32px 24px;">
-        <h2 style="color: #b45309; margin-top: 0;">Atención Gerencia</h2>
+        <h2 style="color: #b45309; margin-top: 0;">Atención Sucursal: ${nombreSucursal}</h2>
         <p style="color: #475569; font-size: 16px; line-height: 1.5;">
           Se ha recibido un nuevo reporte categorizado como <strong>Reporte de Personal</strong> en la sucursal <strong>${nombreSucursal}</strong>.
         </p>
@@ -224,7 +227,7 @@ export async function notificarReporteInmediatoGerencia(id_reporte, nombreSucurs
 
       <!-- Footer -->
       <div style="background-color: #fef3c7; padding: 20px; text-align: center; border-top: 1px solid #fde68a;">
-        <p style="color: #92400e; font-size: 12px; margin: 0;">Este es un mensaje automático de alerta de AXF Gymnet para Gerencia.</p>
+        <p style="color: #92400e; font-size: 12px; margin: 0;">Este es un mensaje automático de alerta de AXF Gymnet para la sucursal.</p>
         <p style="color: #b45309; font-size: 12px; margin: 5px 0 0 0;">© ${new Date().getFullYear()} AXF Solutions.</p>
       </div>
     </div>

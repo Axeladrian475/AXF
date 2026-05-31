@@ -17,6 +17,14 @@ const REGEX_MAYUS    = /[A-Z]/;
 const REGEX_MINUS    = /[a-z]/;
 const REGEX_NUMERO   = /[0-9]/;
 const REGEX_ESPECIAL = /[^A-Za-z0-9]/;
+const REGEX_EMAIL    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validarCorreoBackend(correo) {
+  const c = correo?.trim();
+  if (!c) return 'El correo electrónico es requerido.';
+  if (!REGEX_EMAIL.test(c)) return 'El correo electrónico no es válido.';
+  return null;
+}
 
 /**
  * validarPasswordBackend
@@ -65,16 +73,22 @@ function validarPasswordBackend(password, usuario) {
  */
 export async function crearSucursal(req, res) {
   // ─── 1. Desestructurar payload (debe coincidir EXACTAMENTE con lo que envía React) ────
-  // React envía: { nombre, direccion, codigo_postal, usuario, password }
-  const { nombre, direccion, codigo_postal, usuario, password } = req.body;
+  // React envía: { nombre, direccion, codigo_postal, usuario, correo, password }
+  const { nombre, direccion, codigo_postal, usuario, correo, password } = req.body;
 
   // ─── 2. Validación RQF2 / RQNF4: ningún campo requerido puede estar vacío ────
-  if (!nombre || !direccion || !codigo_postal || !usuario || !password) {
+  if (!nombre || !direccion || !codigo_postal || !usuario || !correo || !password) {
     return res.status(400).json({
       success: false,
-      message: 'Todos los campos son requeridos: nombre, dirección, código postal, usuario y contraseña.',
+      message: 'Todos los campos son requeridos: nombre, dirección, código postal, usuario, correo y contraseña.',
     });
   }
+
+  const errorCorreo = validarCorreoBackend(correo);
+  if (errorCorreo) {
+    return res.status(400).json({ success: false, message: errorCorreo });
+  }
+  const correoNorm = correo.trim().toLowerCase();
 
   // ─── 3. Validación RQNF3: fortaleza de contraseña en el backend ─────────────
   // Crítico: no confiar solo en la validación del frontend para proteger el API.
@@ -110,9 +124,9 @@ export async function crearSucursal(req, res) {
 
       await db.query(
         `UPDATE sucursales
-            SET nombre = ?, direccion = ?, codigo_postal = ?, password_hash = ?, activa = 1
+            SET nombre = ?, direccion = ?, codigo_postal = ?, correo = ?, password_hash = ?, activa = 1
           WHERE id_sucursal = ?`,
-        [nombre, direccion, codigo_postal, password_hash, sucursalExistente.id_sucursal]
+        [nombre, direccion, codigo_postal, correoNorm, password_hash, sucursalExistente.id_sucursal]
       );
 
       return res.status(200).json({
@@ -133,9 +147,9 @@ export async function crearSucursal(req, res) {
     // La columna `capacidad_maxima` usa DEFAULT 50 en la BD y NO se incluye
     // en el INSERT para evitar desajuste de columnas / valores.
     const [result] = await db.query(
-      `INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, password_hash, activa)
-       VALUES (?, ?, ?, ?, ?, 1)`,
-      [nombre, direccion, codigo_postal, usuario, password_hash]
+      `INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, correo, password_hash, activa)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      [nombre, direccion, codigo_postal, usuario, correoNorm, password_hash]
     );
 
     return res.status(201).json({

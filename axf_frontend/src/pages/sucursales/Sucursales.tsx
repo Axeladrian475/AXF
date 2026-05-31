@@ -22,8 +22,11 @@ const FORM_VACIO: SucursalFormData = {
   direccion: '',
   codigo_postal: '',
   usuario: '',
+  correo: '',
   password: '',
 }
+
+const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Sucursales() {
   const [activeTab, setActiveTab] = useState<'agregar' | 'buscar' | 'modificar'>('agregar')
@@ -180,6 +183,14 @@ export default function Sucursales() {
   // ────────────────────────────────────────────────────────────────────────────
   const handleAgregar = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!formAgregar.correo.trim()) {
+      setError('El correo electrónico es requerido')
+      return
+    }
+    if (!REGEX_EMAIL.test(formAgregar.correo.trim())) {
+      setError('El correo electrónico no es válido')
+      return
+    }
     if (!formAgregar.password) {
       setError('La contraseña es requerida para una nueva sucursal')
       return
@@ -221,6 +232,7 @@ export default function Sucursales() {
       direccion: sucursal.direccion,
       codigo_postal: sucursal.codigo_postal,
       usuario: sucursal.usuario,
+      correo: sucursal.correo ?? '',
       password: '',
     })
     setActiveTab('modificar')
@@ -229,6 +241,14 @@ export default function Sucursales() {
   const handleModificar = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedSucursal) return
+    if (!formModificar.correo.trim()) {
+      setError('El correo electrónico es requerido')
+      return
+    }
+    if (!REGEX_EMAIL.test(formModificar.correo.trim())) {
+      setError('El correo electrónico no es válido')
+      return
+    }
     // Validar contraseña RQNF3 solo si se escribió algo
     if (formModificar.password.trim()) {
       const errPass = validarPassword(formModificar.password, formModificar.usuario)
@@ -419,6 +439,22 @@ export default function Sucursales() {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-bold text-black italic mb-1">Correo Electrónico:</label>
+                  <input
+                    type="email"
+                    value={formAgregar.correo}
+                    onChange={e => setFormAgregar({ ...formAgregar, correo: e.target.value })}
+                    required
+                    autoComplete="off"
+                    placeholder="correo@sucursal.com"
+                    className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                  />
+                  <p className="text-xs text-gray-600 mt-1">
+                    Recibirá alertas de 3er strike y reportes al personal en este correo.
+                  </p>
+                </div>
+
+                <div>
                   <label className="block text-sm font-bold text-black italic mb-1">Contraseña:</label>
                   <div className="relative">
                     <input
@@ -492,6 +528,7 @@ export default function Sucursales() {
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Dirección</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">C. Postal</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Usuario Admin</th>
+                        <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Correo</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Contraseña</th>
                         <th className="border border-gray-400 px-4 py-2 text-black font-bold text-sm">Acciones</th>
                       </tr>
@@ -499,7 +536,7 @@ export default function Sucursales() {
                     <tbody>
                       {sucursalesFiltradas.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="border border-gray-400 px-4 py-4 text-center text-gray-500 text-sm">
+                          <td colSpan={8} className="border border-gray-400 px-4 py-4 text-center text-gray-500 text-sm">
                             No se encontraron sucursales
                           </td>
                         </tr>
@@ -511,6 +548,11 @@ export default function Sucursales() {
                             <td className="border border-gray-400 px-4 py-2 text-black">{sucursal.direccion}</td>
                             <td className="border border-gray-400 px-4 py-2 text-center text-black">{sucursal.codigo_postal}</td>
                             <td className="border border-gray-400 px-4 py-2 text-black">{sucursal.usuario}</td>
+                            <td className="border border-gray-400 px-4 py-2 text-black text-sm">
+                              {sucursal.correo || (
+                                <span className="text-orange-700 text-xs font-semibold">Sin correo — actualice en Modificar</span>
+                              )}
+                            </td>
                             <td className="border border-gray-400 px-4 py-2 min-w-[200px]">
                               {revealedById[sucursal.id_sucursal] ? (
                                 <div className="flex flex-col gap-1">
@@ -643,6 +685,21 @@ export default function Sucursales() {
                       required
                       className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-black italic mb-1">Correo Electrónico:</label>
+                    <input
+                      type="email"
+                      value={formModificar.correo}
+                      onChange={e => setFormModificar({ ...formModificar, correo: e.target.value })}
+                      required
+                      placeholder="correo@sucursal.com"
+                      className="w-full bg-[#d9d9d9] border border-gray-400 rounded px-3 py-2 text-black"
+                    />
+                    <p className="text-xs text-gray-600 mt-1">
+                      Recibirá alertas de 3er strike y reportes al personal en este correo.
+                    </p>
                   </div>
 
                   <div>

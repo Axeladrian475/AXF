@@ -6,6 +6,7 @@ export interface Sucursal {
   direccion: string;
   codigo_postal: string;
   usuario: string;
+  correo?: string | null;
   activa: number;
   creado_en: string;
   password_recuperable?: boolean | number;
@@ -22,6 +23,7 @@ export interface SucursalFormData {
   direccion: string;
   codigo_postal: string;
   usuario: string;
+  correo: string;
   password?: string;
 }
 
@@ -36,7 +38,7 @@ export const getSucursales = async (): Promise<Sucursal[]> => {
  * CORRECCIÓN: El endpoint correcto es POST /api/maestro/sucursales.
  * Antes apuntaba a POST /api/sucursales (ruta genérica sin lógica
  * de validación RQNF3 en backend y sin manejo semántico de errores).
- * El payload que envía React { nombre, direccion, codigo_postal, usuario, password }
+ * El payload que envía React { nombre, direccion, codigo_postal, usuario, correo, password }
  * coincide EXACTAMENTE con lo que desestructura el controlador en Node.js.
  */
 export const crearSucursal = async (

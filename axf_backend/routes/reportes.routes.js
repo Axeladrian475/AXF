@@ -245,10 +245,19 @@ router.post('/crear', verificarSuscriptor, uploadReporte.single('foto'), async (
         console.log(`[REPORTE_PERSONAL] Notificado a sucursal:${id_sucursal} → Reporte #${id_reporte}`);
 
         // 3. Notificar a Gerencia por correo
-        const [[sucursalData]] = await db.query(`SELECT nombre FROM sucursales WHERE id_sucursal = ?`, [id_sucursal]);
+        const [[sucursalData]] = await db.query(
+          `SELECT nombre, correo FROM sucursales WHERE id_sucursal = ?`,
+          [id_sucursal]
+        );
         const nombreSucursal = sucursalData?.nombre || `Sucursal ${id_sucursal}`;
-        notificarReporteInmediatoGerencia(id_reporte, nombreSucursal, descripcion, nombrePersonalReportado).catch(err => 
-          console.error('[MAILER] Error al enviar reporte inmediato a gerencia:', err.message)
+        notificarReporteInmediatoGerencia(
+          sucursalData?.correo,
+          id_reporte,
+          nombreSucursal,
+          descripcion,
+          nombrePersonalReportado
+        ).catch(err =>
+          console.error('[MAILER] Error al enviar reporte inmediato a sucursal:', err.message)
         );
 
       } catch (err) {

@@ -16,7 +16,7 @@ const router = express.Router();
 
 // ─── POST /api/maestro/sucursales ────────────────────────────────────────────
 // Crea una nueva sucursal (o reactiva una desactivada con el mismo usuario).
-// Requiere: { nombre, direccion, codigo_postal, usuario, password }
+// Requiere: { nombre, direccion, codigo_postal, usuario, correo, password }
 router.post('/sucursales', verificarToken, soloMaestro, crearSucursal);
 
 // ─── DELETE /api/maestro/sucursales/:id_sucursal ─────────────────────────────
