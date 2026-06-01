@@ -44,6 +44,29 @@ export interface DietaPDFData {
   fecha:       string
 }
 
+// ── Análisis Incidencias ────────────────────────────────────────────────────
+
+export interface AnalisisPDFData {
+  sucursal: string
+  fechaInicio: string
+  fechaFin: string
+  fechaGeneracion: string
+  metricas: {
+    total: number
+    total_estadistico: number
+    resueltos: number
+    pendientes: number
+    tasa_resolucion: number
+  }
+  reportes_prioritarios: any[]
+  todos_resueltos: any[]
+  todos_pendientes: any[]
+  categorias: any[]
+  personal: any[]
+  chartEstado?: string | null
+  chartCategorias?: string | null
+}
+
 // ── Helper: abrir ventana e imprimir ──────────────────────────────────────
 
 function imprimirVentana(html: string) {
@@ -648,6 +671,286 @@ export function generarPDFHistorial(data: HistorialPDFData) {
       <span class="brand">AXF GymNet</span>
       <span>Documento generado el ${data.fecha}</span>
       <span>Uso exclusivo del suscriptor</span>
+    </div>
+  </div>
+</body>
+</html>`
+
+  imprimirVentana(html)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ANÁLISIS DE INCIDENCIAS
+// ════════════════════════════════════════════════════════════════════════════
+
+export function generarPDFAnalisis(data: AnalisisPDFData) {
+  const formatearFecha = (iso: string) => {
+    return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  const prioritariosHtml = data.reportes_prioritarios.length > 0
+    ? data.reportes_prioritarios.map(r => `
+      <div style="border: 1px solid #fca5a5; background: #fef2f2; border-radius: 8px; padding: 12px; margin-bottom: 10px; page-break-inside: avoid;">
+        <div style="display:flex; justify-content: space-between; margin-bottom: 4px;">
+          <span style="font-weight: 800; color: #991b1b; font-size: 13px;">#${r.id_reporte} - ${r.categoria.replace(/_/g, ' ')}</span>
+          <span style="background: #ef4444; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;">
+            ${r.num_strikes} Strikes
+          </span>
+        </div>
+        <div style="color: #475569; font-size: 11px; margin-bottom: 8px;"><strong>Descripción del caso:</strong> ${r.descripcion}</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #fca5a5; padding-top: 8px;">
+          <span style="font-size: 10px; color: #991b1b; font-weight: 700;">Estado: ${r.estado}</span>
+          <span style="font-size: 10px; color: #64748b;">Reportado el: ${formatearFecha(r.creado_en)}</span>
+        </div>
+      </div>
+    `).join('')
+    : '<div style="color: #64748b; font-size: 11px; font-style: italic; padding: 10px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; text-align: center;">No se encontraron incidentes críticos en este periodo. Excelente gestión.</div>'
+
+  const categoriasHtml = data.categorias && data.categorias.length > 0
+    ? `<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
+        ${data.categorias.map(c => `
+          <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; text-align: center; background: #f8fafc; page-break-inside: avoid;">
+            <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">${c.name.replace(/_/g, ' ')}</div>
+            <div style="font-size: 18px; color: #ea580c; font-weight: 900; margin-top: 4px;">${c.cantidad}</div>
+            <div style="font-size: 9px; color: #94a3b8;">incidentes reportados</div>
+          </div>
+        `).join('')}
+       </div>`
+    : '<div style="margin-bottom: 20px; color: #64748b; font-size: 11px; font-style: italic;">Sin suficientes datos de categorías.</div>'
+
+  const pendientesHtml = data.todos_pendientes.length > 0
+    ? data.todos_pendientes.map(r => `
+      <tr style="border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; background: #fffbeb;">
+        <td style="padding: 8px; font-weight: 700; color: #92400e;">#${r.id_reporte}</td>
+        <td style="padding: 8px; color: #475569;">${r.categoria.replace(/_/g, ' ')}</td>
+        <td style="padding: 8px; color: #64748b; font-size: 10px;">${r.descripcion}</td>
+        <td style="padding: 8px; text-align: center; font-size: 10px;">${formatearFecha(r.creado_en)}</td>
+        <td style="padding: 8px; text-align: center; font-weight: bold; color: #b45309;">${r.num_strikes}</td>
+      </tr>
+    `).join('')
+    : '<tr><td colspan="5" style="padding: 12px; text-align: center; color: #64748b; font-style: italic;">No hay reportes pendientes de resolución.</td></tr>'
+
+  const resueltosHtml = data.todos_resueltos.length > 0
+    ? data.todos_resueltos.map(r => {
+        const diffMs = new Date(r.resuelto_en).getTime() - new Date(r.creado_en).getTime()
+        const horas = Math.floor(diffMs / (1000 * 60 * 60))
+        return `
+        <tr style="border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; background: #f0fdf4;">
+          <td style="padding: 8px; font-weight: 700; color: #166534;">#${r.id_reporte}</td>
+          <td style="padding: 8px; color: #475569;">${r.categoria.replace(/_/g, ' ')}</td>
+          <td style="padding: 8px; text-align: center; font-size: 10px;">${formatearFecha(r.creado_en)}</td>
+          <td style="padding: 8px; text-align: center; font-size: 10px; color: #15803d; font-weight: bold;">${formatearFecha(r.resuelto_en)}</td>
+          <td style="padding: 8px; text-align: center; font-weight: bold; color: #475569;">${horas}h</td>
+        </tr>
+      `}).join('')
+    : '<tr><td colspan="5" style="padding: 12px; text-align: center; color: #64748b; font-style: italic;">No hay reportes resueltos en este periodo.</td></tr>'
+
+  const personalRows = data.personal.map((p, i) => `
+    <tr style="background: ${i % 2 === 0 ? '#fff' : '#f8fafc'}; page-break-inside: avoid; border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 10px; font-weight: 700; color: #1e293b;">
+        ${p.nombre}<br>
+        <span style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase;">${p.puesto.replace(/_/g, ' ')}</span>
+      </td>
+      <td style="padding: 10px; text-align: center; color: #64748b; font-weight: 600;">${p.total_dietas}</td>
+      <td style="padding: 10px; text-align: center; color: #64748b; font-weight: 600;">${p.total_rutinas}</td>
+      <td style="padding: 10px; text-align: center; color: #2563eb; font-weight: 800;">${p.total_servicios}</td>
+      <td style="padding: 10px; text-align: center; color: #dc2626; font-weight: 800;">${p.total_reportes}</td>
+      <td style="padding: 10px; text-align: center;">
+        <span style="padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; 
+          background: ${p.total_reportes === 0 ? '#dcfce7' : p.tasa_reportes > 10 || p.tasa_reportes === Infinity ? '#fee2e2' : '#fef3c7'};
+          color: ${p.total_reportes === 0 ? '#15803d' : p.tasa_reportes > 10 || p.tasa_reportes === Infinity ? '#b91c1c' : '#b45309'};">
+          ${p.total_reportes === 0 ? '0%' : p.tasa_reportes === Infinity ? 'Crítico' : `${p.tasa_reportes}%`}
+        </span>
+      </td>
+    </tr>
+  `).join('')
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Informe Exhaustivo de Incidencias — AXF GymNet</title>
+  <style>
+    ${BASE_CSS}
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px 12px;
+      text-align: center;
+      page-break-inside: avoid;
+    }
+    .stat-card.main { border-color: #ea580c; background: #fffaf5; }
+    .stat-card.success { border-color: #10b981; background: #f0fdf4; }
+    .stat-card.warning { border-color: #f59e0b; background: #fffbeb; }
+    
+    .stat-card .val { font-size: 24px; font-weight: 900; }
+    .stat-card.main .val { color: #ea580c; }
+    .stat-card.success .val { color: #10b981; }
+    .stat-card.warning .val { color: #f59e0b; }
+    
+    .stat-card .lbl { font-size: 10px; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 11px;
+      margin-bottom: 24px;
+    }
+    .data-table thead tr { background: #1e293b; }
+    .data-table thead th {
+      padding: 10px;
+      color: #f8fafc;
+      font-size: 10px;
+      text-align: left;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="${LOGO_URL}" alt="AXF GymNet" onerror="this.style.display='none'" />
+    <div class="header-right">
+      <div class="doc-title" style="font-size: 18px; text-transform: uppercase;">Informe Directivo de Incidencias</div>
+      <div class="doc-date">Evaluación de Periodo: ${data.fechaInicio} — ${data.fechaFin}</div>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="info-card">
+      <div class="info-accent"></div>
+      <div class="info-body">
+        <div class="name">Sucursal Operativa: ${data.sucursal}</div>
+        <div class="meta" style="margin-top: 10px;">
+          <span>Fecha de Generación: <strong>${data.fechaGeneracion}</strong></span>
+          <span>Impacto Estadístico (Total Histórico en Fechas): <strong style="color: #ea580c;">${data.metricas.total_estadistico} quejas procesadas</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESUMEN EJECUTIVO -->
+    <div class="section-title">Resumen Ejecutivo</div>
+    <div style="font-size: 12px; color: #475569; margin-bottom: 16px; line-height: 1.6; text-align: justify;">
+      Este documento presenta un análisis detallado del desempeño del servicio y la gestión de quejas en la sucursal <strong>${data.sucursal}</strong>. Durante el periodo comprendido entre <strong>${data.fechaInicio}</strong> y <strong>${data.fechaFin}</strong>, se han registrado un total de <strong>${data.metricas.total}</strong> reportes activos, alcanzando una tasa de resolución global del <strong>${data.metricas.tasa_resolucion}%</strong>. El objetivo de este informe es proveer visibilidad sobre áreas críticas, identificar deficiencias operativas y evaluar la eficiencia del equipo de trabajo frente a las solicitudes de los suscriptores.
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card main">
+        <div class="val">${data.metricas.total}</div>
+        <div class="lbl">Reportes Ingresados</div>
+      </div>
+      <div class="stat-card success">
+        <div class="val">${data.metricas.tasa_resolucion}%</div>
+        <div class="lbl">Tasa de Efectividad</div>
+      </div>
+      <div class="stat-card success">
+        <div class="val">${data.metricas.resueltos}</div>
+        <div class="lbl">Casos Cerrados</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="val">${data.metricas.pendientes}</div>
+        <div class="lbl">Casos Pendientes</div>
+      </div>
+    </div>
+
+    <!-- CATEGORIZACION -->
+    <div class="section-title">Análisis Visual y Categorización</div>
+    
+    <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+      ${data.chartEstado 
+        ? `<div style="flex: 1; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; background: #fff; page-break-inside: avoid;">
+             <div style="font-size: 11px; font-weight: 700; color: #1e293b; margin-bottom: 10px;">Estado de Reportes</div>
+             <img src="${data.chartEstado}" style="width: 100%; max-height: 200px; object-fit: contain;" />
+           </div>`
+        : ''}
+      
+      ${data.chartCategorias
+        ? `<div style="flex: 2; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; background: #fff; page-break-inside: avoid;">
+             <div style="font-size: 11px; font-weight: 700; color: #1e293b; margin-bottom: 10px;">Distribución de Reportes por Categoría</div>
+             <img src="${data.chartCategorias}" style="width: 100%; max-height: 200px; object-fit: contain;" />
+           </div>`
+        : ''}
+    </div>
+
+    ${categoriasHtml}
+
+    <!-- ALERTA CRITICA -->
+    <div class="section-title" style="color: #b91c1c; border-bottom-color: #fca5a5;">🚨 Reportes de Atención Inmediata (Prioridad Alta y Críticos)</div>
+    <div style="font-size: 11px; color: #475569; margin-bottom: 12px; line-height: 1.4;">
+      A continuación se detallan los incidentes que requieren acción directiva, incluyendo aquellos que han superado los 3 strikes (quejas reiteradas del mismo suscriptor) o que pertenecen a categorías de alto riesgo como comportamiento del personal o fallas graves en equipo.
+    </div>
+    <div style="margin-bottom: 24px;">
+      ${prioritariosHtml}
+    </div>
+
+    <!-- PERSONAL -->
+    <div class="section-title" style="color: #1d4ed8; border-bottom-color: #bfdbfe;">👥 Auditoría de Desempeño del Personal</div>
+    <div style="font-size: 11px; color: #475569; margin-bottom: 12px; line-height: 1.4;">
+      Relación entre los servicios impartidos por el personal y la cantidad de quejas recibidas en su contra. Una Tasa de Riesgo superior al 10% requiere evaluación.
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Personal y Cargo</th>
+          <th style="text-align: center;">Dietas Asignadas</th>
+          <th style="text-align: center;">Rutinas Asignadas</th>
+          <th style="text-align: center;">Total Servicios</th>
+          <th style="text-align: center; color: #fca5a5;">Quejas en Contra</th>
+          <th style="text-align: center;">Tasa de Riesgo</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${personalRows || '<tr><td colspan="6" style="padding:20px;text-align:center;color:#64748b;">No hay personal activo con servicios en este análisis.</td></tr>'}
+      </tbody>
+    </table>
+
+    <!-- INVENTARIO PENDIENTES -->
+    <div class="section-title" style="color: #b45309; border-bottom-color: #fde68a;">⏳ Inventario de Reportes Pendientes de Acción</div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 10%;">ID</th>
+          <th style="width: 25%;">Categoría</th>
+          <th style="width: 35%;">Descripción</th>
+          <th style="width: 20%; text-align: center;">Fecha de Creación</th>
+          <th style="width: 10%; text-align: center;">Strikes</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${pendientesHtml}
+      </tbody>
+    </table>
+
+    <!-- INVENTARIO RESUELTOS -->
+    <div class="section-title" style="color: #15803d; border-bottom-color: #bbf7d0;">✅ Histórico de Reportes Solucionados</div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 10%;">ID</th>
+          <th style="width: 30%;">Categoría</th>
+          <th style="width: 25%; text-align: center;">Apertura</th>
+          <th style="width: 25%; text-align: center;">Cierre</th>
+          <th style="width: 10%; text-align: center;">Tiempo</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${resueltosHtml}
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <span class="brand">AXF GymNet Operaciones</span>
+      <span>Documento Confidencial Generado Automáticamente</span>
+      <span>Página 1 de 1</span>
     </div>
   </div>
 </body>

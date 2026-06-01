@@ -185,8 +185,8 @@ function notificarClientes(token, payload) {
 // ════════════════════════════════════════════════════════════════════════════
 router.post('/token', async (req, res) => {
   const { tipo } = req.body;
-  if (!['nfc', 'huella', 'huella_enroll', 'huella_leer'].includes(tipo)) {
-    return res.status(400).json({ message: 'tipo inválido' });
+  if (!['nfc'].includes(tipo)) {
+    return res.status(400).json({ message: 'tipo inválido — solo se acepta "nfc"' });
   }
 
   const token = crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -226,8 +226,8 @@ router.get('/siguiente/:tipo', verificarApiKey, async (req, res) => {
     );
     sesion = rows[0];
   } else {
-    if (!['nfc', 'huella', 'huella_enroll', 'huella_leer'].includes(tipo)) {
-      return res.status(400).json({ message: 'tipo inválido' });
+    if (!['nfc'].includes(tipo)) {
+      return res.status(400).json({ message: 'tipo inválido — solo se acepta "nfc"' });
     }
     const [rows] = await db.query(
       `SELECT token, tipo FROM hardware_sesiones
@@ -304,8 +304,8 @@ router.post('/cancelar', verificarApiKey, async (req, res) => {
 router.post('/evento', verificarApiKey, async (req, res) => {
   const { tipo, valor, token_sesion } = req.body;
   if (!valor || !token_sesion) return res.status(400).json({ message: 'valor y token_sesion son requeridos' });
-  if (!['nfc', 'huella', 'huella_enroll', 'huella_leer'].includes(tipo)) {
-    return res.status(400).json({ message: 'Tipo de evento inválido' });
+  if (!['nfc'].includes(tipo)) {
+    return res.status(400).json({ message: 'Tipo de evento inválido — solo se acepta "nfc"' });
   }
 
   const [[sesion]] = await db.query(
@@ -423,8 +423,8 @@ router.get('/poll/:token', async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 router.post('/acceso', verificarApiKey, async (req, res) => {
   const { tipo, valor } = req.body;
-  if (!['nfc', 'huella'].includes(tipo) || !valor) {
-    return res.status(400).json({ message: 'tipo ("nfc" o "huella") y valor son requeridos' });
+  if (tipo !== 'nfc' || !valor) {
+    return res.status(400).json({ message: 'tipo "nfc" y valor son requeridos' });
   }
 
   try {

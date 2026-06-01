@@ -1,9 +1,8 @@
 // ============================================================================
 //  pages/usuarios/tabs/TabsRegistrarNuevo.tsx
-//  Formulario de registro — integración ESP32 (NFC + Huella dactilar)
+//  Formulario de registro — integración ESP32 (Solo NFC)
 //
-//  Flujo de captura NFC / Huella (v6 — SSE):
-//  1. Personal presiona "Leer NFC" o "Escanear Huella"
+//  Flujo de captura NFC (v7 — SSE, solo NFC):
 //  2. Se llama POST /api/hardware/token → devuelve token
 //  3. Se abre un EventSource a GET /api/hardware/sse/:token
 //  4. El ESP32 recoge el token y reporta pasos → llegan en ~0ms vía SSE
@@ -11,7 +10,7 @@
 // ============================================================================
 
 import { useState, useContext, useEffect, useRef } from 'react'
-import { Eye, EyeOff, Loader2, Wifi, RefreshCw, CheckCircle, Camera, X, Fingerprint } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Wifi, RefreshCw, CheckCircle, Camera, X } from 'lucide-react'
 import { AuthContext }  from '../../../context/AuthContext'
 import axiosClient      from '../../../api/axiosClient'
 import { validarPassword } from '../../../utils/passwordValidator'
@@ -21,7 +20,7 @@ import PasswordStrengthIndicator from '../../../components/PasswordStrengthIndic
 type AlertaTipo = 'exito' | 'error' | 'info'
 type AlertaState = { tipo: AlertaTipo; mensaje: string } | null
 type EstadoHw = 'idle' | 'pending' | 'reading' | 'done' | 'error'
-type TipoHw = 'nfc' | 'huella'
+type TipoHw = 'nfc'
 
 interface SesionHw {
   token: string
@@ -40,30 +39,8 @@ const PASOS_NFC: Record<string, { texto: string; icono: string; color: string }>
   completado:            { texto: 'NFC registrado correctamente',            icono: '✅', color: 'text-green-600' },
 }
 
-// ─── Mapa de pasos Huella ────────────────────────────────────────────────────
-const PASOS_HUELLA: Record<string, { texto: string; icono: string; color: string }> = {
-  esperando_dispositivo: { texto: 'Conectando con el dispositivo ESP32...', icono: '📡', color: 'text-blue-500' },
-  listo_para_leer:       { texto: 'Coloca el dedo en el sensor...',         icono: '👆', color: 'text-orange-500' },
-  acerca_dedo_1:         { texto: 'Coloca el dedo en el sensor (1/2)',      icono: '👆', color: 'text-orange-500' },
-  dedo_1_ok:             { texto: 'Primera toma ✓',                         icono: '✅', color: 'text-green-500' },
-  retira_dedo:           { texto: 'Retira el dedo del sensor...',           icono: '✋', color: 'text-yellow-500' },
-  acerca_dedo_2:         { texto: 'Coloca el dedo de nuevo (2/2)',          icono: '👆', color: 'text-orange-500' },
-  dedo_2_ok:             { texto: 'Segunda toma ✓',                         icono: '✅', color: 'text-green-500' },
-  creando_modelo:        { texto: 'Procesando huellas...',                  icono: '⚙️', color: 'text-blue-500' },
-  guardando:             { texto: 'Guardando en el sensor...',              icono: '💾', color: 'text-blue-500' },
-  enviando:              { texto: 'Guardando datos en el servidor...',      icono: '📤', color: 'text-blue-500' },
-  completado:            { texto: 'Huella registrada correctamente',        icono: '✅', color: 'text-green-600' },
-}
-
 const MENSAJES_ERROR: Record<string, string> = {
   timeout_nfc:            'No se detectó ninguna tarjeta NFC (tiempo agotado). Intenta de nuevo.',
-  timeout_dedo_1:         'No se detectó el dedo en la primera toma. Intenta de nuevo.',
-  timeout_dedo_2:         'No se detectó el dedo en la segunda toma. Intenta de nuevo.',
-  huellas_no_coinciden:   'Las dos tomas no coinciden. Coloca el mismo dedo ambas veces.',
-  error_imagen_1:         'Error al procesar la primera imagen. Intenta de nuevo.',
-  error_imagen_2:         'Error al procesar la segunda imagen. Intenta de nuevo.',
-  error_modelo:           'Error al crear el modelo de huella. Intenta de nuevo.',
-  error_guardado:         'Error al guardar en el sensor. Intenta de nuevo.',
   error_red:              'El ESP32 no pudo comunicarse con el servidor.',
   cancelado_por_frontend: 'Operación cancelada.',
   timeout_general:        'La operación tardó demasiado. Intenta de nuevo.',
@@ -85,7 +62,7 @@ function Alerta({ tipo, mensaje, onClose }: { tipo: AlertaTipo; mensaje: string;
   )
 }
 
-// ─── Componente: Modal Hardware (NFC o Huella) ───────────────────────────────
+// ─── Componente: Modal Hardware (NFC) ────────────────────────────────────────
 function ModalHardware({
   sesion,
   onCancelar,
@@ -95,8 +72,7 @@ function ModalHardware({
   onCancelar: () => void
   onReintentar: () => void
 }) {
-  const esNFC    = sesion.tipo === 'nfc'
-  const pasoMap  = esNFC ? PASOS_NFC : PASOS_HUELLA
+  const pasoMap  = PASOS_NFC
   const infoStep = pasoMap[sesion.paso] ?? { texto: sesion.paso, icono: '⏳', color: 'text-gray-500' }
 
   const esError      = sesion.estado === 'error'
@@ -105,22 +81,15 @@ function ModalHardware({
 
   const mensajeError = MENSAJES_ERROR[sesion.paso] ?? MENSAJES_ERROR['error_desconocido']
 
+  const titulo = 'Registro de Tarjeta NFC'
+
   // Pasos de progreso visual
-  const pasosProgresoNFC = [
+  const pasosProgreso = [
     { key: 'acerca_tarjeta',    label: 'Acercar' },
     { key: 'tarjeta_detectada', label: 'Detectada' },
     { key: 'enviando',          label: 'Guardar' },
   ]
-  const pasosProgresoHuella = [
-    { key: 'acerca_dedo_1', label: 'Toma 1' },
-    { key: 'acerca_dedo_2', label: 'Toma 2' },
-    { key: 'creando_modelo', label: 'Procesar' },
-    { key: 'enviando',       label: 'Guardar' },
-  ]
-  const pasosProgreso = esNFC ? pasosProgresoNFC : pasosProgresoHuella
-  const pasoKeys      = Object.keys(pasoMap)
-
-  const titulo = esNFC ? 'Registro de Tarjeta NFC' : 'Registro de Huella Dactilar'
+  const pasoKeys = pasosProgreso.map(p => p.key)
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -229,7 +198,7 @@ const FORM_VACIO = {
   nombres: '', apellido_paterno: '', apellido_materno: '',
   fecha_nacimiento: '', sexo: 'Masculino', telefono: '',
   direccion: '', codigo_postal: '', correo: '', password: '',
-  nfc_uid: '', huella_id: '',
+  nfc_uid: '',
 }
 
 // ─── Componente: Vista previa de foto ────────────────────────────────────────
@@ -289,12 +258,12 @@ export default function TabsRegistrarNuevo() {
     const url = `${baseURL}/hardware/sse/${token}?jwt=${jwt}`
     const es = new EventSource(url)
 
-    // Timeout de 90s (huella necesita más tiempo por las dos tomas)
+    // Timeout de 60s
     const timeoutId = setTimeout(() => {
       es.close()
       sseCleanupRef.current = null
       setSesionHw(prev => prev ? { ...prev, estado: 'error', paso: 'timeout_general' } : null)
-    }, 90000)
+    }, 60000)
 
     es.onmessage = (event) => {
       try {
@@ -307,14 +276,10 @@ export default function TabsRegistrarNuevo() {
 
           if (data.tipo === 'nfc') {
             setForm(p => ({ ...p, nfc_uid: data.valor }))
-          } else if (data.tipo === 'huella' || data.tipo === 'huella_enroll') {
-            setForm(p => ({ ...p, huella_id: data.valor }))
           }
 
           setSesionHw(prev => prev ? { ...prev, estado: 'done', paso: 'completado' } : null)
-          const etiqueta = (data.tipo === 'nfc')
-            ? `Tarjeta NFC: ${data.valor}`
-            : `Huella en posición: ${data.valor}`
+          const etiqueta = `Tarjeta NFC: ${data.valor}`
           // Cerrar el modal rápido (600ms): el valor ya está guardado en el form
           setTimeout(() => {
             setSesionHw(null)
@@ -359,18 +324,6 @@ export default function TabsRegistrarNuevo() {
     }
   }
 
-  // ── Iniciar lectura Huella ─────────────────────────────────────────────────
-  const iniciarLecturaHuella = async () => {
-    setAlerta(null)
-    try {
-      const { data } = await axiosClient.post('/hardware/token', { tipo: 'huella_enroll' })
-      setSesionHw({ token: data.token, tipo: 'huella', estado: 'pending', paso: 'esperando_dispositivo' })
-      iniciarSSE(data.token)
-    } catch {
-      setAlerta({ tipo: 'error', mensaje: 'Error al iniciar. Verifica que el backend esté corriendo.' })
-    }
-  }
-
   // ── Cancelar lectura ───────────────────────────────────────────────────────
   const cancelarLectura = async () => {
     if (!sesionHw) return
@@ -388,7 +341,6 @@ export default function TabsRegistrarNuevo() {
 
   // ── Reintentar ─────────────────────────────────────────────────────────────
   const reintentar = async () => {
-    const tipoAnterior = sesionHw?.tipo ?? 'nfc'
     // Cerrar SSE anterior
     sseCleanupRef.current?.()
     sseCleanupRef.current = null
@@ -403,9 +355,8 @@ export default function TabsRegistrarNuevo() {
       } catch { /* silencioso */ }
     }
     setSesionHw(null)
-    // Iniciar directamente sin setTimeout — React procesa el setState en batch
-    if (tipoAnterior === 'huella') iniciarLecturaHuella()
-    else iniciarLecturaNFC()
+    // Iniciar directamente
+    iniciarLecturaNFC()
   }
 
   // ── Form handlers ──────────────────────────────────────────────────────────
@@ -450,7 +401,6 @@ export default function TabsRegistrarNuevo() {
       fd.append('password',         form.password)
       fd.append('terminos_aceptados', '1')
       if (form.nfc_uid)   fd.append('nfc_uid',   form.nfc_uid)
-      if (form.huella_id) fd.append('huella_template', form.huella_id)
 
       const { data } = await axiosClient.post('/suscriptores', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -469,7 +419,7 @@ export default function TabsRegistrarNuevo() {
 
   return (
     <div>
-      {/* Modal Hardware (NFC o Huella) */}
+      {/* Modal Hardware (NFC) */}
       {sesionHw && (
         <ModalHardware
           sesion={sesionHw}
@@ -581,11 +531,11 @@ export default function TabsRegistrarNuevo() {
           </div>
         </div>
 
-        {/* ── Control de Acceso: NFC + Huella ───────────────────────────── */}
+        {/* ── Control de Acceso: NFC ─────────────────────────────────────────── */}
         <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
           <p className="font-bold text-sm text-black mb-1">Control de Acceso</p>
           <p className="text-xs text-gray-400 mb-4">
-            Registra la tarjeta NFC y/o la huella dactilar del suscriptor. El dispositivo se activa automáticamente al presionar el botón.
+            Registra la tarjeta NFC del suscriptor. El dispositivo se activa automáticamente al presionar el botón.
           </p>
 
           <div className="flex flex-col gap-4">
@@ -618,38 +568,6 @@ export default function TabsRegistrarNuevo() {
                 >
                   <span>💳</span>
                   {form.nfc_uid ? 'Re-leer NFC' : 'Leer Tarjeta NFC'}
-                </button>
-              </div>
-            </div>
-
-            {/* ── Huella ──────────────────────────────────────────────────── */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <label className="block text-xs font-bold text-gray-600 mb-1">Huella Dactilar (posición en sensor)</label>
-                <div className="flex gap-2">
-                  <input
-                    readOnly
-                    value={form.huella_id ? `Posición #${form.huella_id}` : ''}
-                    placeholder="Sin registrar"
-                    className={`flex-1 bg-white border rounded px-3 py-2 text-sm text-black ${form.huella_id ? 'border-green-400 bg-green-50' : 'border-gray-300'}`}
-                  />
-                  {form.huella_id && (
-                    <button type="button" onClick={() => setForm(p => ({ ...p, huella_id: '' }))} className="text-gray-400 hover:text-red-500 text-xs px-2">✕</button>
-                  )}
-                </div>
-              </div>
-              <div className="pt-5">
-                <button
-                  type="button"
-                  disabled={enviando || esperandoHw}
-                  onClick={iniciarLecturaHuella}
-                  className={`flex items-center gap-2 border-2 font-bold text-sm px-4 py-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed
-                    ${form.huella_id
-                      ? 'border-green-500 text-green-600 hover:bg-green-50'
-                      : 'border-[#ea580c] text-[#ea580c] hover:bg-[#ea580c]/10'}`}
-                >
-                  <Fingerprint size={15} />
-                  {form.huella_id ? 'Re-registrar Huella' : 'Escanear Huella'}
                 </button>
               </div>
             </div>

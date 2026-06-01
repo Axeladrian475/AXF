@@ -1,7 +1,8 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import axiosClient from '../../../api/axiosClient'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie } from 'recharts'
 import { imageUrl } from '../../../utils/imageUrl'
+import { generarPDFAnalisis } from '../../../utils/pdfExport'
 
 interface AnalisisData {
   total: number
@@ -157,6 +158,58 @@ export default function TabIncidencias() {
     meses:   'mes(es)',
   }
 
+  const extractSvgBase64 = (containerId: string): string | null => {
+    const container = document.getElementById(containerId);
+    if (!container) return null;
+    const svg = container.querySelector('svg');
+    if (!svg) return null;
+    
+    try {
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      // Forzar fondo blanco y quitar estilos de Tailwind que puedan romperse
+      clone.style.background = '#ffffff';
+      
+      const svgString = new XMLSerializer().serializeToString(clone);
+      const base64 = btoa(unescape(encodeURIComponent(svgString)));
+      return `data:image/svg+xml;base64,${base64}`;
+    } catch (e) {
+      console.error('Error exportando SVG', e);
+      return null;
+    }
+  }
+
+  const handleExportarPDF = () => {
+    if (!analisis || !analisisPersonal) return
+    
+    const usuarioStr = localStorage.getItem('usuario')
+    const usuario = usuarioStr ? JSON.parse(usuarioStr) : {}
+    const sucursalNombre = usuario.nombre_sucursal || usuario.nombre || usuario.usuario || 'Sucursal'
+
+    const prioritarios = analisis.pendientes.filter(r => r.num_strikes >= 3 || r.categoria === 'Reporte_Personal' || r.categoria === 'Maquina_Dañada');
+
+    generarPDFAnalisis({
+      sucursal: sucursalNombre,
+      fechaInicio: formatearFecha(fechaInicio).split(',')[0], // solo fecha sin hora
+      fechaFin: formatearFecha(fechaFin).split(',')[0],
+      fechaGeneracion: new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      metricas: {
+        total: analisis.total,
+        total_estadistico: analisis.total_estadistico,
+        resueltos: analisis.resueltos_count,
+        pendientes: analisis.pendientes_count,
+        tasa_resolucion: analisis.tasa_resolucion
+      },
+      reportes_prioritarios: prioritarios,
+      todos_resueltos: analisis.resueltos,
+      todos_pendientes: analisis.pendientes,
+      categorias: analisis.categorias_chart || [],
+      personal: analisisPersonal,
+      chartEstado: extractSvgBase64('chart-estado'),
+      chartCategorias: extractSvgBase64('chart-categorias')
+    })
+  }
+
   if (cargando) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -278,6 +331,18 @@ export default function TabIncidencias() {
           >
             {cargandoAnalisis ? 'Cargando...' : 'Obtener análisis ahora'}
           </button>
+          
+          {analisis && analisisPersonal && (
+            <button 
+              onClick={handleExportarPDF}
+              className="bg-[#1e293b] text-white font-bold px-5 py-2 text-sm rounded hover:bg-[#0f172a] transition-colors flex items-center h-[38px] gap-2 ml-auto"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Exportar a PDF
+            </button>
+          )}
         </div>
 
         {errorAnalisis && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-200 mb-5">{errorAnalisis}</div>}
@@ -306,7 +371,7 @@ export default function TabIncidencias() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               <div className="lg:col-span-1 bg-white border border-gray-200 p-5 rounded-xl shadow-sm flex flex-col items-center justify-center">
                 <h4 className="text-sm font-bold text-gray-800 mb-2">Estado de Reportes</h4>
-                <div className="h-48 w-full">
+                <div id="chart-estado" className="h-48 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -351,7 +416,7 @@ export default function TabIncidencias() {
                   <h4 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
                     📊 Distribución de Reportes por Categoría
                   </h4>
-                  <div className="h-48 w-full">
+                  <div id="chart-categorias" className="h-48 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={analisis.categorias_chart} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
