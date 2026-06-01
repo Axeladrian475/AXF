@@ -178,7 +178,7 @@ export async function generarRutinaPDFBuffer(id_rutina, id_suscriptor) {
   const [ejercicios] = await db.query(
     `SELECT re.orden, re.series, re.repeticiones,
             re.descanso_seg, re.peso_kg, re.descripcion_tecnica,
-            re.nombre_bloque, e.nombre, e.grupo_muscular
+            re.nombre_bloque, re.notas_bloque, e.nombre, e.grupo_muscular
      FROM rutina_ejercicios re
      JOIN ejercicios e ON e.id_ejercicio = re.id_ejercicio
      WHERE re.id_rutina = ?
@@ -190,7 +190,7 @@ export async function generarRutinaPDFBuffer(id_rutina, id_suscriptor) {
   for (const ej of ejercicios) {
     const idx    = Math.floor(ej.orden / 100);
     const nombre = ej.nombre_bloque || ej.grupo_muscular || `Bloque ${idx + 1}`;
-    if (!bloquesMap.has(idx)) bloquesMap.set(idx, { nombre, ejercicios: [] });
+    if (!bloquesMap.has(idx)) bloquesMap.set(idx, { nombre, notas_bloque: ej.notas_bloque, ejercicios: [] });
     bloquesMap.get(idx).ejercicios.push(ej);
   }
   const bloques = [...bloquesMap.values()];
@@ -251,6 +251,13 @@ export async function generarRutinaPDFBuffer(id_rutina, id_suscriptor) {
 
           doc.moveDown(0.5);
         }
+
+        if (bloque.notas_bloque) {
+          doc.font('Bold').fontSize(10).fillColor(C_TITULO).text(`Notas de ${bloque.nombre}:`);
+          doc.font('Regular').fontSize(10).fillColor(C_TEXTO).text(bloque.notas_bloque);
+          doc.moveDown(0.5);
+        }
+
         doc.moveDown(0.5);
       }
 

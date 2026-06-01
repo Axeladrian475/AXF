@@ -16,6 +16,7 @@ interface EjRutina {
   series: string
   reps: string
   descanso: string
+  notas: string
 }
 
 interface Rutina {
@@ -29,7 +30,7 @@ let _uid = 1
 let _rid = 1
 
 const newEj = (ej: EjercicioAPI): EjRutina =>
-  ({ uid: _uid++, id_ejercicio: ej.id_ejercicio, nombre: ej.nombre, series: '3', reps: '10', descanso: '60' })
+  ({ uid: _uid++, id_ejercicio: ej.id_ejercicio, nombre: ej.nombre, series: '3', reps: '10', descanso: '60', notas: '' })
 
 const newRutina = (nombre: string): Rutina =>
   ({ id: _rid++, nombre, ejercicios: [], notas: '' })
@@ -57,6 +58,7 @@ export default function CrearRutina({ onBack }: Props) {
   const [guardando, setGuardando]       = useState(false)
   const [exito, setExito]               = useState('')
   const [errorGuardar, setErrorGuardar] = useState('')
+  const [notasGlobales, setNotasGlobales] = useState('')
   const [mostrarModalCorreo, setMostrarModalCorreo] = useState(false)
   const [correoDestino, setCorreoDestino] = useState('')
 
@@ -183,11 +185,12 @@ export default function CrearRutina({ onBack }: Props) {
         r.ejercicios.map((ej, ejIdx) => ({
           id_ejercicio: ej.id_ejercicio,
           orden: rIdx * 100 + ejIdx + 1,
-          nombre_bloque: r.nombre,           // ← nombre del músculo/grupo
+          nombre_bloque: r.nombre,
           series: parseInt(ej.series) || 3,
           repeticiones: parseInt(ej.reps) || 10,
           descanso_seg: parseInt(ej.descanso) || 60,
-          descripcion_tecnica: r.notas || undefined,
+          descripcion_tecnica: ej.notas || undefined,
+          notas_bloque: r.notas || undefined,
         }))
       )
 
@@ -235,6 +238,7 @@ export default function CrearRutina({ onBack }: Props) {
                 reps:       ej.reps,
                 descanso:   ej.descanso,
                 rutina:     r.nombre,
+                notas:      ej.notas,
               } satisfies EjercicioPDF
             }),
           })),
@@ -566,6 +570,13 @@ export default function CrearRutina({ onBack }: Props) {
                             onChange={e => actualizarEj(ej.uid, 'descanso', e.target.value)}
                             className="w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center text-black bg-white" />
                         </div>
+                        <div className="flex items-center gap-1 w-full mt-1.5 col-span-3">
+                          <label className="text-xs text-gray-400">Técnica</label>
+                          <input value={ej.notas}
+                            onChange={e => actualizarEj(ej.uid, 'notas', e.target.value)}
+                            placeholder="Notas de técnica..."
+                            className="flex-1 border border-gray-300 rounded px-2 py-0.5 text-xs text-black bg-white" />
+                        </div>
                       </div>
                       <div className="flex flex-col gap-1 shrink-0 ml-2 border-r border-gray-200 pr-3">
                         <button onClick={() => moverEjArriba(ej.uid)} disabled={ejIdx === 0}
@@ -615,6 +626,18 @@ export default function CrearRutina({ onBack }: Props) {
                 </div>
               </div>
             )}
+
+            {/* Notas Generales */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-black mb-1">
+                Notas Generales (Toda la rutina):
+              </label>
+              <textarea
+                value={notasGlobales}
+                onChange={e => setNotasGlobales(e.target.value)}
+                placeholder="Aclaraciones generales para todo el plan..."
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black bg-white h-16 resize-none focus:outline-none focus:border-[#ea580c]" />
+            </div>
 
             {/* Guardar */}
             <div className="flex justify-end">

@@ -253,14 +253,15 @@ router.post('/rutinas', verificarToken, soloPersonal, soloEntrenador, async (req
     for (const ej of ejercicios) {
       await conn.query(
         `INSERT INTO rutina_ejercicios
-          (id_rutina, id_ejercicio, orden, series, repeticiones, descanso_seg, peso_kg, descripcion_tecnica, nombre_bloque)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id_rutina, id_ejercicio, orden, series, repeticiones, descanso_seg, peso_kg, descripcion_tecnica, nombre_bloque, notas_bloque)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id_rutina, ej.id_ejercicio, ej.orden,
           ej.series, ej.repeticiones,
           ej.descanso_seg || null, ej.peso_kg || null,
           ej.descripcion_tecnica || null,
           ej.nombre_bloque || null,
+          ej.notas_bloque || null,
         ]
       );
     }
