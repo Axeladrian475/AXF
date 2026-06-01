@@ -416,8 +416,8 @@ export default function TabsRegistrarNuevo() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setAlerta(null)
-    if (!form.nombres.trim() || !form.apellido_paterno.trim())
-      return setAlerta({ tipo: 'error', mensaje: 'Nombres y Apellido Paterno son obligatorios.' })
+    if (!form.nombres.trim() || !form.apellido_paterno.trim() || !form.apellido_materno.trim())
+      return setAlerta({ tipo: 'error', mensaje: 'Todos los nombres y apellidos son obligatorios.' })
     if (!form.correo.trim())
       return setAlerta({ tipo: 'error', mensaje: 'El correo electrónico es obligatorio.' })
     const errPass = validarPassword(form.password, form.correo)
@@ -425,6 +425,12 @@ export default function TabsRegistrarNuevo() {
       return setAlerta({ tipo: 'error', mensaje: errPass })
     if (!form.fecha_nacimiento)
       return setAlerta({ tipo: 'error', mensaje: 'La fecha de nacimiento es obligatoria.' })
+    if (!form.telefono.trim())
+      return setAlerta({ tipo: 'error', mensaje: 'El teléfono es obligatorio.' })
+    if (!form.direccion.trim())
+      return setAlerta({ tipo: 'error', mensaje: 'La dirección es obligatoria.' })
+    if (!form.codigo_postal.trim())
+      return setAlerta({ tipo: 'error', mensaje: 'El código postal es obligatorio.' })
     if (!foto)
       return setAlerta({ tipo: 'error', mensaje: 'La foto del suscriptor es obligatoria.' })
 
@@ -518,7 +524,7 @@ export default function TabsRegistrarNuevo() {
             <input name="apellido_paterno" value={form.apellido_paterno} onChange={handleChange} disabled={enviando} placeholder="Ej. Pérez" className={inputCls} />
           </div>
           <div>
-            <label className="block text-sm font-bold text-black mb-1">Apellido Materno</label>
+            <label className="block text-sm font-bold text-black mb-1">Apellido Materno <span className="text-red-500">*</span></label>
             <input name="apellido_materno" value={form.apellido_materno} onChange={handleChange} disabled={enviando} placeholder="Ej. López" className={inputCls} />
           </div>
         </div>
@@ -530,13 +536,13 @@ export default function TabsRegistrarNuevo() {
             <input type="date" name="fecha_nacimiento" value={form.fecha_nacimiento} onChange={handleChange} disabled={enviando} className={inputCls} />
           </div>
           <div>
-            <label className="block text-sm font-bold text-black mb-1">Sexo</label>
+            <label className="block text-sm font-bold text-black mb-1">Sexo <span className="text-red-500">*</span></label>
             <select name="sexo" value={form.sexo} onChange={handleChange} disabled={enviando} className={inputCls}>
               <option>Masculino</option><option>Femenino</option><option>Otro</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-bold text-black mb-1">Teléfono</label>
+            <label className="block text-sm font-bold text-black mb-1">Teléfono <span className="text-red-500">*</span></label>
             <input name="telefono" value={form.telefono} onChange={handleChange} disabled={enviando} placeholder="10 dígitos" maxLength={20} className={inputCls} />
           </div>
         </div>
@@ -544,11 +550,11 @@ export default function TabsRegistrarNuevo() {
         {/* Dirección */}
         <div className="grid grid-cols-3 gap-4">
           <div className="col-span-2">
-            <label className="block text-sm font-bold text-black mb-1">Dirección</label>
+            <label className="block text-sm font-bold text-black mb-1">Dirección <span className="text-red-500">*</span></label>
             <input name="direccion" value={form.direccion} onChange={handleChange} disabled={enviando} placeholder="Calle, Número, Colonia" className={inputCls} />
           </div>
           <div>
-            <label className="block text-sm font-bold text-black mb-1">Código Postal</label>
+            <label className="block text-sm font-bold text-black mb-1">Código Postal <span className="text-red-500">*</span></label>
             <input name="codigo_postal" value={form.codigo_postal} onChange={handleChange} disabled={enviando} placeholder="Ej. 44100" maxLength={10} className={inputCls} />
           </div>
         </div>
