@@ -88,6 +88,8 @@ export async function listarReportes(req, res) {
          r.num_strikes,
          r.creado_en,
          r.resuelto_en,
+         r.en_proceso_por_nombre,
+         r.resuelto_por_nombre,
          CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre_suscriptor,
          s.correo                                   AS correo_suscriptor,
          suc.nombre                                 AS nombre_sucursal,
@@ -140,6 +142,8 @@ export async function obtenerReporte(req, res) {
     const [[reporte]] = await db.query(
       `SELECT
          r.*,
+         r.en_proceso_por_nombre,
+         r.resuelto_por_nombre,
          CONCAT(s.nombres, ' ', s.apellido_paterno)  AS nombre_suscriptor,
          s.correo                                     AS correo_suscriptor,
          s.telefono                                   AS telefono_suscriptor,
@@ -215,12 +219,34 @@ export async function actualizarEstado(req, res) {
 
     const resuelto_en = estado === 'Resuelto' ? 'NOW()' : 'resuelto_en';
 
+    let modificado_por = '';
+    if (req.usuario.rol === 'personal') {
+       const [[p]] = await db.query(`SELECT nombres, apellido_paterno FROM personal WHERE id_personal = ?`, [req.usuario.id]);
+       if (p) modificado_por = `${p.nombres} ${p.apellido_paterno}`;
+    } else if (req.usuario.rol === 'sucursal') {
+       const [[s]] = await db.query(`SELECT nombre FROM sucursales WHERE id_sucursal = ?`, [req.usuario.id]);
+       if (s) modificado_por = `Sucursal ${s.nombre}`;
+    } else if (req.usuario.rol === 'maestro') {
+       modificado_por = 'Administrador Maestro';
+    }
+
+    let extraUpdate = '';
+    let extraParams = [];
+    if (estado === 'En_Proceso') {
+       extraUpdate = `, en_proceso_por_nombre = ?`;
+       extraParams.push(modificado_por);
+    } else if (estado === 'Resuelto') {
+       extraUpdate = `, resuelto_por_nombre = ?`;
+       extraParams.push(modificado_por);
+    }
+
     await db.query(
       `UPDATE reportes
          SET estado = ?,
              resuelto_en = ${estado === 'Resuelto' ? 'NOW()' : 'resuelto_en'}
+             ${extraUpdate}
        WHERE id_reporte = ?`,
-      [estado, id]
+      [estado, ...extraParams, id]
     );
 
     res.json({ message: `Estado actualizado a "${estado}".`, id_reporte: reporte.id_reporte });
@@ -248,10 +274,21 @@ export async function resolverReporte(req, res) {
       [id]
     );
 
+    let modificado_por = '';
+    if (req.usuario.rol === 'personal') {
+       const [[p]] = await db.query(`SELECT nombres, apellido_paterno FROM personal WHERE id_personal = ?`, [req.usuario.id]);
+       if (p) modificado_por = `${p.nombres} ${p.apellido_paterno}`;
+    } else if (req.usuario.rol === 'sucursal') {
+       const [[s]] = await db.query(`SELECT nombre FROM sucursales WHERE id_sucursal = ?`, [req.usuario.id]);
+       if (s) modificado_por = `Sucursal ${s.nombre}`;
+    } else if (req.usuario.rol === 'maestro') {
+       modificado_por = 'Administrador Maestro';
+    }
+
     // Marcar como resuelto en lugar de eliminar, para conservar historial y análisis
     await db.query(
-      `UPDATE reportes SET estado = 'Resuelto', resuelto_en = NOW() WHERE id_reporte = ?`, 
-      [id]
+      `UPDATE reportes SET estado = 'Resuelto', resuelto_en = NOW(), resuelto_por_nombre = ? WHERE id_reporte = ?`, 
+      [modificado_por, id]
     );
 
     // Enviar correo de notificación al suscriptor (sin detener la respuesta si falla)
@@ -567,6 +604,8 @@ export async function listarPrioritarios(req, res) {
          r.reenviado_sucursal,
          r.creado_en,
          r.resuelto_en,
+         r.en_proceso_por_nombre,
+         r.resuelto_por_nombre,
          CONCAT(s.nombres, ' ', s.apellido_paterno) AS nombre_suscriptor,
          s.correo                                   AS correo_suscriptor,
          suc.nombre                                 AS nombre_sucursal,

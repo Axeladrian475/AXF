@@ -27,6 +27,8 @@ interface ReportePrioritario {
   puesto_personal_reportado: string | null
   foto_personal_reportado:   string | null
   ultimo_strike_en:          string | null
+  en_proceso_por_nombre:       string | null
+  resuelto_por_nombre:         string | null
 }
 
 interface Strike {
@@ -386,6 +388,18 @@ export default function TabsReportesPrioritarios() {
                           <span className={`w-1.5 h-1.5 rounded-full ${estadoConf.dot} flex-shrink-0`} />
                           {estadoConf.label}
                         </span>
+                        {r.estado === 'En_Proceso' && r.en_proceso_por_nombre && (
+                          <p className="text-[10px] text-slate-500 mt-1.5 font-medium leading-tight">
+                            Atiende:<br/>
+                            <span className="text-slate-400 font-normal">{r.en_proceso_por_nombre}</span>
+                          </p>
+                        )}
+                        {r.estado === 'Resuelto' && r.resuelto_por_nombre && (
+                          <p className="text-[10px] text-slate-500 mt-1.5 font-medium leading-tight">
+                            Resolvió:<br/>
+                            <span className="text-slate-400 font-normal">{r.resuelto_por_nombre}</span>
+                          </p>
+                        )}
                       </td>
 
                       {/* Categoría */}

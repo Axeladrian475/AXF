@@ -1,8 +1,8 @@
 import db from './config/database.js';
 
 async function check() {
-  const [rows] = await db.query('SHOW CREATE TABLE sucursales');
-  console.log(rows[0]['Create Table']);
+  await db.query(`ALTER TABLE reportes ADD COLUMN en_proceso_por_nombre VARCHAR(100) DEFAULT NULL, ADD COLUMN resuelto_por_nombre VARCHAR(100) DEFAULT NULL;`);
+  console.log('Altered table reportes');
   process.exit(0);
 }
 check();

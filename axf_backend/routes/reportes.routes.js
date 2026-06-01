@@ -294,6 +294,8 @@ router.get('/publicos/:id_sucursal', verificarSuscriptor, async (req, res) => {
          r.estado,
          r.num_strikes,
          r.creado_en,
+         r.en_proceso_por_nombre,
+         r.resuelto_por_nombre,
          COUNT(rs.id)                                        AS sumados,
          COALESCE(MAX(CASE WHEN rs.id_suscriptor = ? THEN 1 ELSE 0 END), 0) AS ya_sumado
        FROM reportes r
@@ -354,6 +356,8 @@ router.get('/mis-reportes', verificarSuscriptor, async (req, res) => {
          CAST(r.es_privado AS UNSIGNED)                       AS es_privado,
          r.estado,
          r.num_strikes,
+         r.en_proceso_por_nombre,
+         r.resuelto_por_nombre,
          DATE_FORMAT(r.creado_en, '%Y-%m-%dT%H:%i:%s')        AS creado_en,
          CASE
            WHEN p.id_personal IS NOT NULL
