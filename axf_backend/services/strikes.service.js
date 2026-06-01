@@ -40,6 +40,7 @@ export async function procesarStrikes() {
          r.num_strikes,
          r.estado,
          r.creado_en,
+         r.actualizado_en,
          -- Hora del último strike (si existe)
          (SELECT MAX(sr.generado_en)
           FROM strikes_reporte sr
@@ -50,8 +51,7 @@ export async function procesarStrikes() {
          COALESCE(cfg.horas_strike3, ?)       AS horas_strike3
        FROM reportes r
        LEFT JOIN config_reportes_periodicos cfg ON cfg.id_sucursal = r.id_sucursal
-       WHERE r.estado != 'Resuelto'
-         AND r.num_strikes < 3`,
+       WHERE r.estado != 'Resuelto'`,
       [DEFAULT_HORAS.strike1, DEFAULT_HORAS.strike2, DEFAULT_HORAS.strike3]
     );
 
@@ -78,9 +78,12 @@ export async function procesarStrikes() {
 async function evaluarReporte(reporte) {
   const ahora = new Date();
   const creado = new Date(reporte.creado_en);
-  const horasDesdeCreacion = (ahora - creado) / 3_600_000;
+  const actualizado = reporte.actualizado_en ? new Date(reporte.actualizado_en) : creado;
 
-  const strikeActual = reporte.num_strikes; // 0, 1 o 2
+  const horasDesdeCreacion = (ahora - creado) / 3_600_000;
+  const horasDesdeActualizacion = (ahora - actualizado) / 3_600_000;
+
+  const strikeActual = reporte.num_strikes; // 0, 1, 2, 3...
 
   // Calcular horas acumuladas necesarias para cada strike
   const umbralS1 = reporte.horas_strike1;
@@ -95,6 +98,16 @@ async function evaluarReporte(reporte) {
     nuevoStrike = 2;
   } else if (strikeActual === 2 && horasDesdeCreacion >= umbralS3) {
     nuevoStrike = 3;
+  } else if (strikeActual >= 3) {
+    // Si ya pasó por los primeros 3 strikes, recibe uno nuevo si:
+    // 1. Lleva 72 horas sin actualización
+    // 2. Han pasado al menos 72 horas desde el último strike asignado
+    const ultimoStrike = reporte.ultimo_strike_en ? new Date(reporte.ultimo_strike_en) : creado;
+    const horasDesdeUltimoStrike = (ahora - ultimoStrike) / 3_600_000;
+    
+    if (horasDesdeActualizacion >= 72 && horasDesdeUltimoStrike >= 72) {
+      nuevoStrike = strikeActual + 1;
+    }
   }
 
   if (nuevoStrike === 0) return 0;
@@ -185,15 +198,15 @@ async function aplicarStrike(reporte, nivel) {
   // ── 7. Notificaciones internas (Socket.io) ────────────────────────────────
   await emitirNotificaciones(id_reporte, nivel, notificados, id_sucursal, suscriptor);
 
-  // ── 8. Enviar correo de alta prioridad (Solo Strike 3) ────────────────────
-  if (nivel === 3) {
+  // ── 8. Enviar correo de alta prioridad (Strike >= 3) ────────────────────
+  if (nivel >= 3) {
     const emailSucursal = sucursal.correo?.trim() || null;
     if (emailSucursal) {
       notificarTercerStrikeSucursal(emailSucursal, id_reporte, sucursal.nombre).catch(err =>
-        console.error('[STRIKES] Error enviando correo de tercer strike a sucursal:', err)
+        console.error(`[STRIKES] Error enviando correo de strike ${nivel} a sucursal:`, err)
       );
     } else {
-      console.warn(`[STRIKES] Sucursal ${id_sucursal} sin correo configurado; no se envió alerta de 3er strike por email.`);
+      console.warn(`[STRIKES] Sucursal ${id_sucursal} sin correo configurado; no se envió alerta de strike por email.`);
     }
   }
 
@@ -201,9 +214,9 @@ async function aplicarStrike(reporte, nivel) {
   const msg = {
     1: `1er Strike: Notificados ${personal.length} personal`,
     2: `2do Strike: Notificados ${personal.length} personal + sucursal`,
-    3: `3er Strike: Notificados ${personal.length} personal + sucursal + suscriptor`,
   };
-  console.log(`[STRIKES]   → ${msg[nivel]} (Reporte #${id_reporte})`);
+  const m = msg[nivel] || `Strike ${nivel}: Notificados ${personal.length} personal + sucursal + suscriptor`;
+  console.log(`[STRIKES]   → ${m} (Reporte #${id_reporte})`);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -248,13 +261,13 @@ async function emitirNotificaciones(id_reporte, nivel, notificados, id_sucursal,
       });
     }
 
-    // ── Guardar notificación persistente en BD para la sucursal (solo Strike 3)
-    if (nivel === 3) {
+    // ── Guardar notificación persistente en BD para la sucursal (Strike >= 3)
+    if (nivel >= 3) {
       try {
         await db.query(
           `INSERT INTO notificaciones_sucursal (id_sucursal, tipo, id_reporte, mensaje)
-           VALUES (?, 'strike_3', ?, ?)`,
-          [id_sucursal, id_reporte, payload.mensaje]
+           VALUES (?, ?, ?, ?)`,
+          [id_sucursal, `strike_${nivel}`, id_reporte, payload.mensaje]
         );
       } catch (dbErr) {
         console.error('[STRIKES] Error al guardar notificación persistente:', dbErr.message);
@@ -267,12 +280,10 @@ async function emitirNotificaciones(id_reporte, nivel, notificados, id_sucursal,
 
 // ─── Textos de los strikes ────────────────────────────────────────────────────
 function mensajeStrike(nivel) {
-  const msgs = {
-    1: '⚠️ 1er Strike: Un reporte lleva más de 24h sin atención. Se notificó al personal de la sucursal.',
-    2: '🔶 2do Strike: Un reporte lleva más de 48h sin resolución. Se notificó al personal y a la gerencia.',
-    3: '🚨 3er Strike: Un reporte lleva más de 72h sin resolución. Escalada máxima activada.',
-  };
-  return msgs[nivel] ?? 'Alerta de strike generada.';
+  if (nivel === 1) return '⚠️ 1er Strike: Un reporte lleva más de 24h sin atención. Se notificó al personal de la sucursal.';
+  if (nivel === 2) return '🔶 2do Strike: Un reporte lleva más de 48h sin resolución. Se notificó al personal y a la gerencia.';
+  if (nivel === 3) return '🚨 3er Strike: Un reporte lleva más de 72h sin resolución. Escalada máxima activada.';
+  return `🚨 Strike ${nivel}: El reporte lleva más de 72h sin actualización desde el último strike. Escalada continua activada.`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

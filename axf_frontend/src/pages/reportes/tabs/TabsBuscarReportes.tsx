@@ -338,7 +338,8 @@ export default function TabsBuscarReportes() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {reportes.map(r => {
-                  const strikeConf = STRIKE_CONFIG[r.num_strikes] ?? STRIKE_CONFIG[0]
+                  const strikeConf = STRIKE_CONFIG[Math.min(r.num_strikes, 3)] ?? STRIKE_CONFIG[0]
+                  const labelStrike = r.num_strikes >= 3 ? `${r.num_strikes}er Strike` : strikeConf.label
                   const estadoConf = ESTADO_CONFIG[r.estado] ?? ESTADO_CONFIG.Abierto
                   const esPersonal = r.categoria === 'Reporte_Personal'
                   const { d, t } = formatFechaSplit(r.creado_en)
@@ -367,7 +368,7 @@ export default function TabsBuscarReportes() {
                       <td className="py-3.5 px-4">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${strikeConf.badge}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${strikeConf.dot} flex-shrink-0`} />
-                          {strikeConf.label}
+                          {labelStrike}
                         </span>
                         {r.num_strikes > 0 && (
                           <p className="text-[10px] text-slate-400 mt-1 pl-0.5">{r.horas_desde_creacion}h activo</p>

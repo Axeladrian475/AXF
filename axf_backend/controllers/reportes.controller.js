@@ -362,7 +362,7 @@ export async function resumenReportes(req, res) {
          SUM(estado = 'Resuelto')                                         AS resueltos,
          SUM(num_strikes = 1 AND estado != 'Resuelto')                   AS strike1,
          SUM(num_strikes = 2 AND estado != 'Resuelto')                   AS strike2,
-         SUM(num_strikes = 3 AND estado != 'Resuelto')                   AS strike3,
+         SUM(num_strikes >= 3 AND estado != 'Resuelto')                  AS strike3,
          SUM(num_strikes > 0  AND estado != 'Resuelto')                  AS con_alerta
        FROM reportes
        WHERE 1=1 ${filtroSuc} ${excluirPersonal}`,

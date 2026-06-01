@@ -60,6 +60,10 @@ export default function CrearRutina({ onBack }: Props) {
   const [mostrarModalCorreo, setMostrarModalCorreo] = useState(false)
   const [correoDestino, setCorreoDestino] = useState('')
 
+  // Drag and drop para reordenar
+  const [dragItemIdx, setDragItemIdx]   = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx]   = useState<number | null>(null)
+
   // ── Cargar datos ───────────────────────────────────────────────────────────
   useEffect(() => {
     const cargar = async () => {
@@ -126,6 +130,43 @@ export default function CrearRutina({ onBack }: Props) {
 
   const eliminarEj = (uid: number) =>
     mutarRutina(r => ({ ...r, ejercicios: r.ejercicios.filter(e => e.uid !== uid) }))
+
+  const moverEjArriba = (uid: number) => {
+    mutarRutina(r => {
+      const idx = r.ejercicios.findIndex(e => e.uid === uid)
+      if (idx <= 0) return r
+      const nuevos = [...r.ejercicios]
+      const temp = nuevos[idx]
+      nuevos[idx] = nuevos[idx - 1]
+      nuevos[idx - 1] = temp
+      return { ...r, ejercicios: nuevos }
+    })
+  }
+
+  const moverEjAbajo = (uid: number) => {
+    mutarRutina(r => {
+      const idx = r.ejercicios.findIndex(e => e.uid === uid)
+      if (idx === -1 || idx === r.ejercicios.length - 1) return r
+      const nuevos = [...r.ejercicios]
+      const temp = nuevos[idx]
+      nuevos[idx] = nuevos[idx + 1]
+      nuevos[idx + 1] = temp
+      return { ...r, ejercicios: nuevos }
+    })
+  }
+
+  const handleSortDrop = () => {
+    if (dragItemIdx !== null && dragOverIdx !== null && dragItemIdx !== dragOverIdx) {
+      mutarRutina(r => {
+        const nuevos = [...r.ejercicios]
+        const [moved] = nuevos.splice(dragItemIdx, 1)
+        nuevos.splice(dragOverIdx, 0, moved)
+        return { ...r, ejercicios: nuevos }
+      })
+    }
+    setDragItemIdx(null)
+    setDragOverIdx(null)
+  }
 
   const ejerciciosFiltrados = ejerciciosDB.filter(e =>
     e.nombre.toLowerCase().includes(busEj.toLowerCase())
@@ -446,10 +487,12 @@ export default function CrearRutina({ onBack }: Props) {
             {/* Zona drop */}
             <div
               onDragOver={e => e.preventDefault()}
-              onDrop={() => {
-                const ej = ejerciciosDB.find(e => e.id_ejercicio === dragEjId)
-                if (ej) agregarEj(ej)
-                setDragEjId(null)
+              onDrop={(e) => {
+                if (dragEjId) {
+                  const ej = ejerciciosDB.find(e => e.id_ejercicio === dragEjId)
+                  if (ej) agregarEj(ej)
+                  setDragEjId(null)
+                }
               }}
               className={`border-2 rounded-lg min-h-52 p-3 mb-3 transition-colors
                 ${dragEjId ? 'border-[#ea580c] bg-orange-50' : 'border-dashed border-gray-300 bg-white'}`}>
@@ -459,14 +502,38 @@ export default function CrearRutina({ onBack }: Props) {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {rutina.ejercicios.map(ej => {
+                  {rutina.ejercicios.map((ej, ejIdx) => {
                     const ejDb = ejerciciosDB.find(e => e.id_ejercicio === ej.id_ejercicio)
                     const imgUrl = ejDb?.imagen_url
                       ? `${import.meta.env.VITE_SOCKET_URL || API_BASE}${ejDb.imagen_url}`
                       : null
                     return (
                     <div key={ej.uid}
-                      className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation()
+                        setDragItemIdx(ejIdx)
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        if (dragItemIdx !== null) setDragOverIdx(ejIdx)
+                      }}
+                      onDragEnd={handleSortDrop}
+                      onDrop={(e) => {
+                        if (dragItemIdx !== null) {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }
+                      }}
+                      className={`flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 cursor-grab active:cursor-grabbing transition-all duration-300
+                        ${dragOverIdx === ejIdx ? (dragItemIdx !== null && dragItemIdx < ejIdx ? 'border-b-4 border-b-[#ea580c] -translate-y-1' : 'border-t-4 border-t-[#ea580c] translate-y-1') : ''}
+                        ${dragItemIdx === ejIdx ? 'opacity-50 scale-95 shadow-inner bg-gray-100' : ''}
+                      `}>
+                      <div className="text-gray-300 cursor-grab active:cursor-grabbing shrink-0 flex flex-col justify-center gap-0.5">
+                        <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                        <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                        <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                      </div>
                       <div className="w-8 h-8 bg-gray-200 rounded overflow-hidden shrink-0 flex items-center justify-center">
                         {imgUrl ? (
                           <img
@@ -500,8 +567,14 @@ export default function CrearRutina({ onBack }: Props) {
                             className="w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center text-black bg-white" />
                         </div>
                       </div>
+                      <div className="flex flex-col gap-1 shrink-0 ml-2 border-r border-gray-200 pr-3">
+                        <button onClick={() => moverEjArriba(ej.uid)} disabled={ejIdx === 0}
+                          className="text-gray-400 hover:text-[#ea580c] disabled:opacity-20 text-[10px] leading-none">▲</button>
+                        <button onClick={() => moverEjAbajo(ej.uid)} disabled={ejIdx === rutina.ejercicios.length - 1}
+                          className="text-gray-400 hover:text-[#ea580c] disabled:opacity-20 text-[10px] leading-none">▼</button>
+                      </div>
                       <button onClick={() => eliminarEj(ej.uid)}
-                        className="text-red-400 hover:text-red-600 text-sm font-bold shrink-0">✕</button>
+                        className="text-red-400 hover:text-red-600 text-sm font-bold shrink-0 ml-1">✕</button>
                     </div>
                     )
                   })}
