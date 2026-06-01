@@ -25,6 +25,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import db from '../config/database.js';
+import { getIO } from '../config/socket.js';
 
 const router = express.Router();
 
@@ -516,7 +517,7 @@ router.post('/acceso/sucursal', verificarApiKey, async (req, res) => {
     await conn.beginTransaction();
 
     const [rows] = await conn.query(
-      `SELECT id_suscriptor, nombres, apellido_paterno
+      `SELECT id_suscriptor, nombres, apellido_paterno, foto_url
          FROM suscriptores WHERE nfc_uid = ? LIMIT 1 FOR UPDATE`,
       [valor]
     );
@@ -605,6 +606,25 @@ router.post('/acceso/sucursal', verificarApiKey, async (req, res) => {
         );
         console.log(`[HW/ACCESO/SUC] +10 pts → ${nombre}`);
       }
+    }
+
+    // ── Emitir notificación en tiempo real a la sucursal ──────────────────
+    try {
+      const io = getIO();
+      // Emitimos al canal de la sucursal. Los staffs de esa sucursal pueden
+      // estar en "personal:X" pero Header.tsx va a escuchar globalmente a 'acceso:notificacion'
+      // y filtrará por su id_sucursal, O podemos emitir a un room específico "sucursal_staff"
+      // Lo más fácil es emitir el evento con la info. Header decidirá si lo muestra.
+      io.emit('acceso:notificacion', {
+        id_sucursal: parseInt(id_sucursal),
+        id_suscriptor: suscriptor.id_suscriptor,
+        nombre: nombre,
+        foto_url: suscriptor.foto_url,
+        movimiento: movimiento,
+        fecha_hora: new Date().toISOString()
+      });
+    } catch (e) {
+      console.error('[HW/ACCESO/SUCURSAL] Error emitiendo socket:', e.message);
     }
 
     await conn.commit();

@@ -23,6 +23,16 @@ interface NotificacionSucursal {
   leida:           number;
 }
 
+interface AccesoNotif {
+  _id: string;
+  id_sucursal: number;
+  id_suscriptor: number;
+  nombre: string;
+  foto_url: string;
+  movimiento: string;
+  fecha_hora: string;
+}
+
 // ─── Formateador corregido ────────────────────────────────────────────────────
 function fmtFecha(iso: string): string {
   try {
@@ -63,6 +73,21 @@ export default function Header() {
   const [abiertoNotif,  setAbiertoNotif]  = useState(false);
   const panelNotifRef                     = useRef<HTMLDivElement>(null);
   const socketSucursalRef                 = useRef<Socket | null>(null);
+
+  // ── Notificaciones de Acceso en Tiempo Real ─────────────────────────────
+  const [accesosRecientes, setAccesosRecientes] = useState<AccesoNotif[]>([]);
+
+  const handleNuevoAcceso = useCallback((data: Omit<AccesoNotif, '_id'>) => {
+    const miSucursal = user?.id_sucursal ?? (user?.rol === 'sucursal' ? user?.id : null);
+    if (miSucursal && miSucursal !== data.id_sucursal) return;
+
+    const newNotif = { ...data, _id: Math.random().toString(36).substring(7) };
+    setAccesosRecientes(prev => [...prev, newNotif]);
+
+    setTimeout(() => {
+      setAccesosRecientes(prev => prev.filter(n => n._id !== newNotif._id));
+    }, 5000); // 5 segundos en pantalla
+  }, [user]);
 
   const cargarAvisos = useCallback(async () => {
     if (!esPersonal) return;
@@ -111,6 +136,8 @@ export default function Header() {
       setNoLeidos(prev => prev + 1);
     });
 
+    socket.on('acceso:notificacion', handleNuevoAcceso);
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -138,6 +165,8 @@ export default function Header() {
         cargarNotificacionesSucursal();
       }
     });
+
+    socket.on('acceso:notificacion', handleNuevoAcceso);
 
     return () => {
       socket.disconnect();
@@ -411,6 +440,52 @@ export default function Header() {
           </svg>
         </button>
       </div>
+
+      {/* ── Contenedor de Toasts de Acceso ──────────────────────────────── */}
+      {accesosRecientes.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+          {accesosRecientes.map(notif => (
+            <div
+              key={notif._id}
+              className="bg-[#0f172a] border border-[#ea580c] shadow-[0_0_20px_rgba(234,88,12,0.3)] rounded-xl p-4 flex items-center gap-4 w-[320px] pointer-events-auto animate-in slide-in-from-right-10 fade-in duration-300"
+            >
+              <div className="w-14 h-14 rounded-full overflow-hidden shrink-0 border-2 border-[#ea580c] bg-gray-800">
+                {notif.foto_url ? (
+                  <img
+                    src={`${BACKEND_URL}${notif.foto_url}`}
+                    alt="Foto suscriptor"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[#ea580c] font-black text-xl">
+                    {notif.nombre.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-white font-bold text-sm leading-tight mb-1">
+                  {notif.nombre}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded ${
+                      notif.movimiento === 'Entrada'
+                        ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                        : 'bg-[#ea580c]/20 text-[#ea580c] border border-[#ea580c]/50'
+                    }`}
+                  >
+                    {notif.movimiento}
+                  </span>
+                  <span className="text-gray-400 text-xs">
+                    {new Date(notif.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </header>
   );
 }
