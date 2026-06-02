@@ -6,17 +6,19 @@
 //  REGLAS según propuesta:
 //    Strike 1 → 24h sin actividad desde creación del reporte
 //               Notifica: todo el personal de la sucursal
-//    Strike 2 → 24h adicionales (48h total) sin pasar de "En_Proceso" a "Resuelto"
-//               Notifica: personal + usuario Sucursal
+//    Strike 2 → 24h adicionales (48h total) sin seguimiento desde el 1er strike
+//               Condición: el reporte sigue en 'Abierto' o sin actualización desde el strike 1
+//               Notifica: personal + usuario Sucursal + correo de advertencia
+//               Guarda notificación persistente en BD
 //    Strike 3 → 24h adicionales (72h total)
-//               Notifica: Sucursal (urgente) + suscriptor
+//               Notifica: Sucursal (urgente) + suscriptor + correo de alerta crítica
 //
 //  Los tiempos son configurables por sucursal en config_reportes_periodicos
 //  (columnas horas_strike1, horas_strike2, horas_strike3).
 // ============================================================================
 
 import db from '../config/database.js';
-import { notificarTercerStrikeSucursal } from './mailer.service.js';
+import { notificarSegundoStrikeSucursal, notificarTercerStrikeSucursal } from './mailer.service.js';
 
 // ─── Constantes default (si la sucursal no tiene config personalizada) ────────
 const DEFAULT_HORAS = { strike1: 24, strike2: 24, strike3: 24 };
@@ -95,7 +97,16 @@ async function evaluarReporte(reporte) {
   if (strikeActual === 0 && horasDesdeCreacion >= umbralS1) {
     nuevoStrike = 1;
   } else if (strikeActual === 1 && horasDesdeCreacion >= umbralS2) {
-    nuevoStrike = 2;
+    // ── SEGUNDO STRIKE ──────────────────────────────────────────────────────
+    // Se ejecuta si el reporte continúa sin seguimiento 24h después del 1er strike.
+    // "Sin seguimiento" = el reporte sigue en estado 'Abierto' (nadie lo ha tomado),
+    // O si fue tomado en proceso pero no se ha actualizado desde el primer strike.
+    const ultimoStrikeEn = reporte.ultimo_strike_en ? new Date(reporte.ultimo_strike_en) : creado;
+    const sinSeguimiento = reporte.estado === 'Abierto' || actualizado <= ultimoStrikeEn;
+
+    if (sinSeguimiento) {
+      nuevoStrike = 2;
+    }
   } else if (strikeActual === 2 && horasDesdeCreacion >= umbralS3) {
     nuevoStrike = 3;
   } else if (strikeActual >= 3) {
@@ -198,7 +209,19 @@ async function aplicarStrike(reporte, nivel) {
   // ── 7. Notificaciones internas (Socket.io) ────────────────────────────────
   await emitirNotificaciones(id_reporte, nivel, notificados, id_sucursal, suscriptor);
 
-  // ── 8. Enviar correo de alta prioridad (Strike >= 3) ────────────────────
+  // ── 8. Enviar correo de advertencia (Strike 2) ─────────────────────────
+  if (nivel === 2) {
+    const emailSucursal = sucursal.correo?.trim() || null;
+    if (emailSucursal) {
+      notificarSegundoStrikeSucursal(emailSucursal, id_reporte, sucursal.nombre).catch(err =>
+        console.error(`[STRIKES] Error enviando correo de strike 2 a sucursal:`, err)
+      );
+    } else {
+      console.warn(`[STRIKES] Sucursal ${id_sucursal} sin correo configurado; no se envió alerta de 2do strike por email.`);
+    }
+  }
+
+  // ── 9. Enviar correo de alta prioridad (Strike >= 3) ────────────────────
   if (nivel >= 3) {
     const emailSucursal = sucursal.correo?.trim() || null;
     if (emailSucursal) {
@@ -210,10 +233,10 @@ async function aplicarStrike(reporte, nivel) {
     }
   }
 
-  // ── 9. Log detallado para depuración ─────────────────────────────────────
+  // ── 10. Log detallado para depuración ────────────────────────────────────
   const msg = {
     1: `1er Strike: Notificados ${personal.length} personal`,
-    2: `2do Strike: Notificados ${personal.length} personal + sucursal`,
+    2: `2do Strike: Notificados ${personal.length} personal + sucursal + correo enviado`,
   };
   const m = msg[nivel] || `Strike ${nivel}: Notificados ${personal.length} personal + sucursal + suscriptor`;
   console.log(`[STRIKES]   → ${m} (Reporte #${id_reporte})`);
@@ -261,8 +284,8 @@ async function emitirNotificaciones(id_reporte, nivel, notificados, id_sucursal,
       });
     }
 
-    // ── Guardar notificación persistente en BD para la sucursal (Strike >= 3)
-    if (nivel >= 3) {
+    // ── Guardar notificación persistente en BD para la sucursal (Strike >= 2)
+    if (nivel >= 2) {
       try {
         await db.query(
           `INSERT INTO notificaciones_sucursal (id_sucursal, tipo, id_reporte, mensaje)

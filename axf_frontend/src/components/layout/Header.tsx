@@ -16,7 +16,7 @@ interface Aviso {
 
 interface NotificacionSucursal {
   id_notificacion: number;
-  tipo:            'reporte_personal' | 'strike_3';
+  tipo:            'reporte_personal' | 'strike_2' | 'strike_3';
   id_reporte:      number;
   mensaje:         string;
   creado_en:       string;
@@ -161,7 +161,7 @@ export default function Header() {
     });
 
     socket.on('alerta:strike', (data: { nivel: number }) => {
-      if (data.nivel === 3) {
+      if (data.nivel >= 2) {
         cargarNotificacionesSucursal();
       }
     });

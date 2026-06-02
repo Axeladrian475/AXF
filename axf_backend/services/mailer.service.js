@@ -162,6 +162,46 @@ export async function notificarNuevaDieta(to, nombre, pdfBuffer = null) {
 }
 
 /**
+ * Envía un correo de advertencia a la sucursal cuando un reporte alcanza el segundo strike.
+ * Indica que el reporte lleva 48h sin resolución y que está próximo a escalar a strike 3.
+ */
+export async function notificarSegundoStrikeSucursal(to, id_reporte, nombreSucursal) {
+  const subject = `🔶 ADVERTENCIA: Segundo Strike - Reporte #${id_reporte} sin resolver`;
+  const html = `
+    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #f59e0b; border-radius: 12px; overflow: hidden; background-color: #fffbeb; color: #1e293b;">
+      
+      <!-- Cabecera -->
+      <div style="background-color: #f59e0b; padding: 24px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px; text-transform: uppercase;">SEGUNDO STRIKE ALCANZADO</h1>
+      </div>
+
+      <!-- Cuerpo -->
+      <div style="padding: 32px 24px;">
+        <h2 style="color: #92400e; margin-top: 0;">Atención Sucursal: ${nombreSucursal}</h2>
+        <p style="color: #475569; font-size: 16px; line-height: 1.5;">
+          El <strong>Reporte #${id_reporte}</strong> ha alcanzado el <strong>Segundo Strike</strong>. Esto significa que lleva más de 48 horas sin seguimiento ni resolución desde su creación.
+        </p>
+        <div style="background-color: #fef3c7; padding: 16px; border-left: 4px solid #f59e0b; margin: 20px 0;">
+          <p style="margin: 0; color: #92400e; font-weight: bold;">⚠️ Escalada inminente</p>
+          <p style="margin: 8px 0 0 0; color: #92400e;">Si este reporte no se resuelve en las próximas 24 horas, se activará el <strong>Tercer Strike</strong> con escalada máxima, notificación al suscriptor y alerta urgente.</p>
+        </div>
+        <p style="color: #475569; font-size: 16px; line-height: 1.5; font-weight: bold;">
+          Se requiere atención inmediata para evitar la escalada a nivel crítico.
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background-color: #fef3c7; padding: 20px; text-align: center; border-top: 1px solid #fde68a;">
+        <p style="color: #92400e; font-size: 12px; margin: 0;">Este es un mensaje automático de alerta de AXF Gymnet. Por favor, atienda el reporte antes de que escale a nivel crítico.</p>
+        <p style="color: #b45309; font-size: 12px; margin: 5px 0 0 0;">© ${new Date().getFullYear()} AXF Solutions.</p>
+      </div>
+    </div>
+  `;
+  
+  return await enviarCorreo(to, subject, html);
+}
+
+/**
  * Envía un correo de alta prioridad a la sucursal cuando un reporte alcanza el tercer strike.
  */
 export async function notificarTercerStrikeSucursal(to, id_reporte, nombreSucursal) {
