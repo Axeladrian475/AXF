@@ -676,3 +676,83 @@ export async function marcarReenviado(req, res) {
     res.status(500).json({ message: 'Error al marcar como reenviado.' });
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/reportes/reenviar-sucursal/:id_reporte (APP MÓVIL)
+// Permite al suscriptor reenviar su propio reporte a la sucursal
+// cuando ha alcanzado el 3er strike.
+// ════════════════════════════════════════════════════════════════════════════
+export async function reenviarReporteSucursal(req, res) {
+  try {
+    const { id_reporte } = req.params;
+    const id_suscriptor = req.usuario.id;
+
+    const [[reporte]] = await db.query(
+      `SELECT id_reporte, id_sucursal, num_strikes, reenviado_sucursal, estado, categoria, descripcion
+       FROM reportes 
+       WHERE id_reporte = ? AND id_suscriptor = ?`,
+      [id_reporte, id_suscriptor]
+    );
+
+    if (!reporte) {
+      return res.status(404).json({ success: false, message: 'Reporte no encontrado o no autorizado.' });
+    }
+
+    if (reporte.num_strikes < 3) {
+      return res.status(400).json({ success: false, message: 'El reporte no ha alcanzado el tercer strike.' });
+    }
+
+    if (reporte.estado === 'Resuelto') {
+      return res.status(400).json({ success: false, message: 'El reporte ya está resuelto.' });
+    }
+
+    if (reporte.reenviado_sucursal === 1) {
+      return res.json({ success: true, message: 'El reporte ya fue reenviado a la sucursal anteriormente.' });
+    }
+
+    // Actualizar BD
+    await db.query(
+      `UPDATE reportes SET reenviado_sucursal = 1 WHERE id_reporte = ?`,
+      [id_reporte]
+    );
+
+    // Obtener nombre del suscriptor
+    const [[suscriptor]] = await db.query(
+      `SELECT CONCAT(nombres, ' ', apellido_paterno) AS nombre
+       FROM suscriptores WHERE id_suscriptor = ?`,
+      [id_suscriptor]
+    );
+
+    const mensajeAlerta = `🚨 REENVÍO TERCER STRIKE: El suscriptor ha escalado el reporte #${id_reporte} por falta de atención.`;
+
+    // 1. Guardar notificación persistente en BD
+    await db.query(
+      `INSERT INTO notificaciones_sucursal (id_sucursal, tipo, id_reporte, mensaje)
+       VALUES (?, 'reporte_reenviado', ?, ?)`,
+      [reporte.id_sucursal, id_reporte, mensajeAlerta]
+    );
+
+    // 2. Emitir evento por Sockets al encargado de la sucursal
+    try {
+      const { getIO } = await import('../config/socket.js');
+      const io = getIO();
+      
+      io.to(`sucursal:${reporte.id_sucursal}`).emit('reporte:reenviado', {
+        id_reporte: reporte.id_reporte,
+        categoria: reporte.categoria,
+        descripcion: reporte.descripcion,
+        urgente: true,
+        nombre_suscriptor: suscriptor?.nombre ?? 'Suscriptor',
+        mensaje: mensajeAlerta
+      });
+      console.log(`[REENVIO_REPORTE] Notificado a sucursal:${reporte.id_sucursal} → Reporte #${id_reporte}`);
+    } catch (socketErr) {
+      console.warn('[REENVIO_REPORTE] Error emitiendo evento socket:', socketErr.message);
+    }
+
+    res.json({ success: true, message: 'Reporte reenviado a Sucursal exitosamente.' });
+  } catch (error) {
+    console.error('[POST /reportes/reenviar-sucursal]', error);
+    res.status(500).json({ success: false, message: 'Error interno al reenviar el reporte.' });
+  }
+}

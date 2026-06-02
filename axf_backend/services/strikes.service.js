@@ -1,7 +1,7 @@
 // ============================================================================
 //  services/strikes.service.js
 //
-//  Motor de escalada de strikes — se ejecuta periódicamente (cada hora).
+//  Motor de escalada de strikes — se ejecuta periódicamente (cada 24 horas).
 //
 //  REGLAS según propuesta:
 //    Strike 1 → 24h sin actividad desde creación del reporte

@@ -43,6 +43,7 @@ import {
   analisisPersonal,
   listarPrioritarios,
   marcarReenviado,
+  reenviarReporteSucursal,
 } from '../controllers/reportes.controller.js';
 import {
   getConfigStrikes,
@@ -341,6 +342,9 @@ router.post('/sumar/:id_reporte', verificarSuscriptor, async (req, res) => {
     res.status(500).json({ success: false, message: 'Error al sumarse al reporte' });
   }
 });
+
+// POST /api/reportes/reenviar-sucursal/:id_reporte
+router.post('/reenviar-sucursal/:id_reporte', verificarSuscriptor, reenviarReporteSucursal);
 
 // GET /api/reportes/mis-reportes
 router.get('/mis-reportes', verificarSuscriptor, async (req, res) => {

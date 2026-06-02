@@ -4,7 +4,7 @@
 //  CAMBIOS respecto a la versión anterior:
 //    1. import reportesRoutes          → rutas del módulo de alertas
 //    2. import { procesarStrikes }     → motor de escalada
-//    3. setInterval(procesarStrikes)   → ejecuta cada hora automáticamente
+//    3. setInterval(procesarStrikes)   → ejecuta cada 24 horas automáticamente
 //    4. app.use('/api/reportes', ...)  → registrar rutas
 //    5. import movilNutricionRoutes    → rutas móviles de nutrición  ← NUEVO
 //    6. app.use('/api/movil/nutricion',...)                          ← NUEVO
@@ -84,7 +84,7 @@ const httpServer = createServer(app);
 initSocket(httpServer);
 
 // ── Motor automático de escalada de strikes ───────────────────────────────────
-const INTERVALO_STRIKES_MS = 60 * 60 * 1_000; // 1 hora
+const INTERVALO_STRIKES_MS = 24 * 60 * 60 * 1_000; // 24 horas
 
 function iniciarMotorStrikes() {
   console.log(`[STRIKES] 🕐 Motor iniciado. Ciclo cada ${INTERVALO_STRIKES_MS / 60_000} minutos.`);
