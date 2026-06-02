@@ -259,11 +259,41 @@ async function emitirNotificaciones(id_reporte, nivel, notificados, id_sucursal,
       generado_en: new Date().toISOString(),
     };
 
-    // Notificar a cada miembro del personal en su sala
-    if (notificados.personal) {
-      notificados.personal.forEach(p => {
-        io.to(`personal:${p.id}`).emit('alerta:strike', payload);
-      });
+    // ── Notificar a cada miembro del personal (Socket.io + BD persistente) ──
+    if (notificados.personal && notificados.personal.length > 0) {
+      try {
+        const mensajeAviso = `⚠️ Strike ${nivel} en Reporte #${id_reporte}: ${payload.mensaje}`;
+        
+        // 1. Guardar el aviso principal
+        const [avisoRes] = await db.query(
+          `INSERT INTO avisos (id_sucursal, mensaje) VALUES (?, ?)`,
+          [id_sucursal, mensajeAviso]
+        );
+        const id_aviso = avisoRes.insertId;
+
+        // 2. Asociar el aviso a cada empleado notificado
+        const placeholders = notificados.personal.map(() => '(?, ?)').join(', ');
+        const valores = notificados.personal.flatMap(p => [id_aviso, p.id]);
+        await db.query(
+          `INSERT INTO aviso_destinatarios (id_aviso, id_personal) VALUES ${placeholders}`,
+          valores
+        );
+
+        // 3. Emitir eventos en tiempo real
+        notificados.personal.forEach(p => {
+          // Evento original de alerta de strike
+          io.to(`personal:${p.id}`).emit('alerta:strike', payload);
+          // Evento para actualizar la campanita de avisos en el Header
+          io.to(`personal:${p.id}`).emit('aviso:nuevo', {
+            id_aviso,
+            mensaje: mensajeAviso,
+            creado_en: new Date().toISOString(),
+            leido: 0,
+          });
+        });
+      } catch (eAviso) {
+        console.error('[STRIKES] Error al guardar aviso para personal:', eAviso.message);
+      }
     }
 
     // Notificar a la sala de la sucursal (nivel 2+)
