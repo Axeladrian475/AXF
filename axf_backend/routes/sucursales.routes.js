@@ -47,7 +47,7 @@ function soloMaestro(req, res, next) {
 router.get('/', verificarToken, soloMaestro, async (req, res) => {
   try {
     const [sucursales] = await db.query(
-      'SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, correo, activa, creado_en FROM sucursales WHERE activa = 1 ORDER BY id_sucursal ASC'
+      'SELECT id_sucursal, nombre, direccion, codigo_postal, usuario, correo, activa, creado_en, (password_enc IS NOT NULL) as password_recuperable FROM sucursales WHERE activa = 1 ORDER BY id_sucursal ASC'
     );
     res.json(sucursales);
   } catch (error) {

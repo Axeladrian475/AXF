@@ -10,6 +10,7 @@
 
 import db     from '../config/database.js';
 import bcrypt from 'bcryptjs';
+import { encryptPassword } from '../utils/passwordVault.js';
 
 // ── Expresiones regulares para validación RQNF3 (espejo del frontend) ─────────
 // Validar aquí también protege el API ante llamadas directas sin pasar por React.
@@ -121,12 +122,13 @@ export async function crearSucursal(req, res) {
       // BUG ANTERIOR: el hash se intentaba antes sin await en contexto erróneo;
       // aquí se garantiza que bcrypt.hash resuelve su Promise ANTES del UPDATE.
       const password_hash = await bcrypt.hash(password, 10);
+      const password_enc = encryptPassword(password);
 
       await db.query(
         `UPDATE sucursales
-            SET nombre = ?, direccion = ?, codigo_postal = ?, correo = ?, password_hash = ?, activa = 1
+            SET nombre = ?, direccion = ?, codigo_postal = ?, correo = ?, password_hash = ?, password_enc = ?, activa = 1
           WHERE id_sucursal = ?`,
-        [nombre, direccion, codigo_postal, correoNorm, password_hash, sucursalExistente.id_sucursal]
+        [nombre, direccion, codigo_postal, correoNorm, password_hash, password_enc, sucursalExistente.id_sucursal]
       );
 
       return res.status(200).json({
@@ -141,15 +143,16 @@ export async function crearSucursal(req, res) {
     // Promise rechaza y el error caía al catch sin mensaje útil para React.
     // Aquí está dentro del try/catch y el campo ya fue validado en el paso 2.
     const password_hash = await bcrypt.hash(password, 10);
+    const password_enc = encryptPassword(password);
 
     // ─── 6. INSERT con columnas explícitas ───────────────────────────────────
     // IMPORTANTE: se listan solo las columnas que enviamos.
     // La columna `capacidad_maxima` usa DEFAULT 50 en la BD y NO se incluye
     // en el INSERT para evitar desajuste de columnas / valores.
     const [result] = await db.query(
-      `INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, correo, password_hash, activa)
-       VALUES (?, ?, ?, ?, ?, ?, 1)`,
-      [nombre, direccion, codigo_postal, usuario, correoNorm, password_hash]
+      `INSERT INTO sucursales (nombre, direccion, codigo_postal, usuario, correo, password_hash, password_enc, activa)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      [nombre, direccion, codigo_postal, usuario, correoNorm, password_hash, password_enc]
     );
 
     return res.status(201).json({
