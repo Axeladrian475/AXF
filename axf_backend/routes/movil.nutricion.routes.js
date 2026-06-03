@@ -297,4 +297,89 @@ router.get('/dietas/:id/pdf', verificarSuscriptorQuery, requiereSuscripcionActiv
   }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+//  GET /api/movil/nutricion/consumo?fecha=YYYY-MM-DD
+// ════════════════════════════════════════════════════════════════════════════
+router.get('/consumo', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+    const { fecha } = req.query;
+    if (!fecha) return res.status(400).json({ message: 'Se requiere la fecha (YYYY-MM-DD)' });
+
+    const [consumos] = await db.query(
+      `SELECT c.*, 
+              dc.descripcion AS comida_planificada_desc,
+              dc.orden_comida
+       FROM consumo_diario c
+       LEFT JOIN dieta_comidas dc ON c.id_dieta_comida = dc.id_comida
+       WHERE c.id_suscriptor = ? AND c.fecha = ?
+       ORDER BY c.creado_en ASC`,
+      [id_suscriptor, fecha]
+    );
+
+    res.json(consumos);
+  } catch (err) {
+    console.error('[GET /movil/nutricion/consumo]', err);
+    res.status(500).json({ message: 'Error al obtener registro de consumo' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  POST /api/movil/nutricion/consumo
+// ════════════════════════════════════════════════════════════════════════════
+router.post('/consumo', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+    const { fecha, id_dieta_comida, descripcion, calorias, proteinas, grasas, carbohidratos } = req.body;
+
+    if (!fecha || !descripcion) {
+      return res.status(400).json({ message: 'Fecha y descripción son obligatorias' });
+    }
+
+    const [result] = await db.query(
+      `INSERT INTO consumo_diario 
+       (id_suscriptor, fecha, id_dieta_comida, descripcion, calorias, proteinas, grasas, carbohidratos)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id_suscriptor, fecha, 
+        id_dieta_comida || null, 
+        descripcion, 
+        calorias || null, 
+        proteinas || null, 
+        grasas || null, 
+        carbohidratos || null
+      ]
+    );
+
+    res.json({ message: 'Consumo registrado', id_consumo: result.insertId });
+  } catch (err) {
+    console.error('[POST /movil/nutricion/consumo]', err);
+    res.status(500).json({ message: 'Error al guardar consumo' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  DELETE /api/movil/nutricion/consumo/:id
+// ════════════════════════════════════════════════════════════════════════════
+router.delete('/consumo/:id', verificarSuscriptor, requiereSuscripcionActiva, async (req, res) => {
+  try {
+    const id_suscriptor = req.usuario.id;
+    const id_consumo = req.params.id;
+
+    const [result] = await db.query(
+      `DELETE FROM consumo_diario WHERE id_consumo = ? AND id_suscriptor = ?`,
+      [id_consumo, id_suscriptor]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Registro no encontrado o no pertenece al usuario' });
+    }
+
+    res.json({ message: 'Registro eliminado correctamente' });
+  } catch (err) {
+    console.error('[DELETE /movil/nutricion/consumo/:id]', err);
+    res.status(500).json({ message: 'Error al eliminar consumo' });
+  }
+});
+
 export default router;

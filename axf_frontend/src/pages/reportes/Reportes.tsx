@@ -54,7 +54,7 @@ export default function Reportes() {
             Todos los Reportes
           </button>
 
-          {esMaestro && (
+          {(esMaestro || esSucursal) && (
             <button onClick={() => setTab('config')} className={btnClass('config')}>
               Configuración
             </button>
@@ -64,7 +64,7 @@ export default function Reportes() {
         {tab === 'prioritarios' && esSucursal && <TabsReportesPrioritarios />}
         {tab === 'personal'     && esSucursal && <TabsReportesPersonal />}
         {tab === 'buscar'       && <TabsBuscarReportes />}
-        {tab === 'config'       && esMaestro  && <TabsConfiguracion />}
+        {tab === 'config'       && (esMaestro || esSucursal) && <TabsConfiguracion />}
 
       </div>
     </div>

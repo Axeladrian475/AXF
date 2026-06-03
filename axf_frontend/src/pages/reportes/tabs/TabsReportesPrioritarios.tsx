@@ -645,7 +645,11 @@ export default function TabsReportesPrioritarios() {
               <div className="space-y-3">
                 {strikes.map(s => {
                   const conf = STRIKE_CONFIG[Math.min(s.nivel, 3)]
-                  let notifs: { personal?: unknown[]; sucursal?: unknown; suscriptor?: unknown } = {}
+                  let notifs: { 
+                    personal?: Array<{ id: number; nombre: string; puesto?: string }>; 
+                    sucursal?: { id: number; nombre: string }; 
+                    suscriptor?: { id: number; nombre: string; correo: string }; 
+                  } = {}
                   try { notifs = JSON.parse(s.notificados ?? '{}') } catch { /* */ }
 
                   return (
@@ -660,13 +664,35 @@ export default function TabsReportesPrioritarios() {
                       <p className="text-xs text-slate-500 mb-3">
                         Generado a las <span className="font-semibold text-slate-700">{s.horas_al_strike}h</span> del reporte
                       </p>
-                      <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 space-y-1.5">
-                        <p className="font-semibold text-slate-500 uppercase tracking-wide text-[10px] mb-2">Notificados</p>
-                        {notifs.personal && Array.isArray(notifs.personal) && (
-                          <p>👥 <span className="font-medium">{notifs.personal.length}</span> miembro(s) del personal</p>
+                      <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 space-y-3">
+                        <p className="font-semibold text-slate-500 uppercase tracking-wide text-[10px] mb-1">Usuarios Notificados</p>
+                        
+                        {notifs.personal && Array.isArray(notifs.personal) && notifs.personal.length > 0 && (
+                          <div>
+                            <p className="font-semibold text-slate-700 mb-1">👥 Personal de Sucursal:</p>
+                            <ul className="pl-4 space-y-1 list-disc list-inside">
+                              {notifs.personal.map(p => (
+                                <li key={p.id}>
+                                  {p.nombre} {p.puesto && <span className="text-slate-400">({p.puesto.replace(/_/g, ' ')})</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
-                        {Boolean(notifs.sucursal) && <p>🏢 Encargado de sucursal</p>}
-                        {Boolean(notifs.suscriptor) && <p>📱 Suscriptor</p>}
+
+                        {notifs.sucursal && (
+                          <div>
+                            <p className="font-semibold text-slate-700 mb-1">🏢 Encargado de Sucursal:</p>
+                            <p className="pl-4 text-slate-600">{notifs.sucursal.nombre}</p>
+                          </div>
+                        )}
+
+                        {notifs.suscriptor && (
+                          <div>
+                            <p className="font-semibold text-slate-700 mb-1">📱 Suscriptor:</p>
+                            <p className="pl-4 text-slate-600">{notifs.suscriptor.nombre} <span className="text-slate-400">({notifs.suscriptor.correo})</span></p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
