@@ -72,15 +72,11 @@ export const getRecetas = (): Promise<RecetaAPI[]> =>
   axiosClient.get('/nutricion/recetas').then(r => r.data);
 
 /** Los macros se calculan en el backend — NO se envían en el body */
-export const crearReceta = (data: {
-  nombre:       string;
-  ingredientes: { id_ingrediente: number; cantidad: number }[];
-}) => axiosClient.post('/nutricion/recetas', data).then(r => r.data);
+export const crearReceta = (data: FormData) => 
+  axiosClient.post('/nutricion/recetas', data).then(r => r.data);
 
-export const actualizarReceta = (id: number, data: {
-  nombre:       string;
-  ingredientes: { id_ingrediente: number; cantidad: number }[];
-}) => axiosClient.put(`/nutricion/recetas/${id}`, data).then(r => r.data);
+export const actualizarReceta = (id: number, data: FormData) => 
+  axiosClient.put(`/nutricion/recetas/${id}`, data).then(r => r.data);
 
 export const eliminarReceta = (id: number) =>
   axiosClient.delete(`/nutricion/recetas/${id}`).then(r => r.data);

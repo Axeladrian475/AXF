@@ -12,12 +12,35 @@
 // ============================================================================
 
 import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import db from '../config/database.js';
 import { verificarToken, soloPersonal, getSucursalId } from '../middlewares/auth.js';
 import { notificarNuevaDieta } from '../services/mailer.service.js';
 import { generarDietaPDFBuffer } from '../services/pdf.service.js';
 
 const router = express.Router();
+
+const __filenameR = fileURLToPath(import.meta.url);
+const __dirnameR = path.dirname(__filenameR);
+
+const UPLOADS_RECETAS = path.resolve(__dirnameR, '..', 'uploads', 'recetas');
+if (!fs.existsSync(UPLOADS_RECETAS)) fs.mkdirSync(UPLOADS_RECETAS, { recursive: true });
+
+const uploadReceta = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_RECETAS),
+    filename: (_req, file, cb) =>
+      cb(null, `receta_${Date.now()}${path.extname(file.originalname).toLowerCase()}`),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Solo imágenes permitidas'));
+  },
+});
 
 // ─── Middleware: solo nutriólogo o entrenador_nutriólogo ──────────────────────
 function soloNutriologo(req, res, next) {
@@ -213,7 +236,7 @@ router.get('/recetas', verificarToken, soloPersonal, soloNutriologo, async (_req
 // POST /api/nutricion/recetas
 // Macros calculados automáticamente — NO se aceptan en el body.
 // Body: { nombre, ingredientes: [{ id_ingrediente, cantidad }] }
-router.post('/recetas', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
+router.post('/recetas', verificarToken, soloPersonal, soloNutriologo, uploadReceta.single('imagen'), async (req, res) => {
   const conn = await db.getConnection();
   try {
     const { nombre, ingredientes } = req.body;
@@ -225,11 +248,12 @@ router.post('/recetas', verificarToken, soloPersonal, soloNutriologo, async (req
     }
 
     const macros = await calcularMacrosReceta(conn, parsedIngs);
+    const imagen_url = req.file ? `/uploads/recetas/${req.file.filename}` : null;
 
     await conn.beginTransaction();
     const [result] = await conn.query(
-      'INSERT INTO recetas (nombre, calorias, proteinas_g, grasas_g, carbohidratos_g, creado_por) VALUES (?, ?, ?, ?, ?, ?)',
-      [nombre.trim(), macros.calorias, macros.proteinas_g, macros.grasas_g, macros.carbohidratos_g, req.usuario.id]
+      'INSERT INTO recetas (nombre, imagen_url, calorias, proteinas_g, grasas_g, carbohidratos_g, creado_por) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [nombre.trim(), imagen_url, macros.calorias, macros.proteinas_g, macros.grasas_g, macros.carbohidratos_g, req.usuario.id]
     );
     for (const ing of parsedIngs) {
       await conn.query(
@@ -250,7 +274,7 @@ router.post('/recetas', verificarToken, soloPersonal, soloNutriologo, async (req
 
 // PUT /api/nutricion/recetas/:id
 // Body: { nombre, ingredientes: [{ id_ingrediente, cantidad }] }
-router.put('/recetas/:id', verificarToken, soloPersonal, soloNutriologo, async (req, res) => {
+router.put('/recetas/:id', verificarToken, soloPersonal, soloNutriologo, uploadReceta.single('imagen'), async (req, res) => {
   const conn = await db.getConnection();
   try {
     const { nombre, ingredientes } = req.body;
@@ -267,10 +291,19 @@ router.put('/recetas/:id', verificarToken, soloPersonal, soloNutriologo, async (
     const macros = await calcularMacrosReceta(conn, parsedIngs);
 
     await conn.beginTransaction();
-    await conn.query(
-      'UPDATE recetas SET nombre=?, calorias=?, proteinas_g=?, grasas_g=?, carbohidratos_g=? WHERE id_receta=?',
-      [nombre.trim(), macros.calorias, macros.proteinas_g, macros.grasas_g, macros.carbohidratos_g, req.params.id]
-    );
+    
+    if (req.file) {
+      const imagen_url = `/uploads/recetas/${req.file.filename}`;
+      await conn.query(
+        'UPDATE recetas SET nombre=?, imagen_url=?, calorias=?, proteinas_g=?, grasas_g=?, carbohidratos_g=? WHERE id_receta=?',
+        [nombre.trim(), imagen_url, macros.calorias, macros.proteinas_g, macros.grasas_g, macros.carbohidratos_g, req.params.id]
+      );
+    } else {
+      await conn.query(
+        'UPDATE recetas SET nombre=?, calorias=?, proteinas_g=?, grasas_g=?, carbohidratos_g=? WHERE id_receta=?',
+        [nombre.trim(), macros.calorias, macros.proteinas_g, macros.grasas_g, macros.carbohidratos_g, req.params.id]
+      );
+    }
     await conn.query('DELETE FROM receta_ingredientes WHERE id_receta = ?', [req.params.id]);
     for (const ing of parsedIngs) {
       await conn.query(

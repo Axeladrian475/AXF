@@ -8,6 +8,8 @@ import {
 } from '../../../api/nutricionApi'
 import type { RecetaAPI, IngredienteAPI } from '../../../api/nutricionApi'
 
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'
+
 interface Props { onBack: () => void }
 
 interface IngredienteLocal {
@@ -38,6 +40,8 @@ function macrosPara(ing: IngredienteLocal, cantidad: number) {
 
 export default function CargarReceta({ onBack }: Props) {
   const [nombreReceta, setNombreReceta]         = useState('')
+  const [imagenArchivo, setImagenArchivo]       = useState<File | null>(null)
+  const [imagenPreview, setImagenPreview]       = useState<string | null>(null)
   const [ingredientes, setIngredientes]         = useState<IngredienteLocal[]>([])
   const [recetasGuardadas, setRecetasGuardadas] = useState<RecetaAPI[]>([])
   const [ingredientesDB, setIngredientesDB]     = useState<IngredienteAPI[]>([])
@@ -113,13 +117,15 @@ export default function CargarReceta({ onBack }: Props) {
     setIngredientes(prev => prev.filter((_, i) => i !== idx))
 
   const resetForm = () => {
-    setNombreReceta(''); setIngredientes([])
+    setNombreReceta(''); setIngredientes([]); setImagenArchivo(null); setImagenPreview(null);
     setBusIng(''); setModo('nueva'); setEditandoId(null); setError('')
   }
 
   const cargarParaEditar = (r: RecetaAPI) => {
     setModo('editar'); setEditandoId(r.id_receta)
     setNombreReceta(r.nombre)
+    setImagenArchivo(null)
+    setImagenPreview(r.imagen_url ? `${API_BASE}${r.imagen_url}` : null)
     const ingsLocales: IngredienteLocal[] = r.ingredientes?.map(ing => {
       const db = ingredientesDB.find(d => d.id_ingrediente === ing.id_ingrediente)
       return {
@@ -149,19 +155,20 @@ export default function CargarReceta({ onBack }: Props) {
     }
     setError(''); setGuardando(true)
 
-    const payload = {
-      nombre: nombreReceta.trim(),
-      ingredientes: ingredientes.map(i => ({
-        id_ingrediente: i.id_ingrediente,
-        cantidad: parseFloat(i.cantidad) || 0,
-      })),
-    }
+    const form = new FormData()
+    form.append('nombre', nombreReceta.trim())
+    form.append('ingredientes', JSON.stringify(ingredientes.map(i => ({
+      id_ingrediente: i.id_ingrediente,
+      cantidad: parseFloat(i.cantidad) || 0,
+    }))))
+    if (imagenArchivo) form.append('imagen', imagenArchivo)
+
     try {
       if (modo === 'editar' && editandoId !== null) {
-        await actualizarReceta(editandoId, payload)
+        await actualizarReceta(editandoId, form as any)
         setExito(`Receta "${nombreReceta.trim()}" actualizada.`)
       } else {
-        await crearReceta(payload)
+        await crearReceta(form as any)
         setExito(`Receta "${nombreReceta.trim()}" guardada.`)
       }
       setRecetasGuardadas(await fetchRecetas())
@@ -230,15 +237,37 @@ export default function CargarReceta({ onBack }: Props) {
                 )}
               </div>
 
-              {/* Nombre */}
-              <div className="mb-4">
-                <label className="block text-xs font-bold text-black mb-1">Nombre de la Receta *</label>
-                <input
-                  placeholder="Ej. Pollo con Arroz"
-                  value={nombreReceta}
-                  onChange={e => setNombreReceta(e.target.value)}
-                  className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-black text-sm focus:outline-none focus:border-[#ea580c]"
-                />
+              {/* Nombre e Imagen */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1">Nombre de la Receta *</label>
+                  <input
+                    placeholder="Ej. Pollo con Arroz"
+                    value={nombreReceta}
+                    onChange={e => setNombreReceta(e.target.value)}
+                    className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-black text-sm focus:outline-none focus:border-[#ea580c]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1">Imagen (Opcional)</label>
+                  <div className="flex items-center gap-2">
+                    {imagenPreview && (
+                      <img src={imagenPreview} alt="Preview" className="w-10 h-10 object-cover rounded border border-gray-300 shrink-0" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setImagenArchivo(file)
+                          setImagenPreview(URL.createObjectURL(file))
+                        }
+                      }}
+                      className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Ingredientes */}
@@ -387,7 +416,12 @@ export default function CargarReceta({ onBack }: Props) {
                       editandoId === r.id_receta ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-[#ea580c]'
                     }`}>
                     <div className="flex justify-between items-start mb-2">
-                      <p className="font-bold text-sm text-black leading-tight">{r.nombre}</p>
+                      <div className="flex gap-2 items-center">
+                        {r.imagen_url && (
+                          <img src={`${API_BASE}${r.imagen_url}`} alt={r.nombre} className="w-10 h-10 object-cover rounded shadow-sm" />
+                        )}
+                        <p className="font-bold text-sm text-black leading-tight">{r.nombre}</p>
+                      </div>
                       <span className="text-xs font-black text-[#ea580c] shrink-0 ml-2">
                         {r.calorias ?? 0} Kcal
                       </span>
