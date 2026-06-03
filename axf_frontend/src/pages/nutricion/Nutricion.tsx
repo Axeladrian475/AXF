@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import RegistroUsuarios from './secciones/RegistroUsuarios'
 import CrearDieta from './secciones/CrearDieta'
 import CargarReceta from './secciones/CargarReceta'
@@ -50,12 +50,21 @@ const CARDS = [
 ]
 
 export default function Nutricion() {
-  const [seccion, setSeccion] = useState<Seccion>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const seccion = searchParams.get('tab') as Seccion | null
 
-  if (seccion === 'registros')   return <RegistroUsuarios   onBack={() => setSeccion(null)} />
-  if (seccion === 'dieta')       return <CrearDieta          onBack={() => setSeccion(null)} />
-  if (seccion === 'receta')      return <CargarReceta        onBack={() => setSeccion(null)} />
-  if (seccion === 'ingrediente') return <CargarIngrediente   onBack={() => setSeccion(null)} />
+  const handleSetSeccion = (s: Seccion | null) => {
+    if (s) {
+      setSearchParams({ tab: s })
+    } else {
+      setSearchParams({})
+    }
+  }
+
+  if (seccion === 'registros')   return <RegistroUsuarios   onBack={() => handleSetSeccion(null)} />
+  if (seccion === 'dieta')       return <CrearDieta          onBack={() => handleSetSeccion(null)} />
+  if (seccion === 'receta')      return <CargarReceta        onBack={() => handleSetSeccion(null)} />
+  if (seccion === 'ingrediente') return <CargarIngrediente   onBack={() => handleSetSeccion(null)} />
 
   return (
     <div className="p-4">
@@ -64,7 +73,7 @@ export default function Nutricion() {
         <p className="text-sm text-gray-500 mb-6">Seleccione una función para comenzar la gestión nutricional:</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {CARDS.map(card => (
-            <button key={String(card.id)} onClick={() => setSeccion(card.id)}
+            <button key={String(card.id)} onClick={() => handleSetSeccion(card.id)}
               className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col items-center text-center hover:border-[#ea580c] hover:shadow-md transition-all group cursor-pointer">
               <div className="mb-3">{card.icon}</div>
               <p className="font-bold text-black text-sm mb-2">{card.titulo}</p>

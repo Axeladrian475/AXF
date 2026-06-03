@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { getSuscriptoresNutricion, getRegistros, crearRegistro, eliminarRegistro } from '../../../api/nutricionApi'
 import type { SuscriptorNutricion, RegistroFisico } from '../../../api/nutricionApi'
 import { generarPDFHistorial } from '../../../utils/pdfExport'
@@ -23,6 +24,7 @@ const OBJETIVOS = [
 ]
 
 export default function RegistroUsuarios({ onBack }: Props) {
+  const [, setSearchParams] = useSearchParams()
   // Suscriptores
   const [suscriptores, setSuscriptores]   = useState<SuscriptorNutricion[]>([])
   const [cargando, setCargando]           = useState(true)
@@ -38,6 +40,7 @@ export default function RegistroUsuarios({ onBack }: Props) {
   const [objetivo, setObjetivo]       = useState('0')
   const [notas, setNotas]             = useState('')
   const [calculado, setCalculado]     = useState(false)
+  const [calculos, setCalculos]       = useState<any>(null)
   const [guardando, setGuardando]     = useState(false)
   const [exito, setExito]             = useState('')
   const [error, setError]             = useState('')
@@ -77,8 +80,12 @@ export default function RegistroUsuarios({ onBack }: Props) {
   }, [paciente])
 
   // Cálculos Mifflin-St Jeor
-  const calculos = useMemo(() => {
-    if (!paciente || !peso || !altura) return null
+  const calcularMacronutrientes = () => {
+    if (!paciente || !peso || !altura) {
+      setError('Por favor, ingresa peso y altura para calcular.')
+      return
+    }
+    setError('')
     const p = parseFloat(peso), h = parseFloat(altura)
     const tmb = paciente.sexo === 'M'
       ? (10 * p) + (6.25 * h) - (5 * edadPaciente) + 5
@@ -93,18 +100,21 @@ export default function RegistroUsuarios({ onBack }: Props) {
     const carbMax = Math.round((tdee * 0.50) / 4)
     const grasaMin = Math.round((tdee * 0.20) / 9)
     const grasaMax = Math.round((tdee * 0.30) / 9)
-    return {
+    
+    setCalculos({
       tmb: Math.round(tmb), tdee: Math.round(tdee),
       protMin, protMax, carbMin, carbMax, grasaMin, grasaMax,
       proteinas: `${protMin} - ${protMax}`,
       carbos: `${carbMin} - ${carbMax}`,
       grasas: `${grasaMin} - ${grasaMax}`,
-    }
-  }, [paciente, peso, altura, actividad, objetivo, edadPaciente])
+    })
+    setCalculado(true)
+  }
 
   const seleccionar = async (s: SuscriptorNutricion) => {
     setPaciente(s)
     setCalculado(false)
+    setCalculos(null)
     setNotas(''); setExito(''); setError(''); setGrasa(''); setMusculo('')
     // Cargar historial
     try {
@@ -246,9 +256,18 @@ export default function RegistroUsuarios({ onBack }: Props) {
             </div>
           ) : (
             <div className="flex-1 space-y-4">
-              <h3 className="font-bold text-base text-black">
-                Registrar Datos de: <span className="text-[#ea580c]">{nombreCompleto(paciente)}</span>
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-base text-black">
+                  Registrar Datos de: <span className="text-[#ea580c]">{nombreCompleto(paciente)}</span>
+                </h3>
+                <button onClick={() => setSearchParams({ tab: 'dieta' })}
+                  className="bg-orange-600 text-white font-bold px-4 py-1.5 rounded text-xs hover:bg-orange-700 transition-colors shadow-sm flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  Crear Dieta
+                </button>
+              </div>
 
               <div>
                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Datos Físicos Actuales</h4>
@@ -307,7 +326,7 @@ export default function RegistroUsuarios({ onBack }: Props) {
               </div>
 
               {/* Botón calcular */}
-              <button onClick={() => setCalculado(true)}
+              <button onClick={calcularMacronutrientes}
                 className="w-full bg-[#1e293b] text-white font-bold py-2 rounded hover:bg-[#0f172a] transition-colors text-sm">
                 Calcular Macronutrientes
               </button>

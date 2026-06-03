@@ -4,6 +4,7 @@
 import {
   useState, useEffect, useRef, useContext, useCallback, useMemo,
 } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { io, Socket } from 'socket.io-client'
 import axiosClient from '../../api/axiosClient'
 import { AuthContext } from '../../context/AuthContext'
@@ -114,7 +115,14 @@ export default function Chat() {
 
   // Estado conversaciones
   const [conversaciones,   setConversaciones]   = useState<Conversacion[]>([])
-  const [suscActivoId,     setSuscActivoId]      = useState<number | null>(null)
+  
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rawId = searchParams.get('user')
+  const suscActivoId = rawId ? Number(rawId) : null
+  const setSuscActivoId = (id: number | null) => {
+    if (id) setSearchParams({ user: String(id) })
+    else setSearchParams({})
+  }
   const [mensajes,         setMensajes]          = useState<Mensaje[]>([])
   const [hayMasAntiguos,   setHayMasAntiguos]    = useState(false)
   const [cargandoAntiguos, setCargandoAntiguos]  = useState(false)
