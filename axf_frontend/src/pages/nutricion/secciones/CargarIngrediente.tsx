@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getIngredientes, crearIngrediente, actualizarIngrediente, eliminarIngrediente } from '../../../api/nutricionApi'
 import type { IngredienteAPI } from '../../../api/nutricionApi'
 
@@ -19,12 +19,27 @@ const soloLetras = (val: string) => val.replace(/[^a-zA-ZáéíóúÁÉÍÓÚü�
 const emptyForm = (unidad = 'g') => ({
   nombre:             '',
   unidad_medicion:    unidad,
-  cantidad_base:      UNIDADES.find(u => u.value === unidad)?.base ?? 100,
-  kcal_base:          0,
-  proteinas_base:     0,
-  grasas_base:        0,
-  carbohidratos_base: 0,
+  cantidad_base:      String(UNIDADES.find(u => u.value === unidad)?.base ?? 100),
+  kcal_base:          '',
+  proteinas_base:     '',
+  grasas_base:        '',
+  carbohidratos_base: '',
 })
+
+const MacroInput = ({
+  label, value, onChange,
+}: { label: string; value: string | number; onChange: (v: string) => void }) => (
+  <div>
+    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</label>
+    <input
+      type="number" min="0" step="any"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder="0"
+      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-black text-center focus:outline-none focus:border-[#ea580c]"
+    />
+  </div>
+)
 
 export default function CargarIngrediente({ onBack }: Props) {
   const [form, setForm]           = useState(emptyForm())
@@ -33,6 +48,11 @@ export default function CargarIngrediente({ onBack }: Props) {
   const [error, setError]         = useState('')
   const [lista, setLista]         = useState<IngredienteAPI[]>([])
   const [cargando, setCargando]   = useState(true)
+  const [busqueda, setBusqueda]   = useState('')
+
+  const listaFiltrada = useMemo(() => {
+    return lista.filter(i => i.nombre.toLowerCase().includes(busqueda.toLowerCase()))
+  }, [lista, busqueda])
 
   // Modal edición
   const [editando, setEditando]           = useState<IngredienteAPI | null>(null)
@@ -52,7 +72,7 @@ export default function CargarIngrediente({ onBack }: Props) {
   // Al cambiar unidad actualiza la cantidad base sugerida
   const handleUnidadChange = (val: string) => {
     const base = UNIDADES.find(u => u.value === val)?.base ?? 100
-    setForm(f => ({ ...f, unidad_medicion: val, cantidad_base: base }))
+    setForm(f => ({ ...f, unidad_medicion: val, cantidad_base: String(base) }))
   }
 
   const guardar = async () => {
@@ -96,11 +116,11 @@ export default function CargarIngrediente({ onBack }: Props) {
     setEditForm({
       nombre:             ing.nombre,
       unidad_medicion:    ing.unidad_medicion,
-      cantidad_base:      ing.cantidad_base,
-      kcal_base:          ing.kcal_base,
-      proteinas_base:     ing.proteinas_base,
-      grasas_base:        ing.grasas_base,
-      carbohidratos_base: ing.carbohidratos_base,
+      cantidad_base:      String(ing.cantidad_base),
+      kcal_base:          String(ing.kcal_base),
+      proteinas_base:     String(ing.proteinas_base),
+      grasas_base:        String(ing.grasas_base),
+      carbohidratos_base: String(ing.carbohidratos_base),
     })
     setEditError('')
   }
@@ -131,21 +151,6 @@ export default function CargarIngrediente({ onBack }: Props) {
   }
 
   const hintUnidad = (u: string) => UNIDADES.find(x => x.value === u)?.hint ?? ''
-
-  const MacroInput = ({
-    label, value, onChange,
-  }: { label: string; value: number; onChange: (v: number) => void }) => (
-    <div>
-      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</label>
-      <input
-        type="number" min="0" step="0.1"
-        value={value || ''}
-        onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        placeholder="0"
-        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-black text-center focus:outline-none focus:border-[#ea580c]"
-      />
-    </div>
-  )
 
   return (
     <div className="p-4">
@@ -210,8 +215,8 @@ export default function CargarIngrediente({ onBack }: Props) {
               </label>
               <input
                 type="number" min="0.01" step="any"
-                value={form.cantidad_base || ''}
-                onChange={e => setForm(f => ({ ...f, cantidad_base: parseFloat(e.target.value) || 0 }))}
+                value={form.cantidad_base}
+                onChange={e => setForm(f => ({ ...f, cantidad_base: e.target.value }))}
                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black focus:outline-none focus:border-[#ea580c]"
               />
               <p className="text-[10px] text-[#ea580c] font-bold mt-1">{hintUnidad(form.unidad_medicion)}</p>
@@ -243,18 +248,22 @@ export default function CargarIngrediente({ onBack }: Props) {
           </div>
 
           {/* ── Lista existentes ── */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <div className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col h-full">
             <h3 className="font-bold text-black text-base mb-0.5">
               Ingredientes disponibles
-              <span className="ml-2 text-[#ea580c] font-black">({lista.length})</span>
+              <span className="ml-2 text-[#ea580c] font-black">({listaFiltrada.length})</span>
             </h3>
             <p className="text-xs text-gray-400 mb-3">Disponibles para uso en recetas.</p>
+
+            <input type="text" placeholder="Buscar ingrediente..." value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-xs text-black mb-3 bg-white shrink-0 focus:outline-none focus:border-[#ea580c]" />
 
             {cargando ? (
               <p className="text-xs text-gray-400 py-4 text-center">Cargando...</p>
             ) : (
-              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                {lista.map(ing => (
+              <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+                {listaFiltrada.map(ing => (
                   <div key={ing.id_ingrediente}
                     className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
                     <div className="flex items-center justify-between mb-1.5">
@@ -294,8 +303,8 @@ export default function CargarIngrediente({ onBack }: Props) {
                     </p>
                   </div>
                 ))}
-                {lista.length === 0 && (
-                  <p className="text-xs text-gray-400 italic py-4 text-center">No hay ingredientes registrados</p>
+                {listaFiltrada.length === 0 && (
+                  <p className="text-xs text-gray-400 italic py-4 text-center">No se encontraron resultados</p>
                 )}
               </div>
             )}
@@ -329,7 +338,7 @@ export default function CargarIngrediente({ onBack }: Props) {
                     value={editForm.unidad_medicion}
                     onChange={e => {
                       const base = UNIDADES.find(u => u.value === e.target.value)?.base ?? 100
-                      setEditForm(f => ({ ...f, unidad_medicion: e.target.value, cantidad_base: base }))
+                      setEditForm(f => ({ ...f, unidad_medicion: e.target.value, cantidad_base: String(base) }))
                     }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black text-sm"
                   >
@@ -339,9 +348,9 @@ export default function CargarIngrediente({ onBack }: Props) {
                 <div>
                   <label className="block text-xs font-bold text-black mb-1">Cantidad base</label>
                   <input
-                    type="number" min="0.01"
-                    value={editForm.cantidad_base || ''}
-                    onChange={e => setEditForm(f => ({ ...f, cantidad_base: parseFloat(e.target.value) || 0 }))}
+                    type="number" min="0.01" step="any"
+                    value={editForm.cantidad_base}
+                    onChange={e => setEditForm(f => ({ ...f, cantidad_base: e.target.value }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-black"
                   />
                 </div>
@@ -361,9 +370,9 @@ export default function CargarIngrediente({ onBack }: Props) {
                     <div key={f.key}>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{f.label}</label>
                       <input
-                        type="number" min="0" step="0.1"
-                        value={editForm[f.key] || ''}
-                        onChange={e => setEditForm(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) || 0 }))}
+                        type="number" min="0" step="any"
+                        value={editForm[f.key]}
+                        onChange={e => setEditForm(prev => ({ ...prev, [f.key]: e.target.value }))}
                         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-black text-center"
                       />
                     </div>
