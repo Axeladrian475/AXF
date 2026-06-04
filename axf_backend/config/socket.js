@@ -277,9 +277,8 @@ export function initSocket(httpServer) {
           );
 
           if (destUser?.fcm_token) {
-            // Solo enviar FCM si el destinatario NO tiene sockets activos
-            // o si es un dispositivo Android (siempre enviar para máxima fiabilidad)
-            const enviarPush = socketsDestino.length === 0;
+            // Siempre enviar FCM push para asegurar entrega en móviles cerrados o en segundo plano
+            const enviarPush = true;
             if (enviarPush) {
               await enviarPushFCM({
                 fcm_token: destUser.fcm_token,
