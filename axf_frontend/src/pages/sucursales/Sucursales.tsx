@@ -14,7 +14,7 @@ import PasswordStrengthIndicator from '../../components/PasswordStrengthIndicato
 
 function puedeRecuperarPassword(s: Sucursal): boolean {
   const v = s.password_recuperable
-  return v === true || v === 1 || v === '1'
+  return v === true || v === 1 || v === '1' as unknown
 }
 
 const FORM_VACIO: SucursalFormData = {
@@ -250,8 +250,8 @@ export default function Sucursales() {
       return
     }
     // Validar contraseña RQNF3 solo si se escribió algo
-    if (formModificar.password.trim()) {
-      const errPass = validarPassword(formModificar.password, formModificar.usuario)
+    if (formModificar.password?.trim()) {
+      const errPass = validarPassword(formModificar.password!, formModificar.usuario)
       if (errPass) { setError(errPass); return }
     }
     setLoadingModificar(true)
@@ -473,7 +473,7 @@ export default function Sucursales() {
                       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                   </div>
-                  <PasswordStrengthIndicator password={formAgregar.password} usuario={formAgregar.usuario} />
+                  <PasswordStrengthIndicator password={formAgregar.password ?? ''} usuario={formAgregar.usuario} />
                 </div>
 
                 <div className="pt-2">
@@ -722,7 +722,7 @@ export default function Sucursales() {
                         {showModifyPassword ? <Eye size={20} /> : <EyeOff size={20} />}
                       </button>
                     </div>
-                    <PasswordStrengthIndicator password={formModificar.password} usuario={formModificar.usuario} />
+                    <PasswordStrengthIndicator password={formModificar.password ?? ''} usuario={formModificar.usuario} />
                   </div>
 
                   <div className="pt-2 flex gap-3">

@@ -412,7 +412,7 @@ export default function TabsBuscarReportes() {
                             {/* Avatar del personal reportado */}
                             {r.foto_personal_reportado ? (
                               <img
-                                src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${r.foto_personal_reportado}`}
+                                src={`${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${r.foto_personal_reportado}`}
                                 alt={r.nombre_personal_reportado}
                                 className="w-9 h-9 rounded-full object-cover shrink-0 border-2 border-rose-300"
                                 onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
@@ -452,12 +452,12 @@ export default function TabsBuscarReportes() {
                       <td className="py-3.5 px-4">
                         {r.foto_url ? (
                           <button
-                            onClick={() => setModalFoto(`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'http://localhost:3001'}${r.foto_url}`)}
+                            onClick={() => setModalFoto(`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://axfgymnet.com'}${r.foto_url}`)}
                             className="block w-14 h-14 rounded-xl overflow-hidden border-2 border-slate-200 hover:border-slate-400 transition-all shadow-sm hover:shadow-md flex-shrink-0"
                             title="Ver evidencia"
                           >
                             <img
-                              src={`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'http://localhost:3001'}${r.foto_url}`}
+                              src={`${import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://axfgymnet.com'}${r.foto_url}`}
                               alt="Evidencia"
                               className="w-full h-full object-cover"
                               onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}

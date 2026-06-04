@@ -92,15 +92,12 @@ export default function CrearDieta({ onBack }: Props) {
   const [cargandoMeta, setCargandoMeta]   = useState(false)
   const [grasasMin, setGrasasMin]         = useState<number | null>(null)
   const [grasasMax, setGrasasMax]         = useState<number | null>(null)
-  const [grasasFinales, setGrasasFinales] = useState<string>('')
   
   const [protMin, setProtMin]         = useState<number | null>(null)
   const [protMax, setProtMax]         = useState<number | null>(null)
-  const [protFinales, setProtFinales] = useState<string>('')
   
   const [carbsMin, setCarbsMin]         = useState<number | null>(null)
   const [carbsMax, setCarbsMax]         = useState<number | null>(null)
-  const [carbsFinales, setCarbsFinales] = useState<string>('')
 
   // Cuando se selecciona un suscriptor, traer su último TDEE registrado
   useEffect(() => {
@@ -280,27 +277,7 @@ export default function CrearDieta({ onBack }: Props) {
       setErrorGuardar('Agrega al menos una comida a la dieta.')
       return
     }
-    if (grasasMin != null && grasasMax != null) {
-      const gf = parseFloat(grasasFinales)
-      if (isNaN(gf) || gf < grasasMin || gf > grasasMax) {
-        setErrorGuardar(`El valor final de grasas ingresado (${grasasFinales || 'vacío'}) está fuera del rango calculado (${grasasMin}g - ${grasasMax}g).`)
-        return
-      }
-    }
-    if (protMin != null && protMax != null) {
-      const pf = parseFloat(protFinales)
-      if (isNaN(pf) || pf < protMin || pf > protMax) {
-        setErrorGuardar(`El valor final de proteínas ingresado (${protFinales || 'vacío'}) está fuera del rango calculado (${protMin}g - ${protMax}g).`)
-        return
-      }
-    }
-    if (carbsMin != null && carbsMax != null) {
-      const cf = parseFloat(carbsFinales)
-      if (isNaN(cf) || cf < carbsMin || cf > carbsMax) {
-        setErrorGuardar(`El valor final de carbohidratos ingresado (${carbsFinales || 'vacío'}) está fuera del rango calculado (${carbsMin}g - ${carbsMax}g).`)
-        return
-      }
-    }
+
     setErrorGuardar('')
     setMostrarModalCorreo(true)
   }
@@ -430,29 +407,23 @@ export default function CrearDieta({ onBack }: Props) {
               </div>
             </div>
             {grasasMin != null && grasasMax != null && protMin != null && carbsMin != null && (
-              <div className="flex items-center gap-3 mt-3 bg-gray-50 px-4 py-2 rounded-xl border border-gray-200">
-                <div className="flex flex-col items-center">
-                  <label className="text-[10px] font-bold text-blue-800 uppercase mb-1">Proteínas</label>
-                  <input type="number" value={protFinales} onChange={e => setProtFinales(e.target.value)}
-                    className="w-16 border border-blue-300 rounded px-1 py-1 text-xs text-black text-center focus:outline-none focus:border-blue-500 bg-white"
-                    placeholder={`${protMin}-${protMax}`} />
-                  <span className="text-[9px] text-blue-600 mt-0.5">({protMin} - {protMax}g)</span>
-                </div>
-                <div className="w-px h-10 bg-gray-300"></div>
-                <div className="flex flex-col items-center">
-                  <label className="text-[10px] font-bold text-yellow-800 uppercase mb-1">Grasas</label>
-                  <input type="number" value={grasasFinales} onChange={e => setGrasasFinales(e.target.value)}
-                    className="w-16 border border-yellow-300 rounded px-1 py-1 text-xs text-black text-center focus:outline-none focus:border-yellow-500 bg-white"
-                    placeholder={`${grasasMin}-${grasasMax}`} />
-                  <span className="text-[9px] text-yellow-600 mt-0.5">({grasasMin} - {grasasMax}g)</span>
-                </div>
-                <div className="w-px h-10 bg-gray-300"></div>
-                <div className="flex flex-col items-center">
-                  <label className="text-[10px] font-bold text-green-800 uppercase mb-1">Carbs</label>
-                  <input type="number" value={carbsFinales} onChange={e => setCarbsFinales(e.target.value)}
-                    className="w-16 border border-green-300 rounded px-1 py-1 text-xs text-black text-center focus:outline-none focus:border-green-500 bg-white"
-                    placeholder={`${carbsMin}-${carbsMax}`} />
-                  <span className="text-[9px] text-green-600 mt-0.5">({carbsMin} - {carbsMax}g)</span>
+              <div className="flex items-center gap-4 mt-3 bg-gray-50 px-4 py-2 rounded-xl border border-gray-200">
+                <span className="text-[10px] font-bold text-gray-500 uppercase">Rango Recomendado:</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-bold text-blue-600">PROT</span>
+                    <span className="text-[11px] text-black font-bold">{protMin} - {protMax}g</span>
+                  </div>
+                  <div className="w-px h-6 bg-gray-300"></div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-bold text-yellow-600">GRAS</span>
+                    <span className="text-[11px] text-black font-bold">{grasasMin} - {grasasMax}g</span>
+                  </div>
+                  <div className="w-px h-6 bg-gray-300"></div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-bold text-green-600">CARB</span>
+                    <span className="text-[11px] text-black font-bold">{carbsMin} - {carbsMax}g</span>
+                  </div>
                 </div>
               </div>
             )}

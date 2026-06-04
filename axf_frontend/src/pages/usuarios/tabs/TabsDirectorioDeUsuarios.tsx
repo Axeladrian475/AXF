@@ -168,7 +168,7 @@ function FotoPreviewModificar({
   onQuitar: () => void
   onSeleccionar: () => void
 }) {
-  const url = archivo ? URL.createObjectURL(archivo) : (fotoUrlActual ? `${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${fotoUrlActual}` : null)
+  const url = archivo ? URL.createObjectURL(archivo) : (fotoUrlActual ? `${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${fotoUrlActual}` : null)
   return (
     <div className="flex flex-col items-center gap-2">
       <div className={`relative w-24 h-24 rounded-full border-4 overflow-hidden flex items-center justify-center
@@ -715,7 +715,7 @@ export default function TabsDirectorioDeUsuarios() {
                 <td className="py-2 pr-3">
                   {u.foto_url ? (
                     <img
-                      src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${u.foto_url}`}
+                      src={`${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${u.foto_url}`}
                       alt={u.nombre_completo}
                       className="w-9 h-9 rounded-full object-cover border-2 border-[#ea580c]/30"
                     />

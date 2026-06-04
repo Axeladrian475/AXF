@@ -4,8 +4,8 @@ import { AuthContext } from '../../context/AuthContext';
 import axiosClient from '../../api/axiosClient';
 import { io, Socket } from 'socket.io-client';
 
-const BACKEND_URL = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'http://localhost:3001';
-const WS_URL      = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+const BACKEND_URL = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://axfgymnet.com';
+const WS_URL      = import.meta.env.VITE_SOCKET_URL || 'https://axfgymnet.com';
 
 interface Aviso {
   id_aviso:  number;

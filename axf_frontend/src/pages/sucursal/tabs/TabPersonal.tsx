@@ -19,7 +19,7 @@ const PUESTOS_LABEL: Record<string, string> = {
 }
 
 // URL base del backend para construir la ruta de las fotos
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://axfgymnet.com'
 
 const FORM_VACIO = {
   nombres: '',
@@ -89,7 +89,7 @@ export default function TabPersonal() {
 
   // ── Foto helper ────────────────────────────────────────────────────────────
   // foto_url en BD es "/uploads/personal/archivo.jpg"
-  // La construimos como "http://localhost:3001/uploads/personal/archivo.jpg"
+  // La construimos como "https://axfgymnet.com/uploads/personal/archivo.jpg"
   // El parámetro ts evita que el navegador use la imagen cacheada tras un cambio
   const fotoSrc = (foto_url: string | null, ts?: number) =>
     foto_url ? `${API_BASE}${foto_url}${ts ? `?t=${ts}` : ''}` : null

@@ -6,7 +6,7 @@ import type { EjercicioPDF, RutinaPDFData } from '../../../utils/pdfExport'
 
 interface Props { onBack: () => void }
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://axfgymnet.com'
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
 interface EjRutina {
@@ -491,7 +491,7 @@ export default function CrearRutina({ onBack }: Props) {
             {/* Zona drop */}
             <div
               onDragOver={e => e.preventDefault()}
-              onDrop={(e) => {
+              onDrop={(_e) => {
                 if (dragEjId) {
                   const ej = ejerciciosDB.find(e => e.id_ejercicio === dragEjId)
                   if (ej) agregarEj(ej)

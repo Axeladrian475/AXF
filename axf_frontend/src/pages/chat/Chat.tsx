@@ -90,7 +90,7 @@ function fechaDia(iso: string): string {
   return `${year}-${month}-${day}`
 }
 
-const WS_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
+const WS_URL = import.meta.env.VITE_SOCKET_URL || 'https://axfgymnet.com'
 
 // Sonido sutil para mensajes nuevos (data URL para evitar archivo externo)
 const playMessageSound = () => {
@@ -630,7 +630,7 @@ export default function Chat() {
                   <div className="relative shrink-0">
                     {c.foto_url ? (
                       <img
-                        src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${c.foto_url}`}
+                        src={`${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${c.foto_url}`}
                         alt={c.nombre_suscriptor}
                         className="w-9 h-9 rounded-full object-cover border-2 border-transparent"
                       />
@@ -692,7 +692,7 @@ export default function Chat() {
               <div className="relative">
                 {suscActivo?.foto_url ? (
                   <img
-                    src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${suscActivo.foto_url}`}
+                    src={`${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${suscActivo.foto_url}`}
                     alt={suscActivo.nombre_suscriptor}
                     className="w-9 h-9 rounded-full object-cover border-2 border-orange-100"
                   />
@@ -723,7 +723,7 @@ export default function Chat() {
                 <span className="text-xs text-gray-400">{user?.nombre?.split(' ')[0]}</span>
                 {user?.foto_url ? (
                   <img
-                    src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${user.foto_url}`}
+                    src={`${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${user.foto_url}`}
                     alt="mi foto"
                     className="w-8 h-8 rounded-full object-cover border-2 border-orange-200"
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
@@ -801,7 +801,7 @@ export default function Chat() {
                           <div className="shrink-0 mb-1">
                             {suscActivo?.foto_url ? (
                               <img
-                                src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${suscActivo.foto_url}`}
+                                src={`${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${suscActivo.foto_url}`}
                                 alt="avatar"
                                 className="w-7 h-7 rounded-full object-cover"
                               />
@@ -872,7 +872,7 @@ export default function Chat() {
                           <div className="shrink-0 mb-1">
                             {user?.foto_url ? (
                               <img
-                                src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${user.foto_url}`}
+                                src={`${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${user.foto_url}`}
                                 alt="mi avatar"
                                 className="w-7 h-7 rounded-full object-cover"
                                 onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
@@ -893,7 +893,7 @@ export default function Chat() {
                     <div className="flex items-end gap-2 justify-start">
                       {suscActivo?.foto_url ? (
                         <img
-                          src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${suscActivo.foto_url}`}
+                          src={`${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${suscActivo.foto_url}`}
                           alt="avatar"
                           className="w-7 h-7 rounded-full object-cover shrink-0"
                         />
@@ -1005,7 +1005,7 @@ export default function Chat() {
                 >
                   {s.foto_url ? (
                     <img
-                      src={`${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace('/api', '')}${s.foto_url}`}
+                      src={`${(import.meta.env.VITE_API_URL ?? 'https://axfgymnet.com').replace('/api', '')}${s.foto_url}`}
                       alt={s.nombre}
                       className="w-9 h-9 rounded-full object-cover shrink-0"
                     />

@@ -4,7 +4,7 @@ import type { EjercicioAPI } from '../../../api/entrenamientoApi'
 
 interface Props { onBack: () => void }
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://axfgymnet.com'
 
 export default function CargarEjercicio({ onBack }: Props) {
   const [nombre, setNombre]         = useState('')

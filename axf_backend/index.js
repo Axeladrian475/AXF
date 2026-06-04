@@ -104,7 +104,7 @@ async function startServer() {
     const PORT = process.env.PORT || 3001;
     httpServer.listen(PORT, () => {
       console.log(`[SERVER] Listening on port ${PORT}`);
-      console.log(`[WS]     Socket.io listo en ws://localhost:${PORT}`);
+      console.log(`[WS]     Socket.io listo en puerto ${PORT}`);
       iniciarMotorStrikes();
       iniciarRecordatorios();
     });

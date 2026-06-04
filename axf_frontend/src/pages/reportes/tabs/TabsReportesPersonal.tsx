@@ -30,7 +30,7 @@ const ESTADO_LABEL: Record<string, string> = {
   Abierto: 'Abierto', En_Proceso: 'En Proceso', Resuelto: 'Resuelto',
 }
 
-const BACKEND = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'http://localhost:3001'
+const BACKEND = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://axfgymnet.com'
 
 export default function TabsReportesPersonal() {
   const [reportes, setReportes] = useState<ReportePersonal[]>([])

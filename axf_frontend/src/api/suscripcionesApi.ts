@@ -108,7 +108,7 @@ export const getSuscripcionActiva = async (id: number): Promise<SuscripcionActiv
 export const suscribirSuscriptor = async (
   id: number,
   data: { id_tipo: number; fecha_inicio?: string; mp_payment_id?: string | null }
-): Promise<{ message: string; id_suscripcion: number; fecha_inicio: string; fecha_fin: string; acumulada: boolean }> => {
+): Promise<{ message: string; id_suscripcion: number; fecha_inicio: string; fecha_fin: string; acumulada: boolean; solo_sesiones?: boolean }> => {
   const response = await axiosClient.post(`/suscriptores/${id}/suscribir`, data);
   return response.data;
 };

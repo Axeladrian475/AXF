@@ -38,7 +38,7 @@ router.post('/crear-orden', verificarToken, personalOSucursal, async (req, res) 
       id_sucursal = emp.id_sucursal;
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://axfgymnet.com';
     let returnUrl = `${frontendUrl}/suscripciones?pago=exitoso&sus=${id_suscriptor}`;
     if (id_promocion) returnUrl += `&promo=${id_promocion}`;
     else returnUrl += `&tipo=${id_tipo}`;

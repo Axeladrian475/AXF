@@ -8,7 +8,7 @@ import {
 } from '../../../api/nutricionApi'
 import type { RecetaAPI, IngredienteAPI } from '../../../api/nutricionApi'
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://axfgymnet.com'
 
 interface Props { onBack: () => void }
 

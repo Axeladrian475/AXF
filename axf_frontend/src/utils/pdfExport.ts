@@ -4,7 +4,7 @@
 //  que se auto-imprime. Evita html2canvas/oklch por completo.
 // ============================================================================
 
-const API_BASE = import.meta.env.VITE_SOCKET_URL ?? 'http://localhost:3001'
+const API_BASE = import.meta.env.VITE_SOCKET_URL ?? 'https://axfgymnet.com'
 const LOGO_URL = `${window.location.origin}/axfLogo.png`
 
 // ── Tipos ──────────────────────────────────────────────────────────────────

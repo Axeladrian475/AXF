@@ -161,7 +161,7 @@ export default function TabsReportesPrioritarios() {
   // Reenviando
   const [reenviandoId, setReenviandoId]       = useState<number | null>(null)
 
-  const BACKEND = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'http://localhost:3001'
+  const BACKEND = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'https://axfgymnet.com'
 
   // ── Cargar ────────────────────────────────────────────────────────────────
   const cargar = useCallback(async () => {

@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const axiosClient = axios.create({
   // URL base de tu backend
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://axfgymnet.com/api',
 });
 
 console.log('URL BASE DE AXIOS:', axiosClient.defaults.baseURL); // <-- Agrega esto

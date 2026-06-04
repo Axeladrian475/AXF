@@ -1,4 +1,7 @@
 import nodemailer from 'nodemailer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 // ── Configuración del transportador ──────────────────────────────────────────
 const transporter = nodemailer.createTransport({
@@ -8,6 +11,11 @@ const transporter = nodemailer.createTransport({
     pass: process.env.SMTP_PASS?.replace(/\s+/g, ''), // Asegurar que no haya espacios
   },
 });
+
+// Verificar conexión SMTP al iniciar
+transporter.verify()
+  .then(() => console.log('[MAILER] ✓ Conexión SMTP verificada correctamente'))
+  .catch(err => console.error('[MAILER] ✗ Error al verificar SMTP:', err.message));
 
 /**
  * Función genérica para enviar correos.
@@ -70,12 +78,18 @@ export async function enviarBienvenida(to, nombre) {
   `;
   return await enviarCorreo(to, subject, html);
 }
-import path from 'path';
-import { fileURLToPath } from 'url';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
-const LOGO_PATH = path.resolve(__dirname, '..', '..', 'axf_frontend', 'public', 'axfLogo.png');
+
+// Buscar el logo: primero en assets/ del backend, luego fallback al frontend
+const LOGO_CANDIDATES = [
+  path.resolve(__dirname, '..', 'assets', 'axfLogo.png'),
+  path.resolve(__dirname, '..', '..', 'axf_frontend', 'public', 'axfLogo.png'),
+];
+const LOGO_PATH = LOGO_CANDIDATES.find(p => fs.existsSync(p)) || LOGO_CANDIDATES[0];
+console.log(`[MAILER] Logo path: ${LOGO_PATH} (existe: ${fs.existsSync(LOGO_PATH)})`);
 
 /**
  * Envía un correo cuando se le asigna una nueva rutina al suscriptor.
